@@ -1,0 +1,130 @@
+const Joi = require('joi');
+const { ALL_STATUSES } = require('./statusMachine');
+
+const uuid = Joi.string().uuid();
+const email = Joi.string().email().lowercase().trim();
+const password = Joi.string().min(8).max(200);
+
+const schemas = {
+  auth: {
+    register: Joi.object({
+      email: email.required(),
+      password: password.required(),
+      name: Joi.string().min(2).max(120).required(),
+      role: Joi.string().valid('applicant', 'club').default('applicant'),
+      locale: Joi.string().length(2).default('en'),
+    }),
+    login: Joi.object({
+      email: email.required(),
+      password: password.required(),
+    }),
+    google: Joi.object({
+      idToken: Joi.string().required(),
+    }),
+    refresh: Joi.object({
+      refreshToken: Joi.string().required(),
+    }),
+  },
+
+  profile: {
+    upsert: Joi.object({
+      firstName: Joi.string().min(1).max(120).required(),
+      lastName: Joi.string().min(1).max(120).required(),
+      dateOfBirth: Joi.date().iso().less('now').allow(null),
+      gender: Joi.string().max(30).allow(null, ''),
+      nationality: Joi.string().max(3).allow(null, ''),
+      discipline: Joi.string().max(60).allow(null, ''),
+      weightKg: Joi.number().positive().max(300).allow(null),
+      weightClass: Joi.string().max(60).allow(null, ''),
+      recordWins: Joi.number().integer().min(0).default(0),
+      recordLosses: Joi.number().integer().min(0).default(0),
+      recordDraws: Joi.number().integer().min(0).default(0),
+      bio: Joi.string().max(2000).allow(null, ''),
+      clubId: uuid.allow(null),
+      metadata: Joi.object().default({}),
+    }),
+  },
+
+  club: {
+    create: Joi.object({
+      name: Joi.string().min(2).max(120).required(),
+      slug: Joi.string().pattern(/^[a-z0-9-]+$/).min(2).max(80).required(),
+      city: Joi.string().max(120).allow(null, ''),
+      country: Joi.string().max(3).allow(null, ''),
+      metadata: Joi.object().default({}),
+    }),
+    update: Joi.object({
+      name: Joi.string().min(2).max(120),
+      city: Joi.string().max(120).allow(null, ''),
+      country: Joi.string().max(3).allow(null, ''),
+      status: Joi.string().valid('pending', 'active', 'suspended'),
+      metadata: Joi.object(),
+    }).min(1),
+  },
+
+  application: {
+    create: Joi.object({
+      tournamentId: uuid.required(),
+      profileId: uuid,                         // admin/club may create on behalf
+      formData: Joi.object().default({}),
+    }),
+    update: Joi.object({
+      formData: Joi.object(),
+    }).min(1),
+    submit: Joi.object({
+      confirm: Joi.boolean().valid(true).required(),
+    }),
+    bulk: Joi.object({
+      ids: Joi.array().items(uuid).min(1).max(500).required(),
+    }),
+  },
+
+  review: {
+    assign: Joi.object({
+      reviewerId: uuid.required(),
+    }),
+    decision: Joi.object({
+      action: Joi.string().valid('approve', 'reject', 'request_correction').required(),
+      reason: Joi.string().max(2000).when('action', { is: Joi.not('approve'), then: Joi.required() }),
+      fields: Joi.array().items(Joi.string().max(80)).when('action', {
+        is: 'request_correction',
+        then: Joi.array().min(1).required(),
+        otherwise: Joi.optional(),
+      }),
+    }),
+    bulkDecision: Joi.object({
+      ids: Joi.array().items(uuid).min(1).max(500).required(),
+      action: Joi.string().valid('approve', 'request_correction').required(),
+      reason: Joi.string().max(2000).when('action', { is: 'request_correction', then: Joi.required() }),
+      fields: Joi.array().items(Joi.string().max(80)).when('action', {
+        is: 'request_correction',
+        then: Joi.array().min(1).required(),
+      }),
+    }),
+  },
+
+  appeal: {
+    create: Joi.object({
+      applicationId: uuid.required(),
+      reason: Joi.string().min(10).max(4000).required(),
+    }),
+    decide: Joi.object({
+      action: Joi.string().valid('grant', 'deny').required(),
+      panelDecision: Joi.string().max(4000).required(),
+    }),
+  },
+
+  queue: {
+    list: Joi.object({
+      status: Joi.string().valid(...ALL_STATUSES, 'all').default('all'),
+      tournamentId: uuid,
+      clubId: uuid,
+      reviewerId: uuid,
+      q: Joi.string().max(200).allow(''),
+      limit: Joi.number().integer().min(1).max(200).default(50),
+      offset: Joi.number().integer().min(0).default(0),
+    }),
+  },
+};
+
+module.exports = { schemas };

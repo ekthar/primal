@@ -1,0 +1,46 @@
+{
+  "name": "tournamentos-backend",
+  "version": "1.0.0",
+  "description": "TournamentOS — tournament registration & admin-review API (Node/Express + PostgreSQL)",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "migrate": "node src/db/migrate.js",
+    "seed": "node src/db/seed.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src server.js"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "exceljs": "^4.4.0",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0",
+    "google-auth-library": "^9.15.1",
+    "helmet": "^8.0.0",
+    "joi": "^17.13.3",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.0",
+    "multer": "^1.4.5-lts.1",
+    "nanoid": "^3.3.8",
+    "pdfkit": "^0.15.2",
+    "pg": "^8.13.1",
+    "pino": "^9.6.0",
+    "resend": "^4.1.1",
+    "twilio": "^5.4.2",
+    "uuid": "^11.0.5"
+  },
+  "devDependencies": {
+    "eslint": "^9.18.0",
+    "nodemon": "^3.1.9",
+    "supertest": "^7.0.0",
+    "vitest": "^3.0.4"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

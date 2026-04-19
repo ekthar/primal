@@ -61,3 +61,20 @@ Build a premium web UI system for a tournament registration and admin-review pla
 2. Replace mock JWT with proper auth (choose between custom JWT and Emergent Google Auth).
 3. Add event/bracket management.
 4. Add real file upload for medical certificates.
+
+## Iteration 2 — Feb 2026 — Backend + Landing Redesign
+- [x] Full **Node/Express + PostgreSQL** backend at `/app/backend-node` (auth JWT+Google, profiles, clubs, applications, reviews with hybrid assignment, appeals, queue+SLA, reports PDF/Excel, tamper-evident audit log, public feed, notifications via Resend/Twilio, correction window, bulk actions, soft-delete ready)
+- [x] 10 SQL-indexed tables + status_events + audit_log with hash chain + DB trigger blocking updates/deletes
+- [x] 13/13 backend tests passing (status machine, validators, smoke)
+- [x] Frontend API client (`/app/frontend/src/lib/api.js`) wiring every endpoint
+- [x] Premium landing page with Framer Motion scroll parallax, workflow scrollytelling, animated admin showcase, marquee, stats, testimonial, triple CTA — honours `prefers-reduced-motion`
+- [x] `backend-node/README.md` + `backend-node/SKILLS.md` continuation docs
+- [x] `/app/README.md` project map
+
+## P1 Follow-ups
+1. Deploy Postgres + Node backend (Render / Supabase / Fly) and point `REACT_APP_BACKEND_URL` at it
+2. Flutter client (hand-written Dio OR openapi-generated from `/app/backend-node/docs/openapi.yaml`)
+3. File upload service (S3/R2) for medical certs & photos
+4. Payments (Stripe test key already in env)
+5. Custom form schema renderer (schema column + jsonb already in DB)
+6. i18n — bundle translations on top of existing `locale` + `translations` jsonb fields
