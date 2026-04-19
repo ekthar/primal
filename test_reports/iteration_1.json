@@ -1,0 +1,35 @@
+{
+  "summary": "Frontend-only regression for TournamentOS prototype. Tested landing, theme toggle, login + role-based redirects, register wizard validation, admin queue (tabs/search/club-filter/bulk actions/confirm modal), reviewer workbench (approve/reject/correction drawer with timeline append), club dashboard, applicant dashboard, appeals (grant/deny toasts), reports (csv/pdf export toasts), sidebar role switcher, and mobile breakpoint. All critical data-testids present and wired. No console errors observed on any route.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Club Dashboard - Correction Inbox", "issue": "Sakura Gym demo club (c1) has ZERO needs_correction fighters in the seeded FIGHTERS array, so the Correction Inbox on /club is empty for the demo club account. The correction-card-<id> / resubmit-<id> path therefore cannot be exercised by the default club demo login. Workaround: log in as admin, request a correction on a Sakura Gym fighter, then switch to club. Recommend: seed at least one FIGHTERS row with clubId='c1' and status='needs_correction' in /app/frontend/src/lib/mockData.js so the demo club inbox is populated by default.", "affected_selectors": ["[data-testid^='correction-card-']", "[data-testid^='resubmit-']"]}
+    ],
+    "design_issues": [
+      {"screen": "Global (ThemeContext)", "issues": ["ThemeContext toggles the 'dark' class on <html> only, not on document.body. Tailwind dark-mode (class strategy) works correctly on html, so visually everything switches. Review request text specifies 'Body class dark toggles'; if a test literally asserts document.body.classList.contains('dark') it will fail. Low-priority cosmetic spec mismatch — behavior is correct."]},
+      {"screen": "AppShell MobileTopbar", "issues": ["MobileTopbar component is rendered at <=md breakpoint but has no data-testid='mobile-topbar'. The spec mentions 'MobileTopbar visible' as a testable item. Add data-testid='mobile-topbar' to the mobile topbar container for testability."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Seed at least one FIGHTERS row with clubId='c1' (Sakura Gym) and status='needs_correction' so the default /club demo inbox is populated.",
+    "Add data-testid='mobile-topbar' to the MobileTopbar container in /app/frontend/src/components/layout/AppShell.jsx for explicit mobile-breakpoint testability.",
+    "Optional: mirror the 'dark' class toggle onto document.body in ThemeContext.jsx to match the literal spec wording ('body class dark toggles')."
+  ],
+  "critical_code_review_comments": [
+    "ThemeContext persists theme in localStorage key 'tos-theme' and toggles html.dark — correct Tailwind pattern but diverges from spec wording that says body class.",
+    "AdminQueue bulk approve confirmation modal does not expose role='dialog' (or it was not detected). The Confirm button works and closes the modal, but screen-reader/a11y dialog role should be verified.",
+    "Correction drawer submits and appends timeline entry with the typed reason — good UX; drawer closes after submit and toast fires.",
+    "No backend; all data is client-side mock. REACT_APP_BACKEND_URL is used only as preview URL base — correct per scope.",
+    "No console errors or React warnings observed on Landing, Login, Register, Admin Queue, Reviewer Workbench, Club, Applicant, Appeals, Reports, or Mobile Admin Queue."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only)", "frontend": "~97% (core flows fully green; 2 minor polish items)"},
+  "test_credentials": "Mock auth — any password. Admin mei@tournamentos.io / Reviewer luca@tournamentos.io / Club ops@sakuragym.jp / Applicant diego.ruiz@mail.com (see /app/memory/test_credentials.md).",
+  "seed_data_creation": "None. Used existing mockData.js FIGHTERS / APPEALS / CLUBS seed.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All data-testids in the original spec are present and functional: theme-toggle, role-admin/reviewer/club/applicant, login-submit, step-indicator-1..4, step-next, step-submit, tab-all/submitted/approved/rejected/inbox/roster, queue-search, filter-club, select-all, select-f-<id>, bulk-action-bar, bulk-approve-btn, bulk-correction-btn, queue-row-<id>, workbench-row-<id>, action-approve, action-reject, action-correction, correction-drawer, correction-reason, correction-card-<id>, resubmit-<id>, appeal-row-<id>, appeal-verdict, appeal-grant, appeal-deny, report-export-csv, report-export-pdf, user-menu-trigger, switch-role-<role>. Only missing testid is 'mobile-topbar'. Login redirects verified: admin→/admin/queue, reviewer→/admin/queue, club→/club, applicant→/applicant. Bulk-approve confirm modal uses text 'Confirm' button. Appeals and Reports fire sonner toasts.",
+  "rca_of_the_issue": "N/A — no blocking bugs."
+}

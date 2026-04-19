@@ -1,54 +1,53 @@
-import { useEffect } from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import axios from "axios";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { ThemeProvider } from "@/context/ThemeContext";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { Toaster } from "@/components/ui/sonner";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+import AppShell from "@/components/layout/AppShell";
+import Landing from "@/pages/Landing";
+import Login from "@/pages/Login";
+import Register from "@/pages/Register";
+import ApplicantDashboard from "@/pages/ApplicantDashboard";
+import ClubDashboard from "@/pages/ClubDashboard";
+import AdminQueue from "@/pages/AdminQueue";
+import ReviewerWorkbench from "@/pages/ReviewerWorkbench";
+import Appeals from "@/pages/Appeals";
+import Reports from "@/pages/Reports";
 
-const Home = () => {
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
-    }
-  };
-
-  useEffect(() => {
-    helloWorldApi();
-  }, []);
-
-  return (
-    <div>
-      <header className="App-header">
-        <a
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
-  );
-};
-
-function App() {
-  return (
-    <div className="App">
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
-    </div>
-  );
+function Protected({ children }) {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" replace />;
+  return children;
 }
 
-export default App;
+export default function App() {
+  return (
+    <ThemeProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <div className="App font-sans">
+            <Routes>
+              <Route path="/" element={<Landing />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+
+              <Route element={<Protected><AppShell /></Protected>}>
+                <Route path="/applicant" element={<ApplicantDashboard />} />
+                <Route path="/club" element={<ClubDashboard />} />
+                <Route path="/admin/queue" element={<AdminQueue />} />
+                <Route path="/admin/review/:id" element={<ReviewerWorkbench />} />
+                <Route path="/admin/review" element={<ReviewerWorkbench />} />
+                <Route path="/admin/appeals" element={<Appeals />} />
+                <Route path="/admin/reports" element={<Reports />} />
+              </Route>
+
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+            <Toaster position="bottom-right" />
+          </div>
+        </BrowserRouter>
+      </AuthProvider>
+    </ThemeProvider>
+  );
+}
