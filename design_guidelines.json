@@ -1,0 +1,170 @@
+{
+  "project_name": "TournamentOS - Martial Arts Platform",
+  "theme_and_archetype": {
+    "theme": "light_and_dark",
+    "archetype": "High-Contrast Editorial Athletic (Archetype 4 + 2)",
+    "rationale": "Combines the frictionless, minimal cognitive load of macOS and Notion (Archetype 4: Swiss/High-Contrast) with the sharp precision and confidence of martial arts (Archetype 2: Performance Pro). Avoids generic SaaS 'AI-slop' by using stark monochromes, glassmorphism, and a disciplined, singular accent color."
+  },
+  "design_tokens": {
+    "colors": {
+      "light": {
+        "background": "#F9F9FB",
+        "surface": "#FFFFFF",
+        "surface_muted": "#F3F4F6",
+        "border": "#E5E7EB",
+        "border_subtle": "rgba(0, 0, 0, 0.05)",
+        "text_primary": "#0A0A0A",
+        "text_secondary": "#6B7280",
+        "text_tertiary": "#9CA3AF",
+        "primary_accent": "#E5484D",
+        "primary_hover": "#CE2C31",
+        "glass_bg": "rgba(255, 255, 255, 0.75)"
+      },
+      "dark": {
+        "background": "#09090B",
+        "surface": "#121214",
+        "surface_muted": "#1F1F22",
+        "border": "#27272A",
+        "border_subtle": "rgba(255, 255, 255, 0.05)",
+        "text_primary": "#FAFAFA",
+        "text_secondary": "#A1A1AA",
+        "text_tertiary": "#71717A",
+        "primary_accent": "#FF4D4F",
+        "primary_hover": "#FF7875",
+        "glass_bg": "rgba(9, 9, 11, 0.75)"
+      },
+      "status": {
+        "draft": { "light": "bg-slate-100 text-slate-700", "dark": "bg-slate-900 text-slate-300" },
+        "submitted": { "light": "bg-blue-50 text-blue-700 border border-blue-100", "dark": "bg-blue-900/30 text-blue-400 border border-blue-900/50" },
+        "under_review": { "light": "bg-amber-50 text-amber-700 border border-amber-100", "dark": "bg-amber-900/30 text-amber-400 border border-amber-900/50" },
+        "needs_correction": { "light": "bg-orange-50 text-orange-800 border border-orange-200", "dark": "bg-orange-900/40 text-orange-300 border border-orange-800/50" },
+        "approved": { "light": "bg-emerald-50 text-emerald-700 border border-emerald-100", "dark": "bg-emerald-900/30 text-emerald-400 border border-emerald-900/50" },
+        "rejected": { "light": "bg-red-50 text-red-700 border border-red-100", "dark": "bg-red-900/30 text-red-400 border border-red-900/50" }
+      }
+    },
+    "typography": {
+      "font_families": {
+        "heading": "Cabinet Grotesk, -apple-system, BlinkMacSystemFont, sans-serif",
+        "body": "Manrope, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+        "mono": "JetBrains Mono, ui-monospace, SFMono-Regular, monospace"
+      },
+      "scale": {
+        "h1": "text-4xl sm:text-5xl tracking-tight font-semibold",
+        "h2": "text-2xl sm:text-3xl tracking-tight font-medium",
+        "h3": "text-xl sm:text-2xl tracking-tight font-medium",
+        "h4": "text-lg font-medium tracking-wide",
+        "body_large": "text-base sm:text-lg leading-relaxed",
+        "body_base": "text-sm sm:text-base leading-relaxed text-secondary",
+        "caption": "text-xs font-medium tracking-wider uppercase text-tertiary"
+      }
+    },
+    "spacing_and_layout": {
+      "container_padding": "px-4 sm:px-6 lg:px-8",
+      "section_gap": "gap-12 sm:gap-16 lg:gap-24",
+      "card_padding": "p-6 sm:p-8",
+      "dense_padding": "p-3 sm:p-4",
+      "radius": {
+        "base": "rounded-lg",
+        "card": "rounded-xl",
+        "pill": "rounded-full",
+        "modal": "rounded-2xl"
+      },
+      "shadows": {
+        "ambient": "shadow-[0_8px_30px_rgb(0,0,0,0.04)]",
+        "elevated": "shadow-[0_20px_40px_rgb(0,0,0,0.08)]",
+        "inner_glow": "inset 0 1px 0 rgba(255,255,255,0.1)"
+      }
+    },
+    "motion": {
+      "duration": {
+        "fast": "150ms",
+        "base": "250ms",
+        "slow": "400ms"
+      },
+      "easing": {
+        "mac_os": "cubic-bezier(0.25, 1, 0.5, 1)",
+        "bounce": "cubic-bezier(0.34, 1.56, 0.64, 1)"
+      }
+    }
+  },
+  "component_guidelines": {
+    "buttons": {
+      "primary": "bg-primary_accent text-white rounded-lg px-4 py-2 font-medium shadow-sm hover:shadow-md hover:-translate-y-[1px] transition-all duration-250 ease-mac_os focus:ring-2 focus:ring-primary_accent/30 focus:outline-none",
+      "secondary": "bg-surface_muted text-text_primary border border-border/50 rounded-lg px-4 py-2 font-medium hover:bg-border/30 transition-colors focus:ring-2 focus:ring-border",
+      "ghost": "text-text_secondary hover:text-text_primary hover:bg-surface_muted rounded-lg px-4 py-2 font-medium transition-colors"
+    },
+    "inputs": {
+      "base": "w-full rounded-lg border border-border bg-surface px-4 py-2.5 text-sm text-text_primary placeholder-text_tertiary transition-all duration-250 focus:border-primary_accent focus:ring-4 focus:ring-primary_accent/10 focus:outline-none",
+      "label": "block text-xs font-semibold tracking-wide text-text_secondary uppercase mb-1.5"
+    },
+    "cards": {
+      "standard": "bg-surface rounded-xl border border-border shadow-ambient p-6",
+      "glass": "bg-glass_bg backdrop-blur-xl backdrop-saturate-150 rounded-xl border border-white/20 (dark:border-white/10) shadow-ambient"
+    },
+    "tables_and_queues": {
+      "container": "w-full border-collapse text-left",
+      "header": "sticky top-0 bg-surface_muted/80 backdrop-blur-md border-b border-border text-xs font-semibold uppercase tracking-wider text-text_secondary py-3 px-4 z-10",
+      "row": "border-b border-border/50 hover:bg-surface_muted/30 transition-colors duration-fast",
+      "cell": "py-3 px-4 text-sm align-middle"
+    },
+    "status_pills": "inline-flex items-center justify-center rounded-full px-2.5 py-0.5 text-xs font-medium tracking-wide shadow-sm backdrop-blur-sm"
+  },
+  "page_compositions": {
+    "public_registration": {
+      "layout": "Centered maximum-width container (max-w-3xl) with ample vertical breathing room (py-24). Form broken into logical macroscopic steps (Club Info, Fighter Details, Medical) using subtle horizontal dividers or smooth scroll sections.",
+      "visuals": "Hero section utilizes 'hero_background_editorial' with a heavy black/50 overlay and a glassmorphism container for the form to sit on, evoking a premium app-like entry."
+    },
+    "admin_review_queue": {
+      "layout": "Full-width dashboard (macOS Finder style). Top bar contains search, filters (weight class, status, club), and bulk-action triggers. Main area is a dense, high-contrast table view optimized for scanning.",
+      "visuals": "Use sticky headers with glassmorphism. Empty states should feature minimalist icons and muted typography."
+    },
+    "reviewer_workbench": {
+      "layout": "Split-pane layout (Notion/macOS Mail style). Left sidebar (30% width) contains a scrollable list of applicants in the queue. Right main pane (70% width) displays the selected applicant's full detail view, timeline, and sticky action footer (Approve/Reject/Correction).",
+      "visuals": "Sidebar items should have clear active states (e.g., bg-surface_muted with a primary_accent left border). Detail view should use a Bento-grid style layout for quick scanning of Medical, Weight, and Record."
+    },
+    "club_dashboard": {
+      "layout": "Grid-based overview (Bento grid). Top row: key metrics (Drafts, Needs Correction, Approved). Main area: Tabs separating 'Roster' and 'Correction Inbox'.",
+      "visuals": "Focus on high legibility and clear status indicators."
+    }
+  },
+  "interaction_specs": {
+    "validation_behavior": "Inline, real-time validation. Error messages appear below inputs in text-red-500 text-xs with a subtle slide-down animation.",
+    "correction_window": "When admin requests correction, a slide-out drawer (macOS style side-sheet) appears to input the exact reason. Sends applicant a highlighted view of the specific fields to fix.",
+    "bulk_actions": "Selecting multiple queue rows reveals a floating action bar (glassmorphic) at the bottom center of the viewport, with options to bulk approve or request medical re-checks.",
+    "accessibility": "All inputs MUST have focus rings (focus:ring-2). Ensure APCA contrast compliance, especially for dark mode text-secondary on surface_muted backgrounds."
+  },
+  "media": {
+    "images": {
+      "hero_background_editorial": {
+        "url": "https://static.prod-images.emergentagent.com/jobs/bd549dfe-9938-4400-b660-7645e98fe567/images/4b840e3988393e715cdd6047052c576e4fbbed0c03c05558cd52613d9e761ba3.png",
+        "description": "Abstract, high-end editorial photography of a martial arts dojo at golden hour.",
+        "usage": "Use as full-screen background for public registration page with a dark overlay, or as a subtle textured background in the login screen."
+      },
+      "dark_mode_texture": {
+        "url": "https://static.prod-images.emergentagent.com/jobs/bd549dfe-9938-4400-b660-7645e98fe567/images/bc270ff15427769bf8ec447b187efba89c6f030fb1648042081cfd38dd6fb9c4.png",
+        "description": "Macro photography of black belt martial arts texture.",
+        "usage": "Use for dark-mode specific empty states, sidebars, or modal backgrounds as a faint overlay."
+      },
+      "avatar_placeholder_1": {
+        "url": "https://images.unsplash.com/photo-1720641424853-36bea6e1682b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTZ8MHwxfHNlYXJjaHwzfHxtYXJ0aWFsJTIwYXJ0cyUyMGZpZ2h0ZXIlMjBwb3J0cmFpdCUyMGJsYWNrJTIwYW5kJTIwd2hpdGV8ZW58MHx8fHwxNzc2NjAzNzM4fDA&ixlib=rb-4.1.0&q=85",
+        "description": "A man standing in the dark with his hands in his pockets.",
+        "usage": "Applicant profile picture placeholder in mock data."
+      },
+      "avatar_placeholder_2": {
+        "url": "https://images.pexels.com/photos/36763067/pexels-photo-36763067.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Black and white portrait of a martial artist in a Gi with confident pose.",
+        "usage": "Applicant profile picture placeholder in mock data."
+      }
+    }
+  },
+  "instructions_to_main_agent": [
+    "Strictly follow the color tokens: rely heavily on monochrome layers (surface, surface_muted) and use the primary accent (#E5484D) solely for primary CTAs and critical states.",
+    "Implement light and dark mode toggling utilizing Tailwind's 'dark:' variant class structure.",
+    "For Shadcn components, override default padding and borders to match the 'spacing_and_layout' guidelines (e.g., rounded-xl for cards, glassmorphic headers).",
+    "Do NOT use HTML generic <select> or <input type='date'>. Use Shadcn Dropdown, Select, and Calendar.",
+    "Ensure all interactive elements have data-testid attributes for testing.",
+    "Use Lucide-React or Phosphor Icons for sharp, thin-stroke iconography (avoid heavy/filled icons unless active).",
+    "For the Review Workbench, use a flex layout with h-screen to ensure the left sidebar scrolls independently of the right content pane.",
+    "Never use placeholder URLs (like via.placeholder.com). Use the provided image URLs in the 'media' object."
+  ]
+}
