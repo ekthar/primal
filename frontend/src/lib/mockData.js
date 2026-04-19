@@ -137,6 +137,29 @@ export function makeFighters(count = 36) {
 
 export const FIGHTERS = makeFighters(42);
 
+// Ensure the default club demo (Sakura Gym, c1) has at least one
+// "needs_correction" fighter so the Correction Inbox is populated on first load.
+(function seedClubInbox() {
+  const hasCorrection = FIGHTERS.some((f) => f.clubId === "c1" && f.status === STATUS.NEEDS_CORRECTION);
+  if (!hasCorrection) {
+    const target = FIGHTERS.find((f) => f.clubId === "c1");
+    if (target) {
+      target.status = STATUS.NEEDS_CORRECTION;
+      target.medicalValid = false;
+      target.notes = "Medical certificate expired 2026-01-12 — please upload a renewed copy.";
+      target.timeline = [
+        ...target.timeline,
+        {
+          at: new Date(Date.now() - 2 * 864e5).toISOString(),
+          kind: "needs_correction",
+          label: "Correction requested — medical certificate expired",
+          actor: "Luca Moretti",
+        },
+      ];
+    }
+  }
+})();
+
 export function statusCounts(list = FIGHTERS) {
   return Object.values(STATUS).reduce((acc, s) => {
     acc[s] = list.filter((f) => f.status === s).length;

@@ -164,7 +164,7 @@ function MobileTopbar() {
   const loc = useLocation();
   const pageName = loc.pathname.split("/").pop() || "Dashboard";
   return (
-    <div className="md:hidden sticky top-0 z-30 flex items-center justify-between px-4 h-14 border-b border-border bg-background/80 backdrop-blur-xl">
+    <div data-testid="mobile-topbar" className="md:hidden sticky top-0 z-30 flex items-center justify-between px-4 h-14 border-b border-border bg-background/80 backdrop-blur-xl">
       <Brand />
       <div className="flex items-center gap-2">
         <ThemeToggle compact />
