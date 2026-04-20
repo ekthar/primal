@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import Link from "next/link";
+import { useRouter } from "next/router";
 import { ArrowLeft, ArrowRight, Check, Shield, User, Stethoscope, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +19,7 @@ const STEPS = [
 ];
 
 export default function Register() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
     firstName: "",
@@ -80,7 +81,7 @@ export default function Register() {
       return;
     }
     toast.success("Application submitted — you'll receive status updates by email");
-    setTimeout(() => navigate("/applicant"), 800);
+    setTimeout(() => router.push("/applicant"), 800);
   };
 
   const progress = ((step - 1) / (STEPS.length - 1)) * 100;
@@ -90,7 +91,7 @@ export default function Register() {
       {/* Top bar */}
       <div className="sticky top-0 z-30 border-b border-border bg-background/70 backdrop-blur-xl">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2">
+          <Link href="/" className="flex items-center gap-2">
             <div className="size-7 rounded-lg bg-foreground text-background flex items-center justify-center font-display font-bold text-xs">T</div>
             <span className="font-display font-semibold tracking-tight text-sm">TournamentOS</span>
           </Link>

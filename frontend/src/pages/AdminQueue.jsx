@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useRouter } from "next/router";
 import {
   Search,
   Filter,
@@ -40,7 +40,7 @@ import {
 const ALL_STATUS = Object.values(STATUS);
 
 export default function AdminQueue() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [activeStatus, setActiveStatus] = useState("all");
   const [clubFilter, setClubFilter] = useState([]);
@@ -222,7 +222,7 @@ export default function AdminQueue() {
                 return (
                   <tr
                     key={f.id}
-                    onClick={() => navigate(`/admin/review/${f.id}`)}
+                    onClick={() => router.push(`/admin/review/${f.id}`)}
                     data-testid={`queue-row-${f.id}`}
                     className={`group border-b border-border cursor-pointer transition-colors ${
                       isSelected ? "bg-primary/5" : "hover:bg-surface-muted/50"

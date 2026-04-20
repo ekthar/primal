@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import Link from "next/link";
+import { useRouter } from "next/router";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +19,7 @@ const ROLES = [
 
 export default function Login() {
   const { login } = useAuth();
-  const navigate = useNavigate();
+  const router = useRouter();
   const [role, setRole] = useState("admin");
   const [email, setEmail] = useState("mei@tournamentos.io");
   const [password, setPassword] = useState("demo1234");
@@ -40,7 +41,7 @@ export default function Login() {
       login(role);
       toast.success(`Welcome back — signed in as ${role}`);
       const routes = { admin: "/admin/queue", reviewer: "/admin/queue", club: "/club", applicant: "/applicant" };
-      navigate(routes[role]);
+        router.push(routes[role]);
     }, 600);
   };
 
@@ -49,7 +50,7 @@ export default function Login() {
       {/* Left — form */}
       <div className="flex-1 flex flex-col">
         <div className="flex items-center justify-between px-6 sm:px-10 py-5">
-          <Link to="/" className="flex items-center gap-2" data-testid="back-home">
+          <Link href="/" className="flex items-center gap-2" data-testid="back-home">
             <div className="size-8 rounded-lg bg-foreground text-background flex items-center justify-center font-display font-bold text-sm">T</div>
             <span className="font-display font-semibold tracking-tight">TournamentOS</span>
           </Link>
@@ -115,7 +116,7 @@ export default function Login() {
             </form>
 
             <p className="mt-6 text-xs text-tertiary text-center">
-              Demo prototype · Any password works · <Link to="/register" className="text-foreground hover:underline">Register instead</Link>
+              Demo prototype · Any password works · <Link href="/register" className="text-foreground hover:underline">Register instead</Link>
             </p>
           </div>
         </div>

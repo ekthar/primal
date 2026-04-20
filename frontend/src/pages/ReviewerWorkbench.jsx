@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useRouter } from "next/router";
 import {
   CheckCircle2,
   XCircle,
@@ -35,8 +35,8 @@ import { FIGHTERS, STATUS } from "@/lib/mockData";
 import { toast } from "sonner";
 
 export default function ReviewerWorkbench() {
-  const { id } = useParams();
-  const navigate = useNavigate();
+  const router = useRouter();
+  const id = Array.isArray(router.query.id) ? router.query.id[0] : router.query.id;
   const [fighters, setFighters] = useState(FIGHTERS);
   const [activeId, setActiveId] = useState(id || fighters[0]?.id);
   const [sideSearch, setSideSearch] = useState("");
@@ -59,7 +59,7 @@ export default function ReviewerWorkbench() {
 
   const pick = (fid) => {
     setActiveId(fid);
-    navigate(`/admin/review/${fid}`, { replace: true });
+    router.replace(`/admin/review/${fid}`);
   };
 
   const updateStatus = (newStatus, label, extra) => {

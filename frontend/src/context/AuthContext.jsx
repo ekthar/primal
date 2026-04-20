@@ -12,19 +12,25 @@ const MOCK_USERS = {
 };
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [user, setUser] = useState(null);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      setUser(raw ? JSON.parse(raw) : null);
+    } catch {
+      setUser(null);
+    } finally {
+      setReady(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
     if (user) localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
     else localStorage.removeItem(STORAGE_KEY);
-  }, [user]);
+  }, [ready, user]);
 
   const login = (role = "admin") => {
     const u = MOCK_USERS[role] || MOCK_USERS.admin;
@@ -35,7 +41,7 @@ export function AuthProvider({ children }) {
   const switchRole = (role) => login(role);
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, switchRole, MOCK_USERS }}>
+    <AuthContext.Provider value={{ user, ready, login, logout, switchRole, MOCK_USERS }}>
       {children}
     </AuthContext.Provider>
   );

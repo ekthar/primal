@@ -1,4 +1,5 @@
-import { Outlet, NavLink, useLocation } from "react-router-dom";
+import Link from "next/link";
+import { useRouter } from "next/router";
 import {
   LayoutDashboard,
   Users,
@@ -23,7 +24,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useNavigate } from "react-router-dom";
+
+function isActivePath(pathname, target) {
+  if (target === "/admin/review") {
+    return pathname === "/admin/review" || pathname === "/admin/review/[id]" || pathname.startsWith("/admin/review/");
+  }
+
+  return pathname === target || pathname.startsWith(`${target}/`);
+}
 
 const NAV = {
   admin: [
@@ -63,13 +71,13 @@ function Brand() {
 
 function RoleSwitcher() {
   const { user, switchRole, logout, MOCK_USERS } = useAuth();
-  const navigate = useNavigate();
+  const router = useRouter();
   if (!user) return null;
 
   const go = (role) => {
     switchRole(role);
     const routes = { admin: "/admin/queue", reviewer: "/admin/queue", club: "/club", applicant: "/applicant" };
-    navigate(routes[role] || "/");
+    router.push(routes[role] || "/");
   };
 
   return (
@@ -106,7 +114,7 @@ function RoleSwitcher() {
           <Settings className="size-3.5" />
           Settings
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => { logout(); navigate("/login"); }} data-testid="logout-btn">
+        <DropdownMenuItem onClick={() => { logout(); router.push("/login"); }} data-testid="logout-btn">
           <LogOut className="size-3.5" />
           Log out
         </DropdownMenuItem>
@@ -117,6 +125,7 @@ function RoleSwitcher() {
 
 function Sidebar() {
   const { user } = useAuth();
+  const router = useRouter();
   const nav = NAV[user?.role] || [];
   return (
     <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-border bg-surface/40 backdrop-blur-xl">
@@ -128,26 +137,19 @@ function Sidebar() {
           Workspace
         </div>
         {nav.map((n) => (
-          <NavLink
+          <Link
             key={n.to}
-            to={n.to}
-            end
+            href={n.to}
             data-testid={n.testid}
-            className={({ isActive }) =>
-              `group flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ease-ios ${
-                isActive
-                  ? "bg-surface-muted text-foreground font-medium shadow-inner-top"
-                  : "text-secondary-muted hover:text-foreground hover:bg-surface-muted/60"
-              }`
-            }
+            className={`group flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ease-ios ${
+              isActivePath(router.pathname, n.to)
+                ? "bg-surface-muted text-foreground font-medium shadow-inner-top"
+                : "text-secondary-muted hover:text-foreground hover:bg-surface-muted/60"
+            }`}
           >
-            {({ isActive }) => (
-              <>
-                <n.icon className={`size-[17px] ${isActive ? "text-primary" : ""}`} strokeWidth={1.75} />
-                <span>{n.label}</span>
-              </>
-            )}
-          </NavLink>
+            <n.icon className={`size-[17px] ${isActivePath(router.pathname, n.to) ? "text-primary" : ""}`} strokeWidth={1.75} />
+            <span>{n.label}</span>
+          </Link>
         ))}
       </nav>
       <div className="p-3 border-t border-border space-y-2">
@@ -163,8 +165,6 @@ function Sidebar() {
 
 function MobileTopbar() {
   const { user } = useAuth();
-  const loc = useLocation();
-  const pageName = loc.pathname.split("/").pop() || "Dashboard";
   return (
     <div data-testid="mobile-topbar" className="md:hidden sticky top-0 z-30 flex items-center justify-between px-4 h-14 border-b border-border bg-background/80 backdrop-blur-xl">
       <Brand />
@@ -180,15 +180,13 @@ function MobileTopbar() {
   );
 }
 
-export default function AppShell() {
+export default function AppShell({ children }) {
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar />
       <main className="flex-1 flex flex-col min-w-0">
         <MobileTopbar />
-        <div className="flex-1">
-          <Outlet />
-        </div>
+        <div className="flex-1">{children}</div>
       </main>
     </div>
   );
