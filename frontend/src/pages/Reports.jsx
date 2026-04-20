@@ -15,6 +15,7 @@ export default function Reports() {
   const [workload, setWorkload] = useState([]);
 
   const [loadingParticipants, setLoadingParticipants] = useState(false);
+  const [downloadingAllPdfs, setDownloadingAllPdfs] = useState(false);
   const [participantSearch, setParticipantSearch] = useState("");
   const [participantTotals, setParticipantTotals] = useState({
     approvedApplications: 0,
@@ -103,6 +104,54 @@ export default function Reports() {
     [individualParticipants, participantSearch]
   );
 
+  const allApprovedApplicationRows = useMemo(() => {
+    const deduped = new Map();
+    [...clubParticipants, ...individualParticipants].forEach((row) => {
+      if (!row?.applicationId) return;
+      if (!deduped.has(row.applicationId)) deduped.set(row.applicationId, row);
+    });
+    return Array.from(deduped.values());
+  }, [clubParticipants, individualParticipants]);
+
+  async function handleDownloadApplicationPdf(applicationId) {
+    const { error } = await api.downloadApplicationPdf(applicationId);
+    if (error) {
+      toast.error(error.message || "Failed to download participant PDF");
+      return;
+    }
+    toast.success("Participant PDF downloaded");
+  }
+
+  async function handleDownloadAllParticipantPdfs() {
+    if (!allApprovedApplicationRows.length) {
+      toast.error("No approved participants available for PDF download");
+      return;
+    }
+
+    if (allApprovedApplicationRows.length > 250) {
+      const ok = window.confirm(`This will download ${allApprovedApplicationRows.length} individual PDF files. Continue?`);
+      if (!ok) return;
+    }
+
+    setDownloadingAllPdfs(true);
+    let success = 0;
+    let failed = 0;
+
+    for (const row of allApprovedApplicationRows) {
+      // Sequential downloads keep API load stable and avoid browser throttling bursts.
+      const { error } = await api.downloadApplicationPdf(row.applicationId);
+      if (error) failed += 1;
+      else success += 1;
+    }
+
+    setDownloadingAllPdfs(false);
+    if (failed) {
+      toast.warning(`Downloaded ${success} PDFs, ${failed} failed`);
+      return;
+    }
+    toast.success(`Downloaded ${success} approved participant PDFs`);
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-6 py-8">
       <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -188,9 +237,14 @@ export default function Reports() {
                   <h2 className="font-display text-2xl font-semibold tracking-tight">Approved participants report</h2>
                   <p className="text-sm text-secondary-muted mt-1">Club-wise and individual participant tables for approved applications.</p>
                 </div>
-                <Button variant="outline" size="sm" onClick={loadParticipantReport}>
-                  <RefreshCcw className="size-4" /> Refresh participant report
-                </Button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button variant="outline" size="sm" disabled={downloadingAllPdfs || loadingParticipants} onClick={handleDownloadAllParticipantPdfs}>
+                    <Download className="size-4" /> {downloadingAllPdfs ? "Downloading PDFs..." : "Print/download all participant PDFs"}
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={loadParticipantReport}>
+                    <RefreshCcw className="size-4" /> Refresh participant report
+                  </Button>
+                </div>
               </div>
 
               <div className="mt-4 grid sm:grid-cols-3 gap-3">
@@ -216,11 +270,13 @@ export default function Reports() {
                     title="Club-wise participants"
                     rows={filteredClubParticipants}
                     showClub
+                    onDownloadApplication={handleDownloadApplicationPdf}
                   />
                   <ParticipantTable
                     title="Individual participants"
                     rows={filteredIndividualParticipants}
                     showClub={false}
+                    onDownloadApplication={handleDownloadApplicationPdf}
                   />
                 </div>
               )}
@@ -248,7 +304,7 @@ function filterParticipantRows(rows, query) {
   });
 }
 
-function ParticipantTable({ title, rows, showClub }) {
+function ParticipantTable({ title, rows, showClub, onDownloadApplication }) {
   return (
     <div className="rounded-2xl border border-border bg-background/50 overflow-hidden">
       <div className="px-4 py-3 border-b border-border font-medium text-sm">{title}</div>
@@ -262,6 +318,7 @@ function ParticipantTable({ title, rows, showClub }) {
               <th className="px-4 py-3">Sex</th>
               <th className="px-4 py-3">Discipline</th>
               {showClub && <th className="px-4 py-3">Club</th>}
+              <th className="px-4 py-3 text-right">Print form</th>
             </tr>
           </thead>
           <tbody>
@@ -276,6 +333,11 @@ function ParticipantTable({ title, rows, showClub }) {
                 <td className="px-4 py-3 text-sm capitalize">{row.sex || "-"}</td>
                 <td className="px-4 py-3 text-sm">{row.discipline || "-"}</td>
                 {showClub && <td className="px-4 py-3 text-sm">{row.clubName || "-"}</td>}
+                <td className="px-4 py-3 text-right">
+                  <Button variant="outline" size="sm" onClick={() => onDownloadApplication(row.applicationId)}>
+                    <Download className="size-3.5" /> PDF
+                  </Button>
+                </td>
               </tr>
             ))}
           </tbody>

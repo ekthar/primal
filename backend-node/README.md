@@ -23,6 +23,7 @@ createdb tournamentos                 # or use a managed Postgres
 yarn install                          # or npm install
 npm run migrate                       # applies src/migrations/*.sql
 npm run seed                          # demo users, club, tournament
+npm run seed:loadtest                 # generate large approved-participant dataset (default 1500)
 npm run dev                           # starts on PORT (default 4000)
 npm test                              # runs vitest suite
 ```
@@ -185,6 +186,8 @@ tests/
 ### Reports & Exports
 - `GET /api/reports/summary`
 - `GET /api/reports/approved.xlsx`
+- `GET /api/reports/participants`      (admin)
+- `GET /api/reports/participants.xlsx` (admin)
 - `GET /api/reports/applications/:id.pdf`
 
 ### Audit (admin)

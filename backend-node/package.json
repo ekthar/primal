@@ -9,6 +9,7 @@
     "dev": "nodemon server.js",
     "migrate": "node src/db/migrate.js",
     "seed": "node src/db/seed.js",
+    "seed:loadtest": "node src/db/seed.loadtest.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint src server.js"
