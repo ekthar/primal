@@ -22,6 +22,7 @@
     "express-rate-limit": "^7.5.0",
     "google-auth-library": "^9.15.1",
     "helmet": "^8.0.0",
+    "india-pincode-search": "^1.0.2",
     "joi": "^17.13.3",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",

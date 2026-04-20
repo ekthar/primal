@@ -4,6 +4,17 @@ const { ALL_STATUSES } = require('./statusMachine');
 const uuid = Joi.string().uuid();
 const email = Joi.string().email().lowercase().trim();
 const password = Joi.string().min(8).max(200);
+const INDIA = 'India';
+const INDIA_PIN_REGEX = /^[1-9][0-9]{5}$/;
+
+const indiaAddressSchema = Joi.object({
+  country: Joi.string().valid(INDIA).default(INDIA),
+  state: Joi.string().min(2).max(120).required(),
+  district: Joi.string().min(2).max(120).required(),
+  line1: Joi.string().min(2).max(240).required(),
+  line2: Joi.string().max(240).allow(null, ''),
+  postalCode: Joi.string().pattern(INDIA_PIN_REGEX).required(),
+}).required();
 
 const schemas = {
   auth: {
@@ -23,6 +34,13 @@ const schemas = {
     }),
     refresh: Joi.object({
       refreshToken: Joi.string().required(),
+    }),
+    forgotPassword: Joi.object({
+      email: email.required(),
+    }),
+    resetPassword: Joi.object({
+      token: Joi.string().required(),
+      newPassword: password.required(),
     }),
     adminCreateUser: Joi.object({
       email: email.required(),
@@ -45,7 +63,7 @@ const schemas = {
       lastName: Joi.string().min(1).max(120).required(),
       dateOfBirth: Joi.date().iso().less('now').allow(null),
       gender: Joi.string().max(30).allow(null, ''),
-      nationality: Joi.string().max(120).allow(null, ''),
+      nationality: Joi.string().valid(INDIA).required(),
       discipline: Joi.string().max(60).allow(null, ''),
       weightKg: Joi.number().positive().max(300).allow(null),
       weightClass: Joi.string().max(60).allow(null, ''),
@@ -54,7 +72,12 @@ const schemas = {
       recordDraws: Joi.number().integer().min(0).default(0),
       bio: Joi.string().max(2000).allow(null, ''),
       clubId: uuid.allow(null),
-      metadata: Joi.object().default({}),
+      metadata: Joi.object({
+        selectedDisciplines: Joi.array().items(Joi.string().max(80)).default([]),
+        experienceLevel: Joi.string().max(80).allow(null, ''),
+        phone: Joi.string().max(30).allow(null, ''),
+        address: indiaAddressSchema,
+      }).unknown(true).required(),
     }),
   },
 
@@ -63,16 +86,34 @@ const schemas = {
       name: Joi.string().min(2).max(120).required(),
       slug: Joi.string().pattern(/^[a-z0-9-]+$/).min(2).max(80).required(),
       city: Joi.string().max(120).allow(null, ''),
-      country: Joi.string().max(120).allow(null, ''),
+      country: Joi.string().valid(INDIA).default(INDIA),
       metadata: Joi.object().default({}),
     }),
     update: Joi.object({
       name: Joi.string().min(2).max(120),
       city: Joi.string().max(120).allow(null, ''),
-      country: Joi.string().max(120).allow(null, ''),
+      country: Joi.string().valid(INDIA),
       status: Joi.string().valid('pending', 'active', 'suspended'),
       metadata: Joi.object(),
     }).min(1),
+    listParticipants: Joi.object({
+      q: Joi.string().max(200).allow(''),
+      limit: Joi.number().integer().min(1).max(200).default(100),
+      offset: Joi.number().integer().min(0).default(0),
+    }),
+    createParticipant: Joi.object({
+      email: email.required(),
+      fullName: Joi.string().min(2).max(120).required(),
+      phone: Joi.string().max(30).allow(null, ''),
+      dateOfBirth: Joi.date().iso().less('now').allow(null),
+      gender: Joi.string().max(30).allow(null, ''),
+      discipline: Joi.string().max(60).allow(null, ''),
+      weightKg: Joi.number().positive().max(300).allow(null),
+      weightClass: Joi.string().max(60).allow(null, ''),
+      bio: Joi.string().max(2000).allow(null, ''),
+      address: indiaAddressSchema,
+      sendResetLink: Joi.boolean().default(true),
+    }),
   },
 
   application: {

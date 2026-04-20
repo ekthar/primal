@@ -1,14 +1,28 @@
-const { clubs: clubsRepo } = require('../repositories');
+const { clubs: clubsRepo, users: usersRepo, profiles: profilesRepo } = require('../repositories');
 const { ApiError } = require('../apiError');
 const { write: auditWrite } = require('../audit');
+const { hashPassword } = require('../security');
+const { validateIndiaAddress } = require('../indiaLocations');
+const { issuePasswordResetForUser, publicUser } = require('./auth.service');
+const { randomBytes } = require('crypto');
+
+async function assertClubAccess(user, clubId) {
+  const club = await clubsRepo.findById(clubId);
+  if (!club) throw ApiError.notFound('Club not found');
+  if (user.role === 'admin') return club;
+  if (user.role !== 'club') throw ApiError.forbidden();
+  if (club.primary_user_id !== user.id) throw ApiError.forbidden();
+  return club;
+}
 
 async function createClub(user, data, ctx = {}) {
-  const existing = await clubsRepo.findBySlug(data.slug);
+  const payload = { ...data, country: 'India' };
+  const existing = await clubsRepo.findBySlug(payload.slug);
   if (existing) throw ApiError.conflict('Slug already taken', { field: 'slug' });
-  const club = await clubsRepo.create({ ...data, primaryUserId: user.id });
+  const club = await clubsRepo.create({ ...payload, primaryUserId: user.id });
   await clubsRepo.addMember(club.id, user.id, 'manager');
   await auditWrite({ actorUserId: user.id, actorRole: user.role, action: 'club.create',
-    entityType: 'club', entityId: club.id, payload: data, requestIp: ctx.ip });
+    entityType: 'club', entityId: club.id, payload: payload, requestIp: ctx.ip });
   return club;
 }
 
@@ -28,6 +42,9 @@ async function updateClub(user, id, patch, ctx = {}) {
   if (user.role !== 'admin') {
     if (club.primary_user_id !== user.id) throw ApiError.forbidden();
     delete patch.status;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'country')) {
+    patch.country = 'India';
   }
   const updated = await clubsRepo.update(id, patch);
   await auditWrite({ actorUserId: user.id, actorRole: user.role, action: 'club.update',
@@ -67,4 +84,94 @@ async function restoreClub(user, id, ctx = {}) {
   return restored;
 }
 
-module.exports = { createClub, listClubsForUser, listPublicClubs, updateClub, approveClub, trashList, softDeleteClub, restoreClub };
+async function listParticipants(user, clubId, query = {}) {
+  await assertClubAccess(user, clubId);
+  return profilesRepo.listByClub(clubId, query);
+}
+
+async function createParticipant(user, clubId, payload, ctx = {}) {
+  const club = await assertClubAccess(user, clubId);
+  const email = String(payload.email || '').trim().toLowerCase();
+  const fullName = String(payload.fullName || '').trim();
+  const [firstName, ...rest] = fullName.split(/\s+/).filter(Boolean);
+  const lastName = rest.join(' ') || firstName;
+  const addressValidation = validateIndiaAddress(payload.address);
+  if (!addressValidation.valid) {
+    throw ApiError.badRequest('Invalid India address', {
+      field: addressValidation.field,
+      reason: addressValidation.reason,
+    });
+  }
+
+  let participantUser = await usersRepo.findByEmail(email);
+  let createdUser = false;
+  if (!participantUser) {
+    const tempPassword = randomBytes(12).toString('base64url');
+    participantUser = await usersRepo.create({
+      email,
+      passwordHash: await hashPassword(tempPassword),
+      role: 'applicant',
+      name: fullName,
+      locale: 'en',
+    });
+    createdUser = true;
+  } else if (participantUser.role !== 'applicant') {
+    throw ApiError.conflict('Email belongs to a non-applicant account', { field: 'email' });
+  }
+
+  const existingProfile = await profilesRepo.findByUserId(participantUser.id);
+  if (existingProfile && existingProfile.club_id && existingProfile.club_id !== club.id) {
+    throw ApiError.conflict('Participant already belongs to another club', { field: 'email' });
+  }
+
+  const profile = await profilesRepo.upsertForUser(participantUser.id, {
+    firstName,
+    lastName,
+    dateOfBirth: payload.dateOfBirth || null,
+    gender: payload.gender || null,
+    nationality: 'India',
+    discipline: payload.discipline || null,
+    weightKg: payload.weightKg || null,
+    weightClass: payload.weightClass || null,
+    recordWins: existingProfile?.record_wins || 0,
+    recordLosses: existingProfile?.record_losses || 0,
+    recordDraws: existingProfile?.record_draws || 0,
+    bio: payload.bio || null,
+    clubId: club.id,
+    metadata: {
+      ...(existingProfile?.metadata || {}),
+      phone: payload.phone || participantUser.phone || null,
+      address: addressValidation.normalized,
+      managedByClub: true,
+    },
+  });
+
+  let resetUrl = null;
+  if (payload.sendResetLink || createdUser) {
+    const issued = await issuePasswordResetForUser(participantUser, ctx);
+    resetUrl = issued.resetUrl;
+  }
+
+  await auditWrite({ actorUserId: user.id, actorRole: user.role, action: 'club.participant.create',
+    entityType: 'profile', entityId: profile.id, payload: { clubId: club.id, userId: participantUser.id }, requestIp: ctx.ip });
+
+  const out = {
+    user: publicUser(participantUser),
+    profile,
+  };
+  if (resetUrl && user.role !== 'admin') out.resetUrl = resetUrl;
+  return out;
+}
+
+module.exports = {
+  createClub,
+  listClubsForUser,
+  listPublicClubs,
+  updateClub,
+  approveClub,
+  trashList,
+  softDeleteClub,
+  restoreClub,
+  listParticipants,
+  createParticipant,
+};

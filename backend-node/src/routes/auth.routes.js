@@ -20,6 +20,21 @@ router.post('/google', validate(schemas.auth.google), ah(async (req, res) => {
   res.json(out);
 }));
 
+router.post('/forgot-password', validate(schemas.auth.forgotPassword), ah(async (req, res) => {
+  const out = await auth.requestPasswordReset(req.body, {
+    ip: req.ip,
+    userAgent: req.get('user-agent'),
+    origin: req.get('origin'),
+    referer: req.get('referer'),
+  });
+  res.json(out);
+}));
+
+router.post('/reset-password', validate(schemas.auth.resetPassword), ah(async (req, res) => {
+  const out = await auth.resetPassword(req.body, { ip: req.ip, userAgent: req.get('user-agent') });
+  res.json(out);
+}));
+
 router.post('/refresh', validate(schemas.auth.refresh), ah(async (req, res) => {
   const out = await auth.refresh(req.body, { ip: req.ip, userAgent: req.get('user-agent') });
   res.json(out);

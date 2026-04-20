@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Layers3, ListChecks, TimerReset, RefreshCcw } from "lucide-react";
+import { ArrowRight, Layers3, ListChecks, TimerReset, RefreshCcw, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import api from "@/lib/api";
 import { toast } from "sonner";
@@ -37,6 +37,15 @@ export default function AdminOverview() {
     setCounts(queueRes.data?.counts || {});
   }
 
+  async function handleApprovedParticipantsExport() {
+    const { error } = await api.downloadApprovedParticipantsXlsx();
+    if (error) {
+      toast.error(error.message || "Failed to export approved participants");
+      return;
+    }
+    toast.success("Approved participants export started");
+  }
+
   const totalApplications = useMemo(() => Object.values(counts || {}).reduce((sum, n) => sum + Number(n || 0), 0), [counts]);
 
   return (
@@ -51,6 +60,7 @@ export default function AdminOverview() {
         </div>
         <div className="flex gap-2">
           <Link href="/admin/queue"><Button variant="outline"><ListChecks className="size-4" /> Review queue</Button></Link>
+          <Button variant="outline" onClick={handleApprovedParticipantsExport}><Download className="size-4" /> Approved participants</Button>
           <Button variant="outline" onClick={loadOverview}><RefreshCcw className="size-4" /> Refresh</Button>
         </div>
       </div>

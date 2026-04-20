@@ -6,6 +6,7 @@ const circularsService = require('../services/circular.service');
 const { schemas } = require('../validators');
 const { verifySignatureForApplication } = require('../pdfSignature');
 const { config } = require('../config');
+const { getIndiaStates, getDistrictsByState, getCanonicalStateName, lookupPincode } = require('../indiaLocations');
 
 const router = Router();
 
@@ -30,6 +31,39 @@ router.get('/clubs', ah(async (req, res) => {
 router.get('/circulars', validate(schemas.circulars.listPublic, 'query'), ah(async (req, res) => {
   const circulars = await circularsService.listPublic({ kind: req.query.kind, limit: req.query.limit });
   res.json({ circulars });
+}));
+
+router.get('/india/states', ah(async (_req, res) => {
+  res.json({ country: 'India', states: getIndiaStates() });
+}));
+
+router.get('/india/districts', ah(async (req, res) => {
+  const stateInput = String(req.query.state || '').trim();
+  if (!stateInput) {
+    res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'state is required' } });
+    return;
+  }
+
+  const state = getCanonicalStateName(stateInput);
+  if (!state) {
+    res.status(404).json({ error: { code: 'NOT_FOUND', message: 'State/UT not found in India directory' } });
+    return;
+  }
+
+  res.json({
+    country: 'India',
+    state,
+    districts: getDistrictsByState(state),
+  });
+}));
+
+router.get('/india/pincode/:pincode', ah(async (req, res) => {
+  const location = lookupPincode(req.params.pincode);
+  if (!location) {
+    res.status(404).json({ error: { code: 'NOT_FOUND', message: 'PIN code not found in India directory' } });
+    return;
+  }
+  res.json({ location });
 }));
 
 router.get('/verify/application-signature', ah(async (req, res) => {

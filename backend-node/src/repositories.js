@@ -27,6 +27,8 @@ const users = {
     return rows[0];
   },
   touchLogin: (id) => query(`UPDATE users SET last_login_at = NOW() WHERE id = $1`, [id]),
+  updatePassword: async (id, passwordHash) =>
+    (await query(`UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2 RETURNING *`, [passwordHash, id])).rows[0],
   updateNotificationPreferences: async (id, prefs) =>
     (await query(`UPDATE users SET notification_preferences = $1 WHERE id = $2 RETURNING *`, [prefs, id])).rows[0],
   softDelete: (id) => query(`UPDATE users SET deleted_at = NOW() WHERE id = $1`, [id]),
@@ -97,6 +99,24 @@ const clubs = {
 const profiles = {
   findById: async (id) => (await query(`SELECT * FROM profiles WHERE id=$1 AND ${ACTIVE}`, [id])).rows[0],
   findByUserId: async (userId) => (await query(`SELECT * FROM profiles WHERE user_id=$1 AND ${ACTIVE}`, [userId])).rows[0],
+  listByClub: async (clubId, { q, limit = 100, offset = 0 } = {}) => {
+    const args = [clubId];
+    const where = [`p.club_id = $1`, `p.${ACTIVE}`];
+    if (q) {
+      args.push(`%${q}%`);
+      where.push(`(p.first_name ILIKE $${args.length} OR p.last_name ILIKE $${args.length} OR u.email ILIKE $${args.length})`);
+    }
+    args.push(limit);
+    args.push(offset);
+    const sql = `
+      SELECT p.*, u.email, u.phone, u.role
+      FROM profiles p
+      JOIN users u ON u.id = p.user_id
+      WHERE ${where.join(' AND ')}
+      ORDER BY p.created_at DESC
+      LIMIT $${args.length - 1} OFFSET $${args.length}`;
+    return (await query(sql, args)).rows;
+  },
   upsertForUser: async (userId, p) => {
     const { rows } = await query(
       `INSERT INTO profiles (user_id, club_id, first_name, last_name, date_of_birth, gender, nationality,

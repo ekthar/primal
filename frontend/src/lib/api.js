@@ -120,6 +120,8 @@ async function downloadFile(path, { query, filename }) {
 export const api = {
   register: (body) => request("POST", "/api/auth/register", { body }),
   login: (body) => request("POST", "/api/auth/login", { body }),
+  forgotPassword: (body) => request("POST", "/api/auth/forgot-password", { body }),
+  resetPassword: (body) => request("POST", "/api/auth/reset-password", { body }),
   loginWithGoogle: (idToken) => request("POST", "/api/auth/google", { body: { idToken } }),
   refresh: (refreshToken) => request("POST", "/api/auth/refresh", { body: { refreshToken } }),
   me: () => request("GET", "/api/auth/me"),
@@ -133,6 +135,8 @@ export const api = {
   createClub: (body) => request("POST", "/api/clubs", { body }),
   listClubs: (query) => request("GET", "/api/clubs", { query }),
   updateClub: (id, body) => request("PATCH", `/api/clubs/${id}`, { body }),
+  listClubParticipants: (clubId, query) => request("GET", `/api/clubs/${clubId}/participants`, { query }),
+  createClubParticipant: (clubId, body) => request("POST", `/api/clubs/${clubId}/participants`, { body }),
 
   createApplication: (body) => request("POST", "/api/applications", { body }),
   listApplications: (query) => request("GET", "/api/applications", { query }),
@@ -166,11 +170,16 @@ export const api = {
   decideAppeal: (id, body) => request("POST", `/api/appeals/${id}/decision`, { body }),
 
   reportSummary: () => request("GET", "/api/reports/summary"),
+  reportParticipants: (query) => request("GET", "/api/reports/participants", { query }),
   exportApprovedXlsx: () => `${BASE_URL}/api/reports/approved.xlsx`,
   exportApplicationPdf: (id) => `${BASE_URL}/api/reports/applications/${id}.pdf`,
   downloadApprovedXlsx: (query) => downloadFile("/api/reports/approved.xlsx", {
     query,
     filename: "approved-applications.xlsx",
+  }),
+  downloadApprovedParticipantsXlsx: (query) => downloadFile("/api/reports/participants.xlsx", {
+    query,
+    filename: "approved-participants.xlsx",
   }),
   downloadApplicationPdf: (id) => downloadFile(`/api/reports/applications/${id}.pdf`, {
     filename: `application-${id}.pdf`,
@@ -188,6 +197,9 @@ export const api = {
   publicParticipants: (query) => request("GET", "/api/public/participants", { query }),
   publicClubs: (query) => request("GET", "/api/public/clubs", { query }),
   publicCirculars: (query) => request("GET", "/api/public/circulars", { query }),
+  publicIndiaStates: () => request("GET", "/api/public/india/states"),
+  publicIndiaDistricts: (state) => request("GET", "/api/public/india/districts", { query: { state } }),
+  publicIndiaPincodeLookup: (pincode) => request("GET", `/api/public/india/pincode/${encodeURIComponent(pincode)}`),
 
   listCirculars: (query) => request("GET", "/api/circulars", { query }),
   createCircular: (body) => request("POST", "/api/circulars", { body }),

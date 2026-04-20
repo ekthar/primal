@@ -105,6 +105,11 @@ export default function Login() {
                   className="mt-1.5 h-11 bg-surface"
                   placeholder="demo1234"
                 />
+                <div className="mt-2 text-right">
+                  <Link href="/forgot-password" className="text-xs text-secondary-muted hover:text-foreground hover:underline">
+                    Forgot password?
+                  </Link>
+                </div>
               </div>
               <Button
                 type="submit"
@@ -117,7 +122,7 @@ export default function Login() {
             </form>
 
             <p className="mt-6 text-xs text-tertiary text-center">
-              Seed password: `demo1234` · <Link href="/register" className="text-foreground hover:underline">Register instead</Link>
+              Seed password: demo1234 · <Link href="/register" className="text-foreground hover:underline">Register instead</Link>
             </p>
           </div>
         </div>

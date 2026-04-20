@@ -28,8 +28,20 @@ function signRefresh(user, overrides = {}) {
     { expiresIn: config.jwt.refreshTtl, issuer: 'tournamentos' }
   );
 }
+function signPasswordReset(payload) {
+  return jwt.sign(
+    {
+      sub: payload.id,
+      email: payload.email,
+      pwf: payload.pwf,
+      type: 'password_reset',
+    },
+    config.jwt.secret,
+    { expiresIn: config.jwt.passwordResetTtl, issuer: 'tournamentos' }
+  );
+}
 function verifyToken(token) {
   return jwt.verify(token, config.jwt.secret, { issuer: 'tournamentos' });
 }
 
-module.exports = { hashPassword, verifyPassword, signAccess, signRefresh, verifyToken };
+module.exports = { hashPassword, verifyPassword, signAccess, signRefresh, signPasswordReset, verifyToken };

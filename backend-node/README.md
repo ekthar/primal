@@ -140,6 +140,8 @@ tests/
 - `POST /api/auth/register` — email + password
 - `POST /api/auth/login`
 - `POST /api/auth/google` — idToken
+- `POST /api/auth/forgot-password`
+- `POST /api/auth/reset-password`
 - `GET  /api/auth/me`
 - `POST /api/auth/logout`
 
@@ -153,6 +155,8 @@ tests/
 - `GET  /api/clubs`
 - `PATCH /api/clubs/:id`
 - `POST /api/clubs/:id/approve`   (admin only)
+- `GET  /api/clubs/:id/participants`
+- `POST /api/clubs/:id/participants`
 
 ### Applications (individual + via club)
 - `POST /api/applications`

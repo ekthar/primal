@@ -24,6 +24,7 @@ const config = {
     secret: process.env.JWT_SECRET || 'dev-only-change-me',
     accessTtl: process.env.JWT_ACCESS_TTL || '15m',
     refreshTtl: process.env.JWT_REFRESH_TTL || '30d',
+    passwordResetTtl: process.env.JWT_PASSWORD_RESET_TTL || '30m',
   },
 
   google: {

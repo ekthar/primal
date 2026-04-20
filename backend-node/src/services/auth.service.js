@@ -1,8 +1,64 @@
 const { users: usersRepo, sessions: sessionsRepo } = require('../repositories');
-const { hashPassword, verifyPassword, signAccess, signRefresh, verifyToken } = require('../security');
+const { hashPassword, verifyPassword, signAccess, signRefresh, signPasswordReset, verifyToken } = require('../security');
 const { ApiError } = require('../apiError');
 const { config } = require('../config');
 const { write: auditWrite } = require('../audit');
+const { dispatch: notify } = require('../notifications');
+const { createHash } = require('crypto');
+
+function passwordHashFingerprint(passwordHash) {
+  return createHash('sha256').update(String(passwordHash || '')).digest('hex').slice(0, 24);
+}
+
+function normalizeHttpOrigin(raw) {
+  const value = String(raw || '').trim();
+  if (!value) return null;
+  try {
+    const parsed = new URL(value);
+    if (!['http:', 'https:'].includes(parsed.protocol)) return null;
+    return parsed.origin;
+  } catch {
+    return null;
+  }
+}
+
+function resolveResetBaseUrl(ctx = {}) {
+  const configured = normalizeHttpOrigin(config.webBaseUrl);
+  const fromOrigin = normalizeHttpOrigin(ctx.origin);
+  const fromReferer = normalizeHttpOrigin(ctx.referer);
+
+  if (config.env === 'production') {
+    return configured || fromOrigin || fromReferer || 'http://localhost:3000';
+  }
+
+  // In local/staging, prefer caller origin when default localhost config is not accurate.
+  if (!configured || configured === 'http://localhost:3000') {
+    return fromOrigin || fromReferer || configured || 'http://localhost:3000';
+  }
+
+  return configured;
+}
+
+async function issuePasswordResetForUser(user, ctx = {}, { sendNotification = true } = {}) {
+  const token = signPasswordReset({
+    id: user.id,
+    email: user.email,
+    pwf: passwordHashFingerprint(user.password_hash),
+  });
+  const resetBaseUrl = resolveResetBaseUrl(ctx);
+  const resetUrl = `${resetBaseUrl}/reset-password?token=${encodeURIComponent(token)}`;
+
+  if (sendNotification) {
+    await notify({
+      userId: user.id,
+      channels: ['email'],
+      to: { email: user.email },
+      template: 'auth.password_reset',
+      payload: { name: user.name, resetUrl },
+    });
+  }
+  return { token, resetUrl };
+}
 
 async function register({ email, password, name, role, locale }, ctx = {}) {
   const existing = await usersRepo.findByEmail(email);
@@ -141,6 +197,48 @@ async function listUsersByAdmin(actor, query = {}) {
   return users.map(publicUser);
 }
 
+async function requestPasswordReset({ email }, ctx = {}) {
+  const user = await usersRepo.findByEmail(email);
+  let resetUrl = null;
+  if (user) {
+    const issued = await issuePasswordResetForUser(user, ctx);
+    resetUrl = issued.resetUrl;
+    await auditWrite({ actorUserId: user.id, actorRole: user.role, action: 'user.password_reset.request',
+      entityType: 'user', entityId: user.id, payload: { email: user.email }, requestIp: ctx.ip });
+  }
+
+  const out = { ok: true };
+  if (config.env !== 'production' && resetUrl) out.resetUrl = resetUrl;
+  return out;
+}
+
+async function resetPassword({ token, newPassword }, ctx = {}) {
+  let decoded;
+  try {
+    decoded = verifyToken(token);
+  } catch {
+    throw ApiError.unauthorized('Invalid or expired reset token');
+  }
+  if (decoded.type !== 'password_reset' || !decoded.sub || !decoded.pwf) {
+    throw ApiError.unauthorized('Invalid reset token');
+  }
+
+  const user = await usersRepo.findById(decoded.sub);
+  if (!user) throw ApiError.unauthorized('User not found');
+
+  const expected = passwordHashFingerprint(user.password_hash);
+  if (expected !== decoded.pwf) {
+    throw ApiError.unauthorized('Reset token already used or expired');
+  }
+
+  const passwordHash = await hashPassword(newPassword);
+  await usersRepo.updatePassword(user.id, passwordHash);
+  await sessionsRepo.revokeForUser(user.id);
+  await auditWrite({ actorUserId: user.id, actorRole: user.role, action: 'user.password_reset.complete',
+    entityType: 'user', entityId: user.id, payload: {}, requestIp: ctx.ip });
+  return { ok: true };
+}
+
 module.exports = {
   register,
   login,
@@ -151,4 +249,7 @@ module.exports = {
   publicUser,
   createUserByAdmin,
   listUsersByAdmin,
+  requestPasswordReset,
+  resetPassword,
+  issuePasswordResetForUser,
 };

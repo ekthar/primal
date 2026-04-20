@@ -11,7 +11,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/api";
-import { COUNTRY_OPTIONS, getDistrictsByCountryState, getStatesByCountry } from "@/lib/locations";
 import { DISCIPLINE_DEFINITIONS, EXPERIENCE_LEVELS, GENDER_OPTIONS, createPreviewEntries } from "@/lib/tournamentWorkflow";
 import { HERO_IMAGE } from "@/lib/mockData";
 
@@ -31,6 +30,13 @@ export default function Register() {
   const [tournamentsLoading, setTournamentsLoading] = useState(true);
   const [tournamentId, setTournamentId] = useState("");
   const [loading, setLoading] = useState(false);
+  const [stateOptions, setStateOptions] = useState([]);
+  const [districtOptions, setDistrictOptions] = useState([]);
+  const [loadingStates, setLoadingStates] = useState(true);
+  const [loadingDistricts, setLoadingDistricts] = useState(false);
+  const [pincodeLookupBusy, setPincodeLookupBusy] = useState(false);
+  const [pincodeResolution, setPincodeResolution] = useState(null);
+  const [pincodeHint, setPincodeHint] = useState("");
   const [form, setForm] = useState({
     fullName: "",
     email: "",
@@ -39,7 +45,7 @@ export default function Register() {
     dob: "",
     phone: "",
     weight: "",
-    nationality: "",
+    nationality: "India",
     state: "",
     district: "",
     addressLine1: "",
@@ -51,7 +57,7 @@ export default function Register() {
     clubName: "",
     clubSlug: "",
     clubCity: "",
-    clubCountry: "",
+    clubCountry: "India",
   });
   const [documents, setDocuments] = useState({ medical: null, photo_id: null, consent: null });
   const [errors, setErrors] = useState({});
@@ -73,24 +79,137 @@ export default function Register() {
     };
   }, []);
 
+  useEffect(() => {
+    if (isClubTrack) {
+      setLoadingStates(false);
+      return;
+    }
+
+    let ignore = false;
+    async function loadIndiaStates() {
+      setLoadingStates(true);
+      const { data, error } = await api.publicIndiaStates();
+      if (ignore) return;
+      if (error) {
+        setStateOptions([]);
+        toast.error(error.message || "Unable to load India states");
+      } else {
+        setStateOptions(data?.states || []);
+      }
+      setLoadingStates(false);
+    }
+
+    loadIndiaStates();
+    return () => {
+      ignore = true;
+    };
+  }, [isClubTrack]);
+
+  useEffect(() => {
+    if (isClubTrack) return;
+    if (!form.state) {
+      setDistrictOptions([]);
+      return;
+    }
+
+    let ignore = false;
+    async function loadDistricts() {
+      setLoadingDistricts(true);
+      const { data, error } = await api.publicIndiaDistricts(form.state);
+      if (ignore) return;
+      if (error) {
+        setDistrictOptions([]);
+        setErrors((current) => ({ ...current, district: "District list unavailable for selected state" }));
+      } else {
+        setDistrictOptions(data?.districts || []);
+      }
+      setLoadingDistricts(false);
+    }
+
+    loadDistricts();
+    return () => {
+      ignore = true;
+    };
+  }, [form.state, isClubTrack]);
+
+  useEffect(() => {
+    if (isClubTrack) return;
+    const pin = String(form.postalCode || "").replace(/\D/g, "");
+
+    if (!pin) {
+      setPincodeResolution(null);
+      setPincodeHint("");
+      setPincodeLookupBusy(false);
+      return;
+    }
+
+    if (!/^[1-9][0-9]{5}$/.test(pin)) {
+      setPincodeResolution(null);
+      setPincodeHint("Enter a valid 6-digit India PIN");
+      setPincodeLookupBusy(false);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      setPincodeLookupBusy(true);
+      const { data, error } = await api.publicIndiaPincodeLookup(pin);
+      if (cancelled) return;
+
+      setPincodeLookupBusy(false);
+      if (error || !data?.location) {
+        setPincodeResolution(null);
+        setPincodeHint(error?.message || "PIN not found in India directory");
+        return;
+      }
+
+      const location = data.location;
+      setPincodeResolution({
+        pincode: location.pincode,
+        state: location.state,
+        district: location.district,
+      });
+      setPincodeHint(
+        location.offices?.length
+          ? `${location.state}, ${location.district} - ${location.offices[0]}`
+          : `${location.state}, ${location.district}`
+      );
+      setForm((current) => ({
+        ...current,
+        nationality: "India",
+        state: location.state,
+        district: location.district,
+        postalCode: location.pincode,
+      }));
+      setErrors((current) => ({ ...current, postalCode: null, state: null, district: null, nationality: null }));
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [form.postalCode, isClubTrack]);
+
   const entryPreview = useMemo(() => createPreviewEntries(form), [form]);
   const validEntries = entryPreview.filter((entry) => entry.valid);
-  const stateOptions = useMemo(() => getStatesByCountry(form.nationality), [form.nationality]);
-  const districtOptions = useMemo(() => getDistrictsByCountryState(form.nationality, form.state), [form.nationality, form.state]);
 
   const setField = (key, value) => {
     setForm((current) => ({ ...current, [key]: value }));
     if (errors[key]) setErrors((current) => ({ ...current, [key]: null }));
   };
 
-  const setNationality = (value) => {
-    setForm((current) => ({ ...current, nationality: value, state: "", district: "" }));
-    setErrors((current) => ({ ...current, nationality: null, state: null, district: null }));
-  };
-
   const setState = (value) => {
     setForm((current) => ({ ...current, state: value, district: "" }));
     setErrors((current) => ({ ...current, state: null, district: null }));
+    setPincodeResolution(null);
+    setPincodeHint("");
+  };
+
+  const setDistrict = (value) => {
+    setForm((current) => ({ ...current, district: value }));
+    setErrors((current) => ({ ...current, district: null }));
+    setPincodeResolution(null);
+    setPincodeHint("");
   };
 
   const toggleDiscipline = (disciplineId) => {
@@ -118,11 +237,23 @@ export default function Register() {
         if (!form.gender) nextErrors.gender = "Required";
         if (!form.dob) nextErrors.dob = "Required";
         if (!form.weight || Number(form.weight) <= 0) nextErrors.weight = "Enter a valid weight";
-        if (!form.nationality) nextErrors.nationality = "Required";
+        if (form.nationality !== "India") nextErrors.nationality = "Country must be India";
         if (!form.state) nextErrors.state = "Required";
         if (!form.district) nextErrors.district = "Required";
         if (!form.addressLine1.trim()) nextErrors.addressLine1 = "Required";
-        if (!form.postalCode.trim()) nextErrors.postalCode = "Required";
+        if (!/^[1-9][0-9]{5}$/.test(form.postalCode)) {
+          nextErrors.postalCode = "Enter a valid 6-digit India PIN";
+        }
+        if (!pincodeResolution) {
+          nextErrors.postalCode = nextErrors.postalCode || "PIN autolocation is required";
+        }
+        if (pincodeResolution && (
+          pincodeResolution.pincode !== form.postalCode
+          || pincodeResolution.state.toLowerCase() !== String(form.state || "").toLowerCase()
+          || pincodeResolution.district.toLowerCase() !== String(form.district || "").toLowerCase()
+        )) {
+          nextErrors.postalCode = "State and district must match the resolved PIN";
+        }
       }
     }
     if (step === 2 && !isClubTrack) {
@@ -196,7 +327,7 @@ export default function Register() {
         name: form.clubName,
         slug: form.clubSlug,
         city: form.clubCity,
-        country: form.clubCountry,
+        country: "India",
         metadata: { contactName: form.fullName, phone: form.phone },
       });
       setLoading(false);
@@ -214,7 +345,7 @@ export default function Register() {
       lastName,
       dateOfBirth: form.dob,
       gender: form.gender,
-      nationality: form.nationality || null,
+      nationality: "India",
       discipline: form.selectedDisciplines[0] || null,
       weightKg: Number(form.weight),
       weightClass: validEntries[0]?.weightClassLabel || null,
@@ -227,7 +358,7 @@ export default function Register() {
         experienceLevel: form.experienceLevel,
         phone: form.phone,
         address: {
-          country: form.nationality,
+          country: "India",
           state: form.state,
           district: form.district,
           line1: form.addressLine1,
@@ -346,7 +477,7 @@ export default function Register() {
                       <Field label="Club name" error={errors.clubName}><Input value={form.clubName} onChange={(e) => setField("clubName", e.target.value)} className="h-11 bg-surface" /></Field>
                       <Field label="Club slug" error={errors.clubSlug}><Input value={form.clubSlug} onChange={(e) => setField("clubSlug", e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))} className="h-11 bg-surface" /></Field>
                       <Field label="City"><Input value={form.clubCity} onChange={(e) => setField("clubCity", e.target.value)} className="h-11 bg-surface" /></Field>
-                      <Field label="Country"><Input value={form.clubCountry} onChange={(e) => setField("clubCountry", e.target.value.toUpperCase())} className="h-11 bg-surface" /></Field>
+                      <Field label="Country"><Input value="India" disabled className="h-11 bg-surface" /></Field>
                     </>
                   ) : (
                     <>
@@ -359,22 +490,13 @@ export default function Register() {
                       </Field>
                       <Field label="Date of birth" error={errors.dob}><Input type="date" value={form.dob} onChange={(e) => setField("dob", e.target.value)} className="h-11 bg-surface" /></Field>
                       <Field label="Weight (kg)" error={errors.weight}><Input type="number" step="0.1" value={form.weight} onChange={(e) => setField("weight", e.target.value)} className="h-11 bg-surface" /></Field>
-                      <Field label="Nationality / Country" error={errors.nationality}>
-                        <Select value={form.nationality} onValueChange={setNationality}>
-                          <SelectTrigger className="h-11 bg-surface">
-                            <SelectValue placeholder="Select country" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {COUNTRY_OPTIONS.map((country) => (
-                              <SelectItem key={country} value={country}>{country}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                      <Field label="Country" error={errors.nationality}>
+                        <Input value="India" disabled className="h-11 bg-surface" />
                       </Field>
                       <Field label="State" error={errors.state}>
-                        <Select value={form.state} onValueChange={setState} disabled={!stateOptions.length}>
+                        <Select value={form.state} onValueChange={setState} disabled={loadingStates || !stateOptions.length}>
                           <SelectTrigger className="h-11 bg-surface">
-                            <SelectValue placeholder="Select state" />
+                            <SelectValue placeholder={loadingStates ? "Loading states..." : "Select state"} />
                           </SelectTrigger>
                           <SelectContent>
                             {stateOptions.map((stateName) => (
@@ -384,9 +506,9 @@ export default function Register() {
                         </Select>
                       </Field>
                       <Field label="District" error={errors.district}>
-                        <Select value={form.district} onValueChange={(value) => setField("district", value)} disabled={!districtOptions.length}>
+                        <Select value={form.district} onValueChange={setDistrict} disabled={loadingDistricts || !districtOptions.length}>
                           <SelectTrigger className="h-11 bg-surface">
-                            <SelectValue placeholder="Select district" />
+                            <SelectValue placeholder={loadingDistricts ? "Loading districts..." : "Select district"} />
                           </SelectTrigger>
                           <SelectContent>
                             {districtOptions.map((districtName) => (
@@ -399,7 +521,25 @@ export default function Register() {
                         <Field label="Address line 1" error={errors.addressLine1}><Input value={form.addressLine1} onChange={(e) => setField("addressLine1", e.target.value)} className="h-11 bg-surface" /></Field>
                         <Field label="Address line 2"><Input value={form.addressLine2} onChange={(e) => setField("addressLine2", e.target.value)} className="h-11 bg-surface" /></Field>
                       </div>
-                      <Field label="Postal code" error={errors.postalCode}><Input value={form.postalCode} onChange={(e) => setField("postalCode", e.target.value)} className="h-11 bg-surface" /></Field>
+                      <Field label="Postal code" error={errors.postalCode}>
+                        <Input
+                          value={form.postalCode}
+                          onChange={(e) => {
+                            const postalCode = e.target.value.replace(/\D/g, "").slice(0, 6);
+                            setField("postalCode", postalCode);
+                            setPincodeResolution(null);
+                            setPincodeHint(postalCode ? "Resolving PIN..." : "");
+                          }}
+                          className="h-11 bg-surface"
+                          inputMode="numeric"
+                          maxLength={6}
+                        />
+                        {pincodeHint ? (
+                          <p className={`text-[11px] mt-1 ${pincodeResolution ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}>
+                            {pincodeLookupBusy ? "Validating PIN..." : pincodeHint}
+                          </p>
+                        ) : null}
+                      </Field>
                     </>
                   )}
                 </div>

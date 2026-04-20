@@ -33,4 +33,12 @@ router.post('/:id/approve', requireAuth, requireRole('admin'), ah(async (req, re
   res.json({ club: await clubs.approveClub(req.user, req.params.id, { ip: req.ip }) });
 }));
 
+router.get('/:id/participants', requireAuth, validate(schemas.club.listParticipants, 'query'), ah(async (req, res) => {
+  res.json({ participants: await clubs.listParticipants(req.user, req.params.id, req.query) });
+}));
+
+router.post('/:id/participants', requireAuth, validate(schemas.club.createParticipant), ah(async (req, res) => {
+  res.status(201).json({ participant: await clubs.createParticipant(req.user, req.params.id, req.body, { ip: req.ip }) });
+}));
+
 module.exports = router;

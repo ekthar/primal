@@ -14,6 +14,7 @@ const { query } = require('../db');
 const { write: auditWrite } = require('../audit');
 const { config } = require('../config');
 const { buildSignatureForApplication } = require('../pdfSignature');
+const { approvedParticipantReport } = require('./report.service');
 
 function formatDateTime(value) {
   if (!value) return '—';
@@ -313,6 +314,37 @@ async function approvedToExcel(res, { tournamentId } = {}) {
   ws.getRow(1).font = { bold: true };
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', 'attachment; filename="approved.xlsx"');
+  await wb.xlsx.write(res);
+  res.end();
+}
+
+async function approvedParticipantsToExcel(res, { tournamentId } = {}) {
+  const report = await approvedParticipantReport({ tournamentId });
+  const wb = new ExcelJS.Workbook();
+  const wsClub = wb.addWorksheet('Club Participants');
+  const wsIndividual = wb.addWorksheet('Individual Participants');
+
+  const columns = [
+    { header: 'Application ID', key: 'applicationId', width: 40 },
+    { header: 'Participant Name', key: 'participantName', width: 28 },
+    { header: 'Date of Birth', key: 'dateOfBirth', width: 16 },
+    { header: 'Age (today)', key: 'ageToday', width: 12 },
+    { header: 'Sex', key: 'sex', width: 14 },
+    { header: 'Discipline', key: 'discipline', width: 22 },
+    { header: 'Club', key: 'clubName', width: 28 },
+    { header: 'Tournament', key: 'tournamentName', width: 30 },
+    { header: 'Approved At', key: 'approvedAt', width: 24 },
+  ];
+
+  wsClub.columns = columns;
+  wsIndividual.columns = columns;
+  report.clubParticipants.forEach((row) => wsClub.addRow(row));
+  report.individualParticipants.forEach((row) => wsIndividual.addRow(row));
+  wsClub.getRow(1).font = { bold: true };
+  wsIndividual.getRow(1).font = { bold: true };
+
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="approved-participants.xlsx"');
   await wb.xlsx.write(res);
   res.end();
 }
@@ -626,4 +658,4 @@ async function auditToExcel(res, actor, { since, until } = {}) {
     entityType: 'audit', entityId: 'bulk', payload: { since, until, count: rows.length }, requestIp: ctx.ip });
 }
 
-module.exports = { approvedToExcel, applicationToPdf, auditToExcel };
+module.exports = { approvedToExcel, approvedParticipantsToExcel, applicationToPdf, auditToExcel };

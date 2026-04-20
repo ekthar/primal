@@ -37,6 +37,10 @@ const TEMPLATES = {
     subject: () => `Application decision`,
     text: (p) => `Hi ${p.applicantName},\n\nUnfortunately your application for ${p.tournamentName} was not approved. Reason: ${p.reason}\n\nYou can file an appeal within ${p.appealWindowDays} days.\n\n— TournamentOS`,
   },
+  'auth.password_reset': {
+    subject: () => 'Reset your password',
+    text: (p) => `Hi ${p.name || 'there'},\n\nUse the link below to reset your password:\n${p.resetUrl}\n\nIf you did not request this, you can ignore this message.\n\n— TournamentOS`,
+  },
 };
 
 async function sendEmail({ to, template, payload }) {
