@@ -24,9 +24,8 @@ router.post('/bulk/decision', validate(schemas.review.bulkDecision), ah(async (r
   res.json({ results: await review.bulkDecide(req.user, req.body, { ip: req.ip }) });
 }));
 
-router.post('/:id/reopen', requireRole('admin'), ah(async (req, res) => {
-  const reason = String(req.body?.reason || 'Reopened');
-  res.json({ application: await review.reopen(req.user, req.params.id, { reason }, { ip: req.ip }) });
+router.post('/:id/reopen', requireRole('admin'), validate(schemas.review.reopen), ah(async (req, res) => {
+  res.json({ application: await review.reopen(req.user, req.params.id, req.body, { ip: req.ip }) });
 }));
 
 module.exports = router;

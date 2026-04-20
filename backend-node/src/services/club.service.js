@@ -43,4 +43,28 @@ async function approveClub(user, id, ctx = {}) {
   return updated;
 }
 
-module.exports = { createClub, listClubsForUser, listPublicClubs, updateClub, approveClub };
+async function trashList(user, query = {}) {
+  if (user.role !== 'admin') throw ApiError.forbidden();
+  return clubsRepo.listDeleted(query);
+}
+
+async function softDeleteClub(user, id, ctx = {}) {
+  const club = await clubsRepo.findById(id);
+  if (!club) throw ApiError.notFound();
+  if (user.role !== 'admin' && club.primary_user_id !== user.id) throw ApiError.forbidden();
+  await clubsRepo.softDelete(id);
+  await auditWrite({ actorUserId: user.id, actorRole: user.role, action: 'club.soft_delete',
+    entityType: 'club', entityId: id, payload: {}, requestIp: ctx.ip });
+  return { ok: true };
+}
+
+async function restoreClub(user, id, ctx = {}) {
+  if (user.role !== 'admin') throw ApiError.forbidden();
+  const restored = await clubsRepo.restore(id);
+  if (!restored) throw ApiError.notFound();
+  await auditWrite({ actorUserId: user.id, actorRole: user.role, action: 'club.restore',
+    entityType: 'club', entityId: id, payload: {}, requestIp: ctx.ip });
+  return restored;
+}
+
+module.exports = { createClub, listClubsForUser, listPublicClubs, updateClub, approveClub, trashList, softDeleteClub, restoreClub };

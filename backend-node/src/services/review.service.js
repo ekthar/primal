@@ -93,6 +93,8 @@ async function reopen(actor, applicationId, { reason }, ctx = {}) {
   const updated = await appsRepo.setStatus(applicationId, {
     status: STATUS.UNDER_REVIEW,
     reopen_reason: reason,
+    reopened_at: new Date(),
+    reopened_by: actor.id,
     review_started_at: new Date(),
   });
   await seRepo.add({ applicationId, fromStatus: app.status, toStatus: STATUS.UNDER_REVIEW,

@@ -1,14 +1,18 @@
 const {
   applications: appsRepo, profiles: profilesRepo, tournaments: tournamentsRepo,
-  statusEvents: seRepo, reviewers: reviewersRepo, clubs: clubsRepo,
+  statusEvents: seRepo, reviewers: reviewersRepo, clubs: clubsRepo, documents: documentsRepo,
 } = require('../repositories');
 const { STATUS, assertTransition } = require('../statusMachine');
 const { ApiError } = require('../apiError');
 const { config } = require('../config');
 const { write: auditWrite } = require('../audit');
 const { dispatch: notify } = require('../notifications');
+const { createHash } = require('crypto');
+const path = require('path');
+const fs = require('fs');
 
 const HOUR = 60 * 60 * 1000;
+const REQUIRED_DOCUMENT_KINDS = ['medical', 'photo_id', 'consent'];
 
 // ---- Authorization helpers ---------------------------------------------------
 async function assertCanView(user, app) {
@@ -87,6 +91,11 @@ async function submit(user, id, ctx = {}) {
   if (!app) throw ApiError.notFound();
   await assertCanView(user, app);
   assertTransition(app.status, STATUS.SUBMITTED, user.role);
+  const documents = await documentsRepo.listForApplication(id);
+  const missing = REQUIRED_DOCUMENT_KINDS.filter((kind) => !documents.some((doc) => doc.kind === kind));
+  if (missing.length) {
+    throw ApiError.unprocessable('Required documents missing', { missing });
+  }
 
   // Auto-assign a reviewer if we don't have one yet (hybrid mode).
   const patch = {
@@ -114,12 +123,58 @@ async function submit(user, id, ctx = {}) {
   return updated;
 }
 
+async function uploadDocument(user, applicationId, { kind, label, expiresOn, file }, ctx = {}) {
+  const app = await appsRepo.findById(applicationId);
+  if (!app) throw ApiError.notFound();
+  await assertCanEdit(user, app);
+  if (!file) throw ApiError.badRequest('File required');
+
+  const checksum = createHash('sha256').update(fs.readFileSync(file.path)).digest('hex');
+  const relativeDir = path.join('applications', applicationId);
+  const storageKey = path.join(relativeDir, file.filename).replace(/\\/g, '/');
+
+  const doc = await documentsRepo.create({
+    applicationId,
+    profileId: app.profile_id,
+    kind,
+    label: label || file.originalname,
+    mimeType: file.mimetype,
+    sizeBytes: file.size,
+    storageKey,
+    checksumSha256: checksum,
+    uploadedBy: user.id,
+    expiresOn: expiresOn || null,
+    originalFilename: file.originalname,
+  });
+  await auditWrite({ actorUserId: user.id, actorRole: user.role, action: 'document.upload',
+    entityType: 'application', entityId: applicationId, payload: { documentId: doc.id, kind }, requestIp: ctx.ip });
+  return { ...doc, url: `${config.appBaseUrl}/uploads/${doc.storage_key}` };
+}
+
+async function listDocuments(user, applicationId) {
+  const app = await appsRepo.findById(applicationId);
+  if (!app) throw ApiError.notFound();
+  await assertCanView(user, app);
+  const documents = await documentsRepo.listForApplication(applicationId);
+  return documents.map((doc) => ({
+    ...doc,
+    url: `${config.appBaseUrl}/uploads/${doc.storage_key}`,
+  }));
+}
+
 async function getById(user, id) {
   const app = await appsRepo.findFullById(id);
   if (!app) throw ApiError.notFound();
   await assertCanView(user, app);
-  const events = await seRepo.listForApplication(id);
-  return { ...app, statusEvents: events };
+  const [events, documents] = await Promise.all([
+    seRepo.listForApplication(id),
+    documentsRepo.listForApplication(id),
+  ]);
+  return {
+    ...app,
+    documents: documents.map((doc) => ({ ...doc, url: `${config.appBaseUrl}/uploads/${doc.storage_key}` })),
+    statusEvents: events,
+  };
 }
 
 async function listForMe(user, query = {}) {
@@ -158,4 +213,4 @@ async function notifySubmission(app) {
   });
 }
 
-module.exports = { create, updateDraft, submit, getById, listForMe, assertCanView, assertCanEdit };
+module.exports = { create, updateDraft, submit, uploadDocument, listDocuments, getById, listForMe, assertCanView, assertCanEdit };

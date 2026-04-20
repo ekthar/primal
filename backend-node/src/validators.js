@@ -94,12 +94,18 @@ const schemas = {
     }),
     bulkDecision: Joi.object({
       ids: Joi.array().items(uuid).min(1).max(500).required(),
-      action: Joi.string().valid('approve', 'request_correction').required(),
-      reason: Joi.string().max(2000).when('action', { is: 'request_correction', then: Joi.required() }),
+      action: Joi.string().valid('approve', 'reject', 'request_correction').required(),
+      reason: Joi.string().max(2000).when('action', {
+        is: Joi.valid('request_correction', 'reject'),
+        then: Joi.required(),
+      }),
       fields: Joi.array().items(Joi.string().max(80)).when('action', {
         is: 'request_correction',
         then: Joi.array().min(1).required(),
       }),
+    }),
+    reopen: Joi.object({
+      reason: Joi.string().min(3).max(2000).required(),
     }),
   },
 
@@ -120,9 +126,19 @@ const schemas = {
       tournamentId: uuid,
       clubId: uuid,
       reviewerId: uuid,
+      overdue: Joi.boolean(),
+      dueSoon: Joi.boolean(),
       q: Joi.string().max(200).allow(''),
       limit: Joi.number().integer().min(1).max(200).default(50),
       offset: Joi.number().integer().min(0).default(0),
+    }),
+  },
+
+  document: {
+    create: Joi.object({
+      kind: Joi.string().max(80).required(),
+      label: Joi.string().max(200).allow(null, ''),
+      expiresOn: Joi.date().iso().allow(null),
     }),
   },
 

@@ -104,7 +104,16 @@ const CHANNELS = { email: sendEmail, sms: sendSms, whatsapp: sendWhatsapp, push:
  * Persists a row per channel. Non-throwing: failures are logged + stored.
  */
 async function dispatch({ userId, applicationId, channels = ['email'], to, template, payload }) {
+  let preferences = null;
+  if (userId) {
+    const { rows } = await query(`SELECT notification_preferences FROM users WHERE id = $1 LIMIT 1`, [userId]);
+    preferences = rows[0]?.notification_preferences || null;
+  }
   for (const channel of channels) {
+    if (preferences && preferences[channel] === false) {
+      await record({ userId, applicationId, channel, template, payload, status: 'skipped', error: 'disabled-by-preference' });
+      continue;
+    }
     const sender = CHANNELS[channel];
     if (!sender) continue;
     const target = typeof to === 'object' ? (to[channel] || to.email || to.phone) : to;

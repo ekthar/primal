@@ -1,6 +1,7 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { config } = require('./config');
+const { randomUUID } = require('crypto');
 
 const BCRYPT_ROUNDS = 12;
 
@@ -19,9 +20,10 @@ function signAccess(user) {
     { expiresIn: config.jwt.accessTtl, issuer: 'tournamentos' }
   );
 }
-function signRefresh(user) {
+function signRefresh(user, overrides = {}) {
+  const jti = overrides.jti || randomUUID();
   return jwt.sign(
-    { sub: user.id, type: 'refresh' },
+    { sub: user.id, type: 'refresh', jti },
     config.jwt.secret,
     { expiresIn: config.jwt.refreshTtl, issuer: 'tournamentos' }
   );

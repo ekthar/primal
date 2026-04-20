@@ -19,8 +19,26 @@ const users = {
     return rows[0];
   },
   touchLogin: (id) => query(`UPDATE users SET last_login_at = NOW() WHERE id = $1`, [id]),
+  updateNotificationPreferences: async (id, prefs) =>
+    (await query(`UPDATE users SET notification_preferences = $1 WHERE id = $2 RETURNING *`, [prefs, id])).rows[0],
   softDelete: (id) => query(`UPDATE users SET deleted_at = NOW() WHERE id = $1`, [id]),
   restore: (id) => query(`UPDATE users SET deleted_at = NULL WHERE id = $1`, [id]),
+};
+
+// --------- sessions ---------
+const sessions = {
+  create: async ({ userId, refreshJti, userAgent = null, ip = null, expiresAt }) =>
+    (await query(
+      `INSERT INTO sessions (user_id, refresh_jti, user_agent, ip, expires_at)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [userId, refreshJti, userAgent, ip, expiresAt]
+    )).rows[0],
+  findByJti: async (jti) =>
+    (await query(`SELECT * FROM sessions WHERE refresh_jti = $1 LIMIT 1`, [jti])).rows[0],
+  revokeByJti: (jti) =>
+    query(`UPDATE sessions SET revoked_at = NOW() WHERE refresh_jti = $1 AND revoked_at IS NULL`, [jti]),
+  revokeForUser: (userId) =>
+    query(`UPDATE sessions SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL`, [userId]),
 };
 
 // --------- clubs ---------
@@ -62,6 +80,9 @@ const clubs = {
   addMember: (clubId, userId, role = 'manager') =>
     query(`INSERT INTO club_members (club_id, user_id, role) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [clubId, userId, role]),
   softDelete: (id) => query(`UPDATE clubs SET deleted_at = NOW() WHERE id = $1`, [id]),
+  restore: async (id) => (await query(`UPDATE clubs SET deleted_at = NULL WHERE id = $1 RETURNING *`, [id])).rows[0],
+  listDeleted: async ({ limit = 50, offset = 0 } = {}) =>
+    (await query(`SELECT * FROM clubs WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC LIMIT $1 OFFSET $2`, [limit, offset])).rows,
 };
 
 // --------- profiles ---------
@@ -123,12 +144,15 @@ const applications = {
       `UPDATE applications SET ${fields.join(', ')} WHERE id = $${args.length} RETURNING *`, args);
     return rows[0];
   },
-  query: async ({ status, tournamentId, clubId, reviewerId, q, limit = 50, offset = 0 } = {}) => {
+  query: async (filters = {}) => {
+    const { status, tournamentId, clubId, reviewerId, overdue, dueSoon, q, limit = 50, offset = 0 } = filters;
     const where = [`a.${ACTIVE}`]; const args = [];
     if (status && status !== 'all') { args.push(status); where.push(`a.status = $${args.length}`); }
     if (tournamentId) { args.push(tournamentId); where.push(`a.tournament_id = $${args.length}`); }
     if (clubId) { args.push(clubId); where.push(`a.club_id = $${args.length}`); }
     if (reviewerId) { args.push(reviewerId); where.push(`a.reviewer_id = $${args.length}`); }
+    if (overdue === true) where.push(`a.review_due_at < NOW() AND a.status IN ('submitted','under_review')`);
+    if (dueSoon === true) where.push(`a.review_due_at BETWEEN NOW() AND NOW() + INTERVAL '6 hours' AND a.status IN ('submitted','under_review')`);
     if (q) { args.push(`%${q}%`); where.push(`(p.first_name ILIKE $${args.length} OR p.last_name ILIKE $${args.length} OR c.name ILIKE $${args.length})`); }
     args.push(limit); args.push(offset);
     const sql = `
@@ -152,15 +176,66 @@ const applications = {
     );
     return Object.fromEntries(rows.map((r) => [r.status, r.n]));
   },
-  publicApproved: async (limit = 100) => (await query(
+  softDelete: (id) => query(`UPDATE applications SET deleted_at = NOW() WHERE id = $1`, [id]),
+  restore: (id) => query(`UPDATE applications SET deleted_at = NULL WHERE id = $1 RETURNING *`, [id]),
+  listDeleted: async ({ limit = 50, offset = 0 } = {}) =>
+    (await query(
+      `SELECT a.id, a.status, a.deleted_at, p.first_name, p.last_name, t.name AS tournament_name
+       FROM applications a
+       JOIN profiles p ON p.id = a.profile_id
+       JOIN tournaments t ON t.id = a.tournament_id
+       WHERE a.deleted_at IS NOT NULL
+       ORDER BY a.deleted_at DESC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    )).rows,
+  publicApproved: async ({ limit = 100, tournamentSlug = null } = {}) => {
+    const args = [];
+    const where = [`a.status = 'approved'`, `a.${ACTIVE}`];
+    if (tournamentSlug) { args.push(tournamentSlug); where.push(`t.slug = $${args.length}`); }
+    args.push(limit);
+    return (await query(
     `SELECT a.id, p.first_name, p.last_name, p.weight_class, p.discipline,
             c.name AS club_name, t.slug AS tournament_slug
      FROM applications a
      JOIN profiles p ON p.id = a.profile_id
      LEFT JOIN clubs c ON c.id = a.club_id
      JOIN tournaments t ON t.id = a.tournament_id
-     WHERE a.status = 'approved' AND a.${ACTIVE}
-     ORDER BY a.decided_at DESC LIMIT $1`, [limit])).rows,
+     WHERE ${where.join(' AND ')}
+     ORDER BY a.decided_at DESC LIMIT $${args.length}`, args)).rows;
+  },
+};
+
+// --------- documents ---------
+const documents = {
+  create: async ({ applicationId = null, profileId = null, kind, label = null, mimeType = null, sizeBytes = null, storageKey, checksumSha256 = null, uploadedBy = null, expiresOn = null, originalFilename = null }) =>
+    (await query(
+      `INSERT INTO documents (application_id, profile_id, kind, label, mime_type, size_bytes, storage_key, checksum_sha256, uploaded_by, expires_on, original_filename)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      [applicationId, profileId, kind, label, mimeType, sizeBytes, storageKey, checksumSha256, uploadedBy, expiresOn, originalFilename]
+    )).rows[0],
+  listForApplication: async (applicationId) =>
+    (await query(`SELECT * FROM documents WHERE application_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC`, [applicationId])).rows,
+  findById: async (id) =>
+    (await query(`SELECT * FROM documents WHERE id = $1 AND deleted_at IS NULL`, [id])).rows[0],
+};
+
+const trash = {
+  list: async ({ entity, limit = 100, offset = 0 }) => {
+    const map = {
+      users: `SELECT 'users' AS entity, id::text AS id, email AS label, deleted_at FROM users WHERE deleted_at IS NOT NULL`,
+      clubs: `SELECT 'clubs' AS entity, id::text AS id, name AS label, deleted_at FROM clubs WHERE deleted_at IS NOT NULL`,
+      profiles: `SELECT 'profiles' AS entity, id::text AS id, first_name || ' ' || last_name AS label, deleted_at FROM profiles WHERE deleted_at IS NOT NULL`,
+      applications: `SELECT 'applications' AS entity, id::text AS id, id::text AS label, deleted_at FROM applications WHERE deleted_at IS NOT NULL`,
+      tournaments: `SELECT 'tournaments' AS entity, id::text AS id, name AS label, deleted_at FROM tournaments WHERE deleted_at IS NOT NULL`,
+      appeals: `SELECT 'appeals' AS entity, id::text AS id, id::text AS label, deleted_at FROM appeals WHERE deleted_at IS NOT NULL`,
+    };
+    if (entity && map[entity]) {
+      return (await query(`${map[entity]} ORDER BY deleted_at DESC LIMIT $1 OFFSET $2`, [limit, offset])).rows;
+    }
+    const union = Object.values(map).join(' UNION ALL ');
+    return (await query(`${union} ORDER BY deleted_at DESC LIMIT $1 OFFSET $2`, [limit, offset])).rows;
+  },
 };
 
 // --------- status events ---------
@@ -278,4 +353,4 @@ const reviewers = {
      ORDER BY open_count ASC, u.created_at ASC LIMIT 1`)).rows[0],
 };
 
-module.exports = { users, clubs, profiles, tournaments, applications, statusEvents, appeals, reviewers, circulars };
+module.exports = { users, sessions, clubs, profiles, tournaments, applications, documents, statusEvents, appeals, reviewers, circulars, trash };
