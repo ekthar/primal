@@ -37,6 +37,7 @@ const NAV = {
     { to: "/admin/overview", icon: LayoutDashboard, label: "Overview", testid: "nav-overview" },
     { to: "/admin/queue", icon: ListChecks, label: "Review Queue", testid: "nav-queue" },
     { to: "/admin/review", icon: Inbox, label: "Workbench", testid: "nav-workbench" },
+    { to: "/admin/users", icon: Settings, label: "Users", testid: "nav-users" },
     { to: "/admin/brackets", icon: Users, label: "Brackets", testid: "nav-brackets" },
     { to: "/admin/appeals", icon: Gavel, label: "Appeals", testid: "nav-appeals" },
     { to: "/admin/reports", icon: BarChart3, label: "Reports", testid: "nav-reports" },
@@ -49,7 +50,6 @@ const NAV = {
   ],
   club: [
     { to: "/club", icon: LayoutDashboard, label: "Club Dashboard", testid: "nav-club" },
-    { to: "/admin/reports", icon: BarChart3, label: "Reports", testid: "nav-reports-club" },
   ],
   applicant: [
     { to: "/applicant", icon: LayoutDashboard, label: "My Application", testid: "nav-applicant" },

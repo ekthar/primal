@@ -85,6 +85,38 @@ async function request(method, path, { body, query, headers = {}, raw = false, r
   }
 }
 
+function triggerBrowserDownload(blob, filename) {
+  if (typeof window === "undefined") return;
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+async function downloadFile(path, { query, filename }) {
+  const { data: res, error } = await request("GET", path, { query, raw: true });
+  if (error) return { data: null, error };
+
+  if (!res.ok) {
+    let apiError = { code: `HTTP_${res.status}`, message: res.statusText || "Download failed" };
+    try {
+      const payload = await res.json();
+      if (payload?.error) apiError = payload.error;
+    } catch {
+      // Keep fallback message when non-JSON error payload is returned.
+    }
+    return { data: null, error: apiError };
+  }
+
+  const blob = await res.blob();
+  triggerBrowserDownload(blob, filename);
+  return { data: { ok: true }, error: null };
+}
+
 export const api = {
   register: (body) => request("POST", "/api/auth/register", { body }),
   login: (body) => request("POST", "/api/auth/login", { body }),
@@ -92,6 +124,8 @@ export const api = {
   refresh: (refreshToken) => request("POST", "/api/auth/refresh", { body: { refreshToken } }),
   me: () => request("GET", "/api/auth/me"),
   logout: () => request("POST", "/api/auth/logout", { body: { refreshToken: getRefreshToken() } }),
+  adminListUsers: (query) => request("GET", "/api/auth/admin/users", { query }),
+  adminCreateUser: (body) => request("POST", "/api/auth/admin/users", { body }),
 
   getMyProfile: () => request("GET", "/api/profiles/me"),
   upsertMyProfile: (body) => request("PUT", "/api/profiles/me", { body }),
@@ -127,16 +161,28 @@ export const api = {
   queueWorkload: () => request("GET", "/api/queue/workload"),
 
   fileAppeal: (body) => request("POST", "/api/appeals", { body }),
+  myAppeals: () => request("GET", "/api/appeals/mine"),
   openAppeals: () => request("GET", "/api/appeals/open"),
   decideAppeal: (id, body) => request("POST", `/api/appeals/${id}/decision`, { body }),
 
   reportSummary: () => request("GET", "/api/reports/summary"),
   exportApprovedXlsx: () => `${BASE_URL}/api/reports/approved.xlsx`,
   exportApplicationPdf: (id) => `${BASE_URL}/api/reports/applications/${id}.pdf`,
+  downloadApprovedXlsx: (query) => downloadFile("/api/reports/approved.xlsx", {
+    query,
+    filename: "approved-applications.xlsx",
+  }),
+  downloadApplicationPdf: (id) => downloadFile(`/api/reports/applications/${id}.pdf`, {
+    filename: `application-${id}.pdf`,
+  }),
 
   verifyAudit: () => request("GET", "/api/audit/verify"),
   auditForEntity: (type, id) => request("GET", `/api/audit/entity/${type}/${id}`),
   exportAuditXlsx: () => `${BASE_URL}/api/audit/export.xlsx`,
+  downloadAuditXlsx: (query) => downloadFile("/api/audit/export.xlsx", {
+    query,
+    filename: "audit-trail.xlsx",
+  }),
 
   publicTournaments: () => request("GET", "/api/public/tournaments"),
   publicParticipants: (query) => request("GET", "/api/public/participants", { query }),

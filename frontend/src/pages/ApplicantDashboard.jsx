@@ -1,23 +1,56 @@
 import { useEffect, useState } from "react";
-import { Download, FileCheck2, ShieldAlert } from "lucide-react";
+import { Download, FileCheck2, Gavel, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 import StatusPill from "@/components/shared/StatusPill";
 import EmptyState from "@/components/shared/EmptyState";
 import api from "@/lib/api";
+import { toast } from "sonner";
 
 export default function ApplicantDashboard() {
   const [profile, setProfile] = useState(null);
   const [applications, setApplications] = useState([]);
+  const [appealsByApplication, setAppealsByApplication] = useState({});
+  const [appealDrafts, setAppealDrafts] = useState({});
+  const [filingAppealId, setFilingAppealId] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([api.getMyProfile(), api.listApplications()]).then(([profileRes, appRes]) => {
+    Promise.all([api.getMyProfile(), api.listApplications(), api.myAppeals()]).then(([profileRes, appRes, appealRes]) => {
       if (!profileRes.error) setProfile(profileRes.data.profile);
       if (!appRes.error) setApplications(appRes.data.items || []);
+      if (!appealRes.error) {
+        const index = {};
+        for (const appeal of appealRes.data.appeals || []) {
+          if (!index[appeal.application_id]) index[appeal.application_id] = appeal;
+        }
+        setAppealsByApplication(index);
+      }
       setLoading(false);
     });
   }, []);
+
+  async function submitAppeal(applicationId) {
+    const reason = (appealDrafts[applicationId] || "").trim();
+    if (reason.length < 10) {
+      toast.error("Appeal reason must be at least 10 characters");
+      return;
+    }
+    setFilingAppealId(applicationId);
+    const { data, error } = await api.fileAppeal({ applicationId, reason });
+    setFilingAppealId(null);
+    if (error) {
+      toast.error(error.message || "Failed to file appeal");
+      return;
+    }
+    const appeal = data?.appeal;
+    if (appeal) {
+      setAppealsByApplication((current) => ({ ...current, [applicationId]: appeal }));
+    }
+    setAppealDrafts((current) => ({ ...current, [applicationId]: "" }));
+    toast.success("Appeal filed successfully");
+  }
 
   if (loading) return <div className="max-w-6xl mx-auto px-6 py-8 text-sm text-secondary-muted">Loading application workspace...</div>;
   if (!profile) {
@@ -30,6 +63,7 @@ export default function ApplicantDashboard() {
 
   const approvedCount = applications.filter((application) => application.status === "approved").length;
   const pendingCount = applications.filter((application) => ["submitted", "under_review", "needs_correction"].includes(application.status)).length;
+  const address = profile.metadata?.address || null;
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-8">
@@ -88,6 +122,41 @@ export default function ApplicantDashboard() {
                   <Detail label="Reviewer" value={application.reviewer_id || "Unassigned"} />
                   <Detail label="Correction due" value={application.correction_due_at ? new Date(application.correction_due_at).toLocaleDateString() : "-"} />
                 </div>
+
+                {(["rejected", "needs_correction"].includes(application.status)) && (
+                  <div className="mt-4 rounded-xl border border-border bg-surface p-4">
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <Gavel className="size-4 text-primary" /> Appeal panel
+                    </div>
+                    {appealsByApplication[application.id] ? (
+                      <div className="mt-2 text-sm text-secondary-muted">
+                        Appeal status: <span className="capitalize">{appealsByApplication[application.id].status?.replace("_", " ")}</span>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="mt-2 text-sm text-secondary-muted">
+                          If you disagree with the review outcome, submit an appeal for admin decision.
+                        </p>
+                        <Textarea
+                          className="mt-3 bg-background"
+                          rows={3}
+                          placeholder="Explain why this decision should be reconsidered"
+                          value={appealDrafts[application.id] || ""}
+                          onChange={(event) => setAppealDrafts((current) => ({ ...current, [application.id]: event.target.value }))}
+                        />
+                        <div className="mt-3">
+                          <Button
+                            variant="outline"
+                            onClick={() => submitAppeal(application.id)}
+                            disabled={filingAppealId === application.id}
+                          >
+                            {filingAppealId === application.id ? "Submitting..." : "File appeal"}
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
               </article>
             ))}
           </div>
@@ -99,6 +168,9 @@ export default function ApplicantDashboard() {
             <Separator className="my-4" />
             <dl className="space-y-3 text-sm">
               <Detail label="Nationality" value={profile.nationality || "-"} />
+              <Detail label="State" value={address?.state || "-"} />
+              <Detail label="District" value={address?.district || "-"} />
+              <Detail label="Postal code" value={address?.postalCode || "-"} />
               <Detail label="Discipline" value={profile.discipline || "-"} />
               <Detail label="Weight" value={profile.weight_kg ? `${profile.weight_kg} kg` : "-"} />
               <Detail label="Weight class" value={profile.weight_class || "-"} />

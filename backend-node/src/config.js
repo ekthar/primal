@@ -1,3 +1,8 @@
+const databaseUrl = process.env.DATABASE_URL || '';
+const dbHost = process.env.PGHOST || '';
+const likelyCloudPostgres = /postgres\.database\.azure\.com|(^|\.)neon\.tech|(^|\.)aws\.neon\.tech/i.test(`${databaseUrl} ${dbHost}`);
+const urlRequiresSsl = /sslmode=require/i.test(databaseUrl);
+
 const config = {
   env: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT || '4000', 10),
@@ -5,13 +10,14 @@ const config = {
   webBaseUrl: process.env.WEB_BASE_URL || 'http://localhost:3000',
 
   db: {
-    url: process.env.DATABASE_URL,
-    host: process.env.PGHOST,
+    url: databaseUrl || undefined,
+    host: dbHost || undefined,
     port: parseInt(process.env.PGPORT || '5432', 10),
     database: process.env.PGDATABASE,
     user: process.env.PGUSER,
     password: process.env.PGPASSWORD,
-    ssl: /^true$/i.test(process.env.PG_SSL || ''),
+    ssl: /^true$/i.test(process.env.PG_SSL || '') || urlRequiresSsl || likelyCloudPostgres,
+    sslRejectUnauthorized: /^true$/i.test(process.env.PG_SSL_REJECT_UNAUTHORIZED || ''),
   },
 
   jwt: {

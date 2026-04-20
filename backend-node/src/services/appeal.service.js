@@ -29,6 +29,10 @@ async function listOpen(user) {
   return appealsRepo.listOpen();
 }
 
+async function listMine(user) {
+  return appealsRepo.listForUser(user.id);
+}
+
 async function decide(user, id, { action, panelDecision }, ctx = {}) {
   if (user.role !== 'admin') throw ApiError.forbidden();
   const appeal = await appealsRepo.findById(id);
@@ -56,4 +60,4 @@ async function decide(user, id, { action, panelDecision }, ctx = {}) {
   return updated;
 }
 
-module.exports = { file, listOpen, decide };
+module.exports = { file, listOpen, listMine, decide };

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import StatusPill from "@/components/shared/StatusPill";
 import EmptyState from "@/components/shared/EmptyState";
 import api from "@/lib/api";
+import { toast } from "sonner";
 
 export default function ClubDashboard() {
   const [clubs, setClubs] = useState([]);

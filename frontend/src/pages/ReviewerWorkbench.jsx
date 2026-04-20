@@ -4,55 +4,167 @@ import {
   CheckCircle2,
   ChevronRight,
   FileWarning,
+  RefreshCcw,
   Search,
   ShieldCheck,
   Swords,
+  Undo2,
   XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import EntryStatusPill from "@/components/tournament/EntryStatusPill";
+import StatusPill from "@/components/shared/StatusPill";
 import EmptyState from "@/components/shared/EmptyState";
-import {
-  ENTRY_STATUS,
-  TOURNAMENT_ENTRIES,
-  findParticipantById,
-} from "@/lib/tournamentWorkflow";
+import api from "@/lib/api";
+import { toast } from "sonner";
+import { useAuth } from "@/context/AuthContext";
 
 export default function ReviewerWorkbench() {
+  const { user } = useAuth();
   const router = useRouter();
   const routeId = Array.isArray(router.query.id) ? router.query.id[0] : router.query.id;
-  const [entries, setEntries] = useState(TOURNAMENT_ENTRIES);
+  const [queue, setQueue] = useState([]);
+  const [loadingQueue, setLoadingQueue] = useState(true);
   const [search, setSearch] = useState("");
-  const [activeId, setActiveId] = useState(routeId || TOURNAMENT_ENTRIES[0]?.id);
+  const [activeId, setActiveId] = useState(routeId || null);
+  const [activeApplication, setActiveApplication] = useState(null);
+  const [loadingApplication, setLoadingApplication] = useState(false);
+  const [actionBusy, setActionBusy] = useState(false);
 
   useEffect(() => {
-    if (routeId) setActiveId(routeId);
+    const timer = setTimeout(() => {
+      loadQueue();
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    if (!routeId) return;
+    setActiveId(routeId);
   }, [routeId]);
 
-  const queue = useMemo(() => {
-    const needle = search.toLowerCase();
-    return entries.filter((entry) => {
-      if (![ENTRY_STATUS.PENDING, ENTRY_STATUS.APPROVED].includes(entry.reviewStatus)) return false;
-      if (!needle) return true;
-      return [entry.participantName, entry.club, entry.disciplineLabel, entry.id].some((value) => value.toLowerCase().includes(needle));
-    });
-  }, [entries, search]);
+  useEffect(() => {
+    if (!queue.length) {
+      setActiveApplication(null);
+      return;
+    }
+    if (routeId) return;
+    if (!activeId) setActiveId(queue[0].id);
+    if (activeId && !queue.some((item) => item.id === activeId)) {
+      setActiveId(queue[0].id);
+    }
+  }, [activeId, queue, routeId]);
 
-  const activeEntry = useMemo(() => entries.find((entry) => entry.id === activeId), [activeId, entries]);
-  const participant = activeEntry ? findParticipantById(activeEntry.participantId) : null;
+  useEffect(() => {
+    if (!activeId) return;
+    loadApplication(activeId);
+  }, [activeId]);
 
-  const updateStatus = (status) => {
-    setEntries((current) => current.map((entry) => (
-      entry.id === activeId ? { ...entry, reviewStatus: status } : entry
-    )));
-  };
+  async function loadQueue() {
+    setLoadingQueue(true);
+    const { data, error } = await api.queueBoard({ status: "all", q: search || undefined, limit: 200, offset: 0 });
+    setLoadingQueue(false);
+    if (error) {
+      toast.error(error.message || "Failed to load reviewer queue");
+      return;
+    }
+    const items = data.items || [];
+    setQueue(items);
+  }
 
-  if (!activeEntry || !participant) {
+  async function loadApplication(id) {
+    setLoadingApplication(true);
+    const { data, error } = await api.getApplication(id);
+    setLoadingApplication(false);
+    if (error) {
+      setActiveApplication(null);
+      toast.error(error.message || "Failed to load application details");
+      return;
+    }
+    setActiveApplication(data.application);
+  }
+
+  async function refreshAll() {
+    await loadQueue();
+    if (activeId) await loadApplication(activeId);
+  }
+
+  async function handleStartReview() {
+    if (!activeId) return;
+    setActionBusy(true);
+    const { error } = await api.startReview(activeId);
+    setActionBusy(false);
+    if (error) {
+      toast.error(error.message || "Failed to start review");
+      return;
+    }
+    toast.success("Review started");
+    refreshAll();
+  }
+
+  async function handleDecision(action) {
+    if (!activeId) return;
+    let reason;
+    let fields;
+
+    if (action === "reject") {
+      reason = window.prompt("Rejection reason", "Eligibility criteria not met");
+      if (!reason) return;
+    }
+    if (action === "request_correction") {
+      reason = window.prompt("Correction reason", "Please update required fields");
+      if (!reason) return;
+      const fieldInput = window.prompt("Fields to correct (comma separated)", "medical,weight_class");
+      fields = (fieldInput || "")
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+      if (!fields.length) {
+        toast.error("At least one correction field is required");
+        return;
+      }
+    }
+
+    setActionBusy(true);
+    const { error } = await api.decide(activeId, { action, reason, fields });
+    setActionBusy(false);
+    if (error) {
+      toast.error(error.message || "Decision failed");
+      return;
+    }
+    toast.success(action === "approve" ? "Application approved" : action === "reject" ? "Application rejected" : "Correction requested");
+    refreshAll();
+  }
+
+  async function handleReopen() {
+    if (!activeId) return;
+    const reason = window.prompt("Reopen reason", "Appeal granted");
+    if (!reason) return;
+    setActionBusy(true);
+    const { error } = await api.reopen(activeId, reason);
+    setActionBusy(false);
+    if (error) {
+      toast.error(error.message || "Failed to reopen application");
+      return;
+    }
+    toast.success("Application reopened to under review");
+    refreshAll();
+  }
+
+  const requiredKinds = ["medical", "photo_id", "consent"];
+  const hasRequiredDocs = useMemo(() => {
+    if (!activeApplication?.documents) return false;
+    return requiredKinds.every((kind) => activeApplication.documents.some((doc) => doc.kind === kind));
+  }, [activeApplication]);
+
+  const canDecide = activeApplication && ["submitted", "under_review"].includes(activeApplication.status);
+  const canReopen = user?.role === "admin" && activeApplication && ["approved", "rejected"].includes(activeApplication.status);
+
+  if (!loadingQueue && !queue.length) {
     return (
       <div className="p-10">
-        <EmptyState icon={Search} title="No discipline entry selected" description="Choose a competition entry from the queue to review it." />
+        <EmptyState icon={Search} title="No review items available" description="Queue is empty for your current filters." />
       </div>
     );
   }
@@ -68,6 +180,7 @@ export default function ReviewerWorkbench() {
           </div>
         </div>
         <div className="flex-1 overflow-y-auto">
+          {loadingQueue && <div className="px-4 py-3 text-sm text-secondary-muted">Loading queue...</div>}
           {queue.map((entry) => (
             <button
               key={entry.id}
@@ -80,10 +193,12 @@ export default function ReviewerWorkbench() {
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-sm font-medium truncate">{entry.participantName}</div>
-                  <div className="text-[11px] text-tertiary mt-1 truncate">{entry.disciplineLabel} · {entry.weightClassLabel}</div>
+                  <div className="text-sm font-medium truncate">{entry.first_name} {entry.last_name}</div>
+                  <div className="text-[11px] text-tertiary mt-1 truncate">
+                    {entry.first_name} {entry.last_name} · {entry.tournament_name}
+                  </div>
                 </div>
-                <EntryStatusPill status={entry.reviewStatus} size="xs" />
+                <StatusPill status={entry.status} size="xs" />
               </div>
             </button>
           ))}
@@ -91,26 +206,54 @@ export default function ReviewerWorkbench() {
       </aside>
 
       <section className="flex-1 overflow-y-auto">
+        {!activeApplication || loadingApplication ? (
+          <div className="p-10 text-sm text-secondary-muted">Loading application details...</div>
+        ) : (
+          <>
         <header className="sticky top-0 z-10 border-b border-border bg-background/85 backdrop-blur-xl">
           <div className="px-6 py-5 flex items-center gap-4 flex-wrap">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 text-xs text-tertiary">
-                <span className="font-mono">{activeEntry.id}</span>
+                <span className="font-mono">{activeApplication.id}</span>
                 <ChevronRight className="size-3" />
-                <span>{activeEntry.disciplineLabel}</span>
+                <span>{activeApplication.tournament_name}</span>
               </div>
-              <h2 className="font-display text-2xl font-semibold tracking-tight mt-1">{activeEntry.participantName}</h2>
+              <h2 className="font-display text-2xl font-semibold tracking-tight mt-1">
+                {activeApplication.first_name} {activeApplication.last_name}
+              </h2>
               <div className="mt-2 flex items-center gap-3 flex-wrap">
-                <EntryStatusPill status={activeEntry.reviewStatus} />
-                <span className="text-xs text-tertiary">{activeEntry.categoryLabel}</span>
+                <StatusPill status={activeApplication.status} />
+                <span className="text-xs text-tertiary">{activeApplication.club_name || "Individual applicant"}</span>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={() => updateStatus(ENTRY_STATUS.REJECTED)}>
-                <XCircle className="size-4 mr-1.5" /> Reject
-              </Button>
-              <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => updateStatus(ENTRY_STATUS.APPROVED)}>
-                <CheckCircle2 className="size-4 mr-1.5" /> Approve
+              {activeApplication.status === "submitted" && (
+                <Button variant="outline" disabled={actionBusy} onClick={handleStartReview}>
+                  <RefreshCcw className="size-4 mr-1.5" /> Start review
+                </Button>
+              )}
+              {canDecide && (
+                <Button variant="outline" disabled={actionBusy} onClick={() => handleDecision("request_correction")}>
+                  <FileWarning className="size-4 mr-1.5" /> Correction
+                </Button>
+              )}
+              {canDecide && (
+                <Button variant="outline" disabled={actionBusy} onClick={() => handleDecision("reject")}>
+                  <XCircle className="size-4 mr-1.5" /> Reject
+                </Button>
+              )}
+              {canDecide && (
+                <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" disabled={actionBusy} onClick={() => handleDecision("approve")}>
+                  <CheckCircle2 className="size-4 mr-1.5" /> Approve
+                </Button>
+              )}
+              {canReopen && (
+                <Button variant="outline" disabled={actionBusy} onClick={handleReopen}>
+                  <Undo2 className="size-4 mr-1.5" /> Reopen
+                </Button>
+              )}
+              <Button variant="ghost" disabled={actionBusy} onClick={refreshAll}>
+                Refresh
               </Button>
             </div>
           </div>
@@ -122,12 +265,12 @@ export default function ReviewerWorkbench() {
               <h3 className="font-display text-xl font-semibold tracking-tight">Discipline entry</h3>
               <Separator className="my-4" />
               <div className="grid sm:grid-cols-2 gap-4 text-sm">
-                <Detail label="Discipline" value={activeEntry.disciplineLabel} />
-                <Detail label="Category" value={activeEntry.categoryLabel} />
-                <Detail label="Age group" value={activeEntry.ageGroupLabel} />
-                <Detail label="Weight class" value={activeEntry.weightClassLabel} />
-                <Detail label="Gender" value={activeEntry.gender === "male" ? "Male" : "Female"} />
-                <Detail label="Experience" value={activeEntry.experienceLabel} />
+                <Detail label="Discipline" value={activeApplication.discipline || "-"} />
+                <Detail label="Tournament" value={activeApplication.tournament_name || "-"} />
+                <Detail label="Weight class" value={activeApplication.weight_class || "-"} />
+                <Detail label="Weight" value={activeApplication.weight_kg ? `${activeApplication.weight_kg} kg` : "-"} />
+                <Detail label="Reviewer" value={activeApplication.reviewer_id || "Unassigned"} />
+                <Detail label="Submitted" value={activeApplication.submitted_at ? new Date(activeApplication.submitted_at).toLocaleString() : "-"} />
               </div>
             </section>
 
@@ -135,11 +278,23 @@ export default function ReviewerWorkbench() {
               <div className="flex items-start gap-3">
                 <Swords className="size-5 text-primary shrink-0 mt-0.5" />
                 <div>
-                  <h3 className="font-display text-xl font-semibold tracking-tight">Bracket readiness</h3>
+                  <h3 className="font-display text-xl font-semibold tracking-tight">Review timeline</h3>
                   <p className="text-sm text-secondary-muted mt-2">
-                    This entry contributes to a bracket only after approval. Category grouping uses discipline, age, gender, weight, and experience level.
+                    Full event log for auditability from creation to current state.
                   </p>
                 </div>
+              </div>
+              <div className="mt-4 space-y-3">
+                {(activeApplication.statusEvents || []).map((event) => (
+                  <div key={event.id} className="rounded-xl border border-border bg-background/60 p-3 text-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-medium">{event.from_status || "-"} to {event.to_status}</span>
+                      <span className="text-xs text-tertiary">{new Date(event.created_at).toLocaleString()}</span>
+                    </div>
+                    {event.reason && <div className="mt-1 text-secondary-muted">{event.reason}</div>}
+                  </div>
+                ))}
+                {!activeApplication.statusEvents?.length && <div className="text-sm text-secondary-muted">No timeline events recorded yet.</div>}
               </div>
             </section>
           </div>
@@ -149,32 +304,44 @@ export default function ReviewerWorkbench() {
               <h3 className="font-display text-xl font-semibold tracking-tight">Participant details</h3>
               <Separator className="my-4" />
               <div className="space-y-3 text-sm">
-                <Detail label="Club" value={participant.club} />
-                <Detail label="Nationality" value={participant.nationality} />
-                <Detail label="Weight" value={`${participant.weight} kg`} />
-                <Detail label="Payment" value={participant.paymentStatus} />
-                <Detail label="Documents" value={participant.documentsStatus} />
-                <Detail label="Waiver" value={participant.waiverStatus} />
+                <Detail label="Club" value={activeApplication.club_name || "Individual"} />
+                <Detail label="Applicant" value={`${activeApplication.first_name} ${activeApplication.last_name}`} />
+                <Detail label="Correction due" value={activeApplication.correction_due_at ? new Date(activeApplication.correction_due_at).toLocaleString() : "-"} />
+                <Detail label="Rejection reason" value={activeApplication.rejection_reason || "-"} />
+                <Detail label="Reopen reason" value={activeApplication.reopen_reason || "-"} />
+                <Detail label="Decided at" value={activeApplication.decided_at ? new Date(activeApplication.decided_at).toLocaleString() : "-"} />
               </div>
             </section>
 
             <section className="rounded-2xl border border-border bg-surface p-6">
-              <h3 className="font-display text-xl font-semibold tracking-tight">Auto checks</h3>
+              <h3 className="font-display text-xl font-semibold tracking-tight">Documents and checks</h3>
               <Separator className="my-4" />
               <div className="space-y-3 text-sm">
-                <CheckRow ok={activeEntry.issues.length === 0} label="Entry maps cleanly into a valid category" />
-                <CheckRow ok={participant.documentsStatus === "complete"} label="Documents complete" />
-                <CheckRow ok={participant.paymentStatus === "paid"} label="Payment cleared" />
-                <CheckRow ok={participant.waiverStatus === "signed"} label="Waiver signed" />
+                <CheckRow ok={hasRequiredDocs} label="Required documents uploaded" />
+                <CheckRow ok={!!activeApplication.reviewer_id} label="Reviewer assigned" />
+                <CheckRow ok={activeApplication.status !== "draft"} label="Application submitted" />
+                <CheckRow ok={activeApplication.status !== "needs_correction"} label="No open correction request" />
               </div>
-              {activeEntry.issues.length > 0 && (
-                <div className="mt-4 rounded-xl border border-orange-200 dark:border-orange-900/60 bg-orange-50/60 dark:bg-orange-950/30 p-3 text-sm text-orange-800 dark:text-orange-200">
-                  {activeEntry.issues.join(" ")}
-                </div>
-              )}
+              <div className="mt-4 space-y-2">
+                {(activeApplication.documents || []).map((doc) => (
+                  <a
+                    key={doc.id}
+                    href={doc.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block rounded-xl border border-border bg-background/60 p-3 text-sm hover:bg-surface-muted/40"
+                  >
+                    <div className="font-medium">{doc.kind}</div>
+                    <div className="text-xs text-tertiary mt-1">{doc.original_filename || doc.label || doc.storage_key}</div>
+                  </a>
+                ))}
+                {!activeApplication.documents?.length && <div className="text-sm text-secondary-muted">No documents uploaded yet.</div>}
+              </div>
             </section>
           </div>
         </div>
+          </>
+        )}
       </section>
     </div>
   );

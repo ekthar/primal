@@ -22,6 +22,8 @@ node_modules/
 # Next.js
 /.next/
 /out/
+frontend/.next/
+frontend/out/
 next-env.d.ts
 *.tsbuildinfo
 
@@ -75,6 +77,9 @@ agenthub/agents/youtube/db
 
 # Build caches
 .cache/
+
+# Backend runtime artifacts
+backend-node/uploads/
 
 memory/test_credentials.md
 

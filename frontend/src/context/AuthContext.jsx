@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import api, { clearSession, setSession } from "@/lib/api";
+import api, { clearSession, getAccessToken, setSession } from "@/lib/api";
 
 const AuthContext = createContext(null);
 const STORAGE_KEY = "tos-auth-user";
@@ -23,6 +23,11 @@ export function AuthProvider({ children }) {
       try {
         const stored = window.localStorage.getItem(STORAGE_KEY);
         if (stored) setUser(JSON.parse(stored));
+        const token = getAccessToken();
+        if (!token) {
+          if (!ignore) setUser(null);
+          return;
+        }
         const { data, error } = await api.me();
         if (!ignore) {
           if (error) {

@@ -29,9 +29,14 @@ import frame020 from "@/assets/veo-frames/020.png";
 import frame050 from "@/assets/veo-frames/050.png";
 import frame080 from "@/assets/veo-frames/080.png";
 import frame100 from "@/assets/veo-frames/100.png";
+const frame001Src = frame001?.src || frame001;
+const frame020Src = frame020?.src || frame020;
+const frame050Src = frame050?.src || frame050;
+const frame080Src = frame080?.src || frame080;
+const frame100Src = frame100?.src || frame100;
+const toImgSrc = (img) => (img?.src || img);
 
 // ---------- primitives ---------------------------------------------------------
-
 function Reveal({ children, delay = 0, y = 24, className = "" }) {
   const reduced = useReducedMotion();
   return (
@@ -122,7 +127,7 @@ function FightTapeMarquee({ items, duration = 22 }) {
 
 function InfiniteTileColumn({ images, duration = 18, className = "" }) {
   const reduced = useReducedMotion();
-  const tiles = images.filter(Boolean);
+  const tiles = images.filter(Boolean).map(toImgSrc);
   const loop = [...tiles, ...tiles];
   return (
     <div className={`relative overflow-hidden rounded-3xl border border-border bg-surface/40 backdrop-blur ${className}`}>
@@ -205,7 +210,7 @@ function Hero() {
   return (
     <section ref={ref} className="relative min-h-[92vh] overflow-hidden flex items-center pt-20">
       <motion.div
-        style={{ y: reduced ? 0 : imgY, scale: reduced ? 1 : imgScale, backgroundImage: `url(${frame080})` }}
+        style={{ y: reduced ? 0 : imgY, scale: reduced ? 1 : imgScale, backgroundImage: `url(${frame080Src})` }}
         className="absolute inset-0 -z-30 bg-cover bg-center opacity-[0.55] dark:opacity-[0.28]"
       />
       <div
@@ -347,10 +352,10 @@ function Announcements() {
       if (error || !data?.circulars) {
         setStatus("fallback");
         setItems([
-          { id: "demo-1", kind: "registration", title: "Registration is open", subtitle: "Athletes & gyms", body: "Create your profile, pick your division, and lock your entry. Early entries get priority seeding.", pinned: true, publishedAt: new Date().toISOString(), coverImageUrl: frame080, ctaLabel: "Register", ctaUrl: "/register" },
-          { id: "demo-2", kind: "window", title: "Editing window closes in 48 hours", subtitle: "Weight class · documents", body: "Update weight class, documents, and discipline before the lock to avoid delays at check-in.", pinned: false, publishedAt: new Date().toISOString(), coverImageUrl: frame020 },
-          { id: "demo-3", kind: "notice", title: "Gym roster verification", subtitle: "Managers only", body: "Add fighters to your gym roster and verify identity once — reuse across events.", pinned: false, publishedAt: new Date().toISOString(), coverImageUrl: frame001 },
-          { id: "demo-4", kind: "rules", title: "Ruleset & weigh-in circular published", subtitle: "Read before check-in", body: "Unified check-in flow across MMA, striking, and grappling divisions. Bring photo ID and medical clearance.", pinned: false, publishedAt: new Date().toISOString(), coverImageUrl: frame100 },
+          { id: "demo-1", kind: "registration", title: "Registration is open", subtitle: "Athletes & gyms", body: "Create your profile, pick your division, and lock your entry. Early entries get priority seeding.", pinned: true, publishedAt: new Date().toISOString(), coverImageUrl: frame080Src, ctaLabel: "Register", ctaUrl: "/register" },
+          { id: "demo-2", kind: "window", title: "Editing window closes in 48 hours", subtitle: "Weight class · documents", body: "Update weight class, documents, and discipline before the lock to avoid delays at check-in.", pinned: false, publishedAt: new Date().toISOString(), coverImageUrl: frame020Src },
+          { id: "demo-3", kind: "notice", title: "Gym roster verification", subtitle: "Managers only", body: "Add fighters to your gym roster and verify identity once — reuse across events.", pinned: false, publishedAt: new Date().toISOString(), coverImageUrl: frame001Src },
+          { id: "demo-4", kind: "rules", title: "Ruleset & weigh-in circular published", subtitle: "Read before check-in", body: "Unified check-in flow across MMA, striking, and grappling divisions. Bring photo ID and medical clearance.", pinned: false, publishedAt: new Date().toISOString(), coverImageUrl: frame100Src },
         ]);
         return;
       }
@@ -399,7 +404,7 @@ function Announcements() {
             const meta = kindMeta[u.kind] || kindMeta.notice;
             const Icon = meta.icon;
             const date = fmt(u.publishedAt || u.createdAt);
-            const cover = u.coverImageUrl || frame080;
+            const cover = u.coverImageUrl || frame080Src;
             return (
             <Reveal key={u.id || i} delay={i * 0.07}>
               <motion.article

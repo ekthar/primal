@@ -1,70 +1,70 @@
-# Getting Started with Create React App
+# TournamentOS Frontend (Next.js)
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+This frontend is a Next.js app using the Pages Router and Tailwind-based UI components.
 
-## Available Scripts
+## Requirements
 
-In the project directory, you can run:
+- Node.js 20+
+- npm or yarn
 
-### `npm start`
+## Environment
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+Set backend URL with one of these variables:
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+- `NEXT_PUBLIC_BACKEND_URL` (preferred)
+- `REACT_APP_BACKEND_URL` (legacy fallback)
 
-### `npm test`
+Example:
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+```bash
+NEXT_PUBLIC_BACKEND_URL=http://localhost:4000
+```
 
-### `npm run build`
+If unset, frontend `/api/*` and `/uploads/*` requests are proxied to `http://localhost:4000` via Next rewrites in dev/build runtime.
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## Install
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+```bash
+cd frontend
+npm install
+```
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+## Run Development Server
 
-### `npm run eject`
+```bash
+npm run dev
+```
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+Open http://localhost:3000.
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+## Admin-First Local Setup
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+Start backend first so auth/public endpoints are available:
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+```bash
+cd ../backend-node
+npm install
+npm run migrate
+npm run seed
+npm run dev
+```
 
-## Learn More
+Then start frontend (`cd ../frontend; npm run dev`) and sign in with the seeded admin account:
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+- Email: `mei@tournamentos.io`
+- Password: `demo1234`
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+After admin login, you can continue with tournament and participant workflows.
 
-### Code Splitting
+## Build for Production
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+```bash
+npm run build
+npm run start
+```
 
-### Analyzing the Bundle Size
+## Notes
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+- Role dashboards are under `/applicant`, `/club`, and `/admin/*`.
+- Authentication tokens are stored in local storage by the frontend API client.
+- Most pages now consume live backend APIs; make sure the backend is running and seeded.

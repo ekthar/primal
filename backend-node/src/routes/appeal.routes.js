@@ -13,6 +13,10 @@ router.get('/open', requireAuth, requireRole('admin', 'reviewer'), ah(async (req
   res.json({ appeals: await appeals.listOpen(req.user) });
 }));
 
+router.get('/mine', requireAuth, ah(async (req, res) => {
+  res.json({ appeals: await appeals.listMine(req.user) });
+}));
+
 router.post('/:id/decision', requireAuth, requireRole('admin'),
   validate(schemas.appeal.decide), ah(async (req, res) => {
     res.json({ appeal: await appeals.decide(req.user, req.params.id, req.body, { ip: req.ip }) });

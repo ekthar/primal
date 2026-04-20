@@ -56,8 +56,8 @@ const AVATAR_POOL = [
   "https://images.pexels.com/photos/36763067/pexels-photo-36763067.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
 ];
 
-export const HERO_IMAGE = frame100;
-export const TEXTURE_IMAGE = frame020;
+export const HERO_IMAGE = frame100?.src || frame100;
+export const TEXTURE_IMAGE = frame020?.src || frame020;
 
 const firstNames = ["Diego", "Aiko", "Marcus", "Lena", "Kofi", "Sasha", "Hiro", "Mina", "Rafael", "Yuki", "Emre", "Priya", "Noah", "Zara", "Ivan", "Olga", "Tariq", "Jade", "Viktor", "Nadia"];
 const lastNames = ["Ruiz", "Tanaka", "Okafor", "Ivanov", "Silva", "Kim", "Nakamura", "Patel", "Sato", "Oliveira", "Demir", "Kowalski", "Anderson", "Khan", "Petrov", "Rossi", "Haddad", "Wong", "Dubois", "Abramov"];

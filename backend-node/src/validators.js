@@ -24,6 +24,19 @@ const schemas = {
     refresh: Joi.object({
       refreshToken: Joi.string().required(),
     }),
+    adminCreateUser: Joi.object({
+      email: email.required(),
+      password: password.required(),
+      name: Joi.string().min(2).max(120).required(),
+      role: Joi.string().valid('admin', 'reviewer', 'club', 'applicant').required(),
+      locale: Joi.string().length(2).default('en'),
+    }),
+    adminListUsers: Joi.object({
+      role: Joi.string().valid('admin', 'reviewer', 'club', 'applicant'),
+      q: Joi.string().max(200).allow(''),
+      limit: Joi.number().integer().min(1).max(200).default(50),
+      offset: Joi.number().integer().min(0).default(0),
+    }),
   },
 
   profile: {
@@ -32,7 +45,7 @@ const schemas = {
       lastName: Joi.string().min(1).max(120).required(),
       dateOfBirth: Joi.date().iso().less('now').allow(null),
       gender: Joi.string().max(30).allow(null, ''),
-      nationality: Joi.string().max(3).allow(null, ''),
+      nationality: Joi.string().max(120).allow(null, ''),
       discipline: Joi.string().max(60).allow(null, ''),
       weightKg: Joi.number().positive().max(300).allow(null),
       weightClass: Joi.string().max(60).allow(null, ''),
@@ -50,13 +63,13 @@ const schemas = {
       name: Joi.string().min(2).max(120).required(),
       slug: Joi.string().pattern(/^[a-z0-9-]+$/).min(2).max(80).required(),
       city: Joi.string().max(120).allow(null, ''),
-      country: Joi.string().max(3).allow(null, ''),
+      country: Joi.string().max(120).allow(null, ''),
       metadata: Joi.object().default({}),
     }),
     update: Joi.object({
       name: Joi.string().min(2).max(120),
       city: Joi.string().max(120).allow(null, ''),
-      country: Joi.string().max(3).allow(null, ''),
+      country: Joi.string().max(120).allow(null, ''),
       status: Joi.string().valid('pending', 'active', 'suspended'),
       metadata: Joi.object(),
     }).min(1),

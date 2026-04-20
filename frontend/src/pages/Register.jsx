@@ -7,9 +7,11 @@ import ThemeToggle from "@/components/shared/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/api";
+import { COUNTRY_OPTIONS, getDistrictsByCountryState, getStatesByCountry } from "@/lib/locations";
 import { DISCIPLINE_DEFINITIONS, EXPERIENCE_LEVELS, GENDER_OPTIONS, createPreviewEntries } from "@/lib/tournamentWorkflow";
 import { HERO_IMAGE } from "@/lib/mockData";
 
@@ -25,6 +27,8 @@ export default function Register() {
   const { register: registerUser } = useAuth();
   const isClubTrack = router.query.track === "club";
   const [step, setStep] = useState(1);
+  const [tournaments, setTournaments] = useState([]);
+  const [tournamentsLoading, setTournamentsLoading] = useState(true);
   const [tournamentId, setTournamentId] = useState("");
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
@@ -36,6 +40,11 @@ export default function Register() {
     phone: "",
     weight: "",
     nationality: "",
+    state: "",
+    district: "",
+    addressLine1: "",
+    addressLine2: "",
+    postalCode: "",
     experienceLevel: "",
     selectedDisciplines: [],
     notes: "",
@@ -48,18 +57,40 @@ export default function Register() {
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
-    api.publicTournaments().then(({ data }) => {
-      const first = data?.tournaments?.[0];
-      if (first) setTournamentId(first.id);
-    });
+    let ignore = false;
+    async function loadTournaments() {
+      setTournamentsLoading(true);
+      const { data } = await api.publicTournaments();
+      if (ignore) return;
+      const items = data?.tournaments || [];
+      setTournaments(items);
+      if (items.length > 0) setTournamentId((current) => current || items[0].id);
+      setTournamentsLoading(false);
+    }
+    loadTournaments();
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   const entryPreview = useMemo(() => createPreviewEntries(form), [form]);
   const validEntries = entryPreview.filter((entry) => entry.valid);
+  const stateOptions = useMemo(() => getStatesByCountry(form.nationality), [form.nationality]);
+  const districtOptions = useMemo(() => getDistrictsByCountryState(form.nationality, form.state), [form.nationality, form.state]);
 
   const setField = (key, value) => {
     setForm((current) => ({ ...current, [key]: value }));
     if (errors[key]) setErrors((current) => ({ ...current, [key]: null }));
+  };
+
+  const setNationality = (value) => {
+    setForm((current) => ({ ...current, nationality: value, state: "", district: "" }));
+    setErrors((current) => ({ ...current, nationality: null, state: null, district: null }));
+  };
+
+  const setState = (value) => {
+    setForm((current) => ({ ...current, state: value, district: "" }));
+    setErrors((current) => ({ ...current, state: null, district: null }));
   };
 
   const toggleDiscipline = (disciplineId) => {
@@ -86,14 +117,19 @@ export default function Register() {
       } else {
         if (!form.gender) nextErrors.gender = "Required";
         if (!form.dob) nextErrors.dob = "Required";
-        if (!form.weight) nextErrors.weight = "Required";
+        if (!form.weight || Number(form.weight) <= 0) nextErrors.weight = "Enter a valid weight";
+        if (!form.nationality) nextErrors.nationality = "Required";
+        if (!form.state) nextErrors.state = "Required";
+        if (!form.district) nextErrors.district = "Required";
+        if (!form.addressLine1.trim()) nextErrors.addressLine1 = "Required";
+        if (!form.postalCode.trim()) nextErrors.postalCode = "Required";
       }
     }
     if (step === 2 && !isClubTrack) {
       if (form.selectedDisciplines.length === 0) nextErrors.selectedDisciplines = "Select at least one discipline";
       if (entryPreview.some((entry) => !entry.valid)) nextErrors.selectedDisciplines = "Fix the invalid discipline selection";
       if (!form.experienceLevel) nextErrors.experienceLevel = "Required";
-      if (!tournamentId) nextErrors.tournament = "Tournament is loading";
+      if (!tournamentId && !tournamentsLoading && tournaments.length > 0) nextErrors.tournament = "Select a tournament";
     }
     if (step === 3 && !isClubTrack) {
       if (!documents.medical) nextErrors.medical = "Medical certificate required";
@@ -123,6 +159,21 @@ export default function Register() {
     const [firstName, ...rest] = form.fullName.trim().split(" ");
     const lastName = rest.join(" ") || firstName;
 
+    let selectedTournamentId = tournamentId;
+    if (!isClubTrack && !selectedTournamentId) {
+      const { data } = await api.publicTournaments();
+      const fallbackTournamentId = data?.tournaments?.[0]?.id;
+      if (fallbackTournamentId) {
+        selectedTournamentId = fallbackTournamentId;
+        setTournamentId(fallbackTournamentId);
+      }
+    }
+    if (!isClubTrack && !selectedTournamentId) {
+      setLoading(false);
+      toast.error("No active tournament available. Please contact admin.");
+      return;
+    }
+
     const { user, error } = await registerUser({
       email: form.email,
       password: form.password,
@@ -132,6 +183,10 @@ export default function Register() {
     });
     if (error) {
       setLoading(false);
+      if (error.code === "CONFLICT") {
+        toast.error("Email already registered. Please sign in instead.");
+        return;
+      }
       toast.error(error.message || "Registration failed");
       return;
     }
@@ -171,6 +226,14 @@ export default function Register() {
         selectedDisciplines: form.selectedDisciplines,
         experienceLevel: form.experienceLevel,
         phone: form.phone,
+        address: {
+          country: form.nationality,
+          state: form.state,
+          district: form.district,
+          line1: form.addressLine1,
+          line2: form.addressLine2 || null,
+          postalCode: form.postalCode,
+        },
       },
     });
     if (profileRes.error) {
@@ -180,7 +243,7 @@ export default function Register() {
     }
 
     const appRes = await api.createApplication({
-      tournamentId,
+      tournamentId: selectedTournamentId,
       formData: {
         selectedDisciplines: form.selectedDisciplines,
         experienceLevel: form.experienceLevel,
@@ -296,7 +359,47 @@ export default function Register() {
                       </Field>
                       <Field label="Date of birth" error={errors.dob}><Input type="date" value={form.dob} onChange={(e) => setField("dob", e.target.value)} className="h-11 bg-surface" /></Field>
                       <Field label="Weight (kg)" error={errors.weight}><Input type="number" step="0.1" value={form.weight} onChange={(e) => setField("weight", e.target.value)} className="h-11 bg-surface" /></Field>
-                      <Field label="Nationality"><Input value={form.nationality} onChange={(e) => setField("nationality", e.target.value)} className="h-11 bg-surface" /></Field>
+                      <Field label="Nationality / Country" error={errors.nationality}>
+                        <Select value={form.nationality} onValueChange={setNationality}>
+                          <SelectTrigger className="h-11 bg-surface">
+                            <SelectValue placeholder="Select country" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {COUNTRY_OPTIONS.map((country) => (
+                              <SelectItem key={country} value={country}>{country}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </Field>
+                      <Field label="State" error={errors.state}>
+                        <Select value={form.state} onValueChange={setState} disabled={!stateOptions.length}>
+                          <SelectTrigger className="h-11 bg-surface">
+                            <SelectValue placeholder="Select state" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {stateOptions.map((stateName) => (
+                              <SelectItem key={stateName} value={stateName}>{stateName}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </Field>
+                      <Field label="District" error={errors.district}>
+                        <Select value={form.district} onValueChange={(value) => setField("district", value)} disabled={!districtOptions.length}>
+                          <SelectTrigger className="h-11 bg-surface">
+                            <SelectValue placeholder="Select district" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {districtOptions.map((districtName) => (
+                              <SelectItem key={districtName} value={districtName}>{districtName}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </Field>
+                      <div className="sm:col-span-2 grid sm:grid-cols-2 gap-4">
+                        <Field label="Address line 1" error={errors.addressLine1}><Input value={form.addressLine1} onChange={(e) => setField("addressLine1", e.target.value)} className="h-11 bg-surface" /></Field>
+                        <Field label="Address line 2"><Input value={form.addressLine2} onChange={(e) => setField("addressLine2", e.target.value)} className="h-11 bg-surface" /></Field>
+                      </div>
+                      <Field label="Postal code" error={errors.postalCode}><Input value={form.postalCode} onChange={(e) => setField("postalCode", e.target.value)} className="h-11 bg-surface" /></Field>
                     </>
                   )}
                 </div>
@@ -324,6 +427,21 @@ export default function Register() {
                         ))}
                       </div>
                     </Field>
+                    <Field label="Tournament" error={errors.tournament}>
+                      <Select value={tournamentId} onValueChange={setTournamentId} disabled={tournamentsLoading || tournaments.length === 0}>
+                        <SelectTrigger className="h-11 bg-surface">
+                          <SelectValue placeholder={tournamentsLoading ? "Loading tournaments..." : "Select tournament"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {tournaments.map((tournament) => (
+                            <SelectItem key={tournament.id} value={tournament.id}>{tournament.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                    {!tournamentsLoading && tournaments.length === 0 && (
+                      <p className="text-[11px] text-amber-600 dark:text-amber-400">No public tournaments found right now. You can continue to review details, but submission needs an active tournament.</p>
+                    )}
                     <div className="grid md:grid-cols-2 gap-3">
                       {DISCIPLINE_DEFINITIONS.map((discipline) => {
                         const active = form.selectedDisciplines.includes(discipline.id);
@@ -345,6 +463,7 @@ export default function Register() {
                       })}
                     </div>
                     {errors.selectedDisciplines && <p className="text-[11px] text-red-500">{errors.selectedDisciplines}</p>}
+                    {errors.tournament && <p className="text-[11px] text-red-500">{errors.tournament}</p>}
                     <Field label="Notes for reviewer">
                       <Textarea rows={4} value={form.notes} onChange={(e) => setField("notes", e.target.value)} className="bg-surface" />
                     </Field>
@@ -392,6 +511,8 @@ export default function Register() {
                     ["Email", form.email || "-"],
                     ["Track", isClubTrack ? "Club onboarding" : "Individual application"],
                     ["Club", isClubTrack ? form.clubName || "-" : "Self-registration"],
+                    ["Nationality", isClubTrack ? "-" : form.nationality || "-"],
+                    ["State / District", isClubTrack ? "-" : `${form.state || "-"} / ${form.district || "-"}`],
                     ["Disciplines", isClubTrack ? "-" : (form.selectedDisciplines.map((disciplineId) => DISCIPLINE_DEFINITIONS.find((discipline) => discipline.id === disciplineId)?.label).join(", ") || "-")],
                     ["Documents", isClubTrack ? "Not required" : `${Object.values(documents).filter(Boolean).length}/3 uploaded`],
                   ].map(([label, value]) => (

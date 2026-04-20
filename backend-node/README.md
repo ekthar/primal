@@ -27,6 +27,38 @@ npm run dev                           # starts on PORT (default 4000)
 npm test                              # runs vitest suite
 ```
 
+## Neon PostgreSQL setup
+
+Use Neon PostgreSQL with SSL.
+
+1. Copy environment template:
+
+```bash
+cp .env.example .env
+```
+
+2. Fill either `DATABASE_URL` (recommended) or discrete `PG*` values.
+
+Recommended Neon `DATABASE_URL` format:
+
+```bash
+DATABASE_URL=postgresql://<user>:<password>@<endpoint>.neon.tech/<database>?sslmode=require
+PG_SSL=true
+PG_SSL_REJECT_UNAUTHORIZED=true
+```
+
+3. Run migration and seed after env is set:
+
+```bash
+npm run migrate
+npm run seed
+npm run dev
+```
+
+Notes:
+- SSL is auto-enabled for Neon/Azure hostnames and `sslmode=require` URLs.
+- If you run into TLS verification issues in a non-standard environment, temporarily set `PG_SSL_REJECT_UNAUTHORIZED=false`.
+
 Health check: `GET /api/health`.
 
 ## Architecture

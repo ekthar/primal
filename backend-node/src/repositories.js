@@ -10,6 +10,14 @@ const users = {
   findByEmail: async (email) => (await query(`SELECT * FROM users WHERE email=$1 AND ${ACTIVE}`, [email])).rows[0],
   findById: async (id) => (await query(`SELECT * FROM users WHERE id=$1 AND ${ACTIVE}`, [id])).rows[0],
   findByGoogleSub: async (sub) => (await query(`SELECT * FROM users WHERE google_sub=$1 AND ${ACTIVE}`, [sub])).rows[0],
+  list: async ({ role, q, limit = 50, offset = 0 } = {}) => {
+    const where = [`${ACTIVE}`]; const args = [];
+    if (role) { args.push(role); where.push(`role = $${args.length}`); }
+    if (q) { args.push(`%${q}%`); where.push(`(name ILIKE $${args.length} OR email ILIKE $${args.length})`); }
+    args.push(limit); args.push(offset);
+    const sql = `SELECT * FROM users WHERE ${where.join(' AND ')} ORDER BY created_at DESC LIMIT $${args.length - 1} OFFSET $${args.length}`;
+    return (await query(sql, args)).rows;
+  },
   create: async ({ email, passwordHash, role, name, locale = 'en', googleSub = null, emailVerified = false, avatarUrl = null }) => {
     const { rows } = await query(
       `INSERT INTO users (email, password_hash, role, name, locale, google_sub, email_verified, avatar_url)
@@ -153,7 +161,10 @@ const applications = {
     if (reviewerId) { args.push(reviewerId); where.push(`a.reviewer_id = $${args.length}`); }
     if (overdue === true) where.push(`a.review_due_at < NOW() AND a.status IN ('submitted','under_review')`);
     if (dueSoon === true) where.push(`a.review_due_at BETWEEN NOW() AND NOW() + INTERVAL '6 hours' AND a.status IN ('submitted','under_review')`);
-    if (q) { args.push(`%${q}%`); where.push(`(p.first_name ILIKE $${args.length} OR p.last_name ILIKE $${args.length} OR c.name ILIKE $${args.length})`); }
+    if (q) {
+      args.push(`%${q}%`);
+      where.push(`(a.id::text ILIKE $${args.length} OR p.first_name ILIKE $${args.length} OR p.last_name ILIKE $${args.length} OR c.name ILIKE $${args.length})`);
+    }
     args.push(limit); args.push(offset);
     const sql = `
       SELECT a.id, a.status, a.submitted_at, a.review_due_at, a.correction_due_at, a.updated_at,
@@ -327,6 +338,13 @@ const appeals = {
     (await query(`INSERT INTO appeals (application_id, filed_by, reason) VALUES ($1,$2,$3) RETURNING *`,
       [applicationId, filedBy, reason])).rows[0],
   findById: async (id) => (await query(`SELECT * FROM appeals WHERE id=$1 AND ${ACTIVE}`, [id])).rows[0],
+  listForUser: async (userId) => (await query(
+    `SELECT a.* FROM appeals a
+     JOIN applications app ON app.id = a.application_id
+     WHERE a.${ACTIVE} AND app.submitted_by = $1
+     ORDER BY a.created_at DESC`,
+    [userId]
+  )).rows,
   listForApplication: async (applicationId) => (await query(
     `SELECT * FROM appeals WHERE application_id=$1 AND ${ACTIVE} ORDER BY created_at DESC`, [applicationId])).rows,
   listOpen: async () => (await query(

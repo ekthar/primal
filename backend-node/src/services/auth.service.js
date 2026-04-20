@@ -117,4 +117,38 @@ async function logout(user, { refreshToken } = {}, ctx = {}) {
   return { ok: true };
 }
 
-module.exports = { register, login, loginWithGoogle, me, refresh, logout, publicUser };
+async function createUserByAdmin(actor, { email, password, name, role, locale }, ctx = {}) {
+  if (actor.role !== 'admin') throw ApiError.forbidden();
+  const existing = await usersRepo.findByEmail(email);
+  if (existing) throw ApiError.conflict('Email already registered', { field: 'email' });
+  const passwordHash = await hashPassword(password);
+  const user = await usersRepo.create({ email, passwordHash, role, name, locale });
+  await auditWrite({
+    actorUserId: actor.id,
+    actorRole: actor.role,
+    action: 'user.create_by_admin',
+    entityType: 'user',
+    entityId: user.id,
+    payload: { role: user.role, email: user.email },
+    requestIp: ctx.ip,
+  });
+  return publicUser(user);
+}
+
+async function listUsersByAdmin(actor, query = {}) {
+  if (actor.role !== 'admin') throw ApiError.forbidden();
+  const users = await usersRepo.list(query);
+  return users.map(publicUser);
+}
+
+module.exports = {
+  register,
+  login,
+  loginWithGoogle,
+  me,
+  refresh,
+  logout,
+  publicUser,
+  createUserByAdmin,
+  listUsersByAdmin,
+};

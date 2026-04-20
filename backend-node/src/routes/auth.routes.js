@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { ah, validate, requireAuth } = require('../middleware');
+const { ah, validate, requireAuth, requireRole } = require('../middleware');
 const { schemas } = require('../validators');
 const auth = require('../services/auth.service');
 
@@ -31,6 +31,14 @@ router.get('/me', requireAuth, ah(async (req, res) => {
 
 router.post('/logout', requireAuth, ah(async (req, res) => {
   res.json(await auth.logout(req.user, { refreshToken: req.body?.refreshToken }, { ip: req.ip }));
+}));
+
+router.get('/admin/users', requireAuth, requireRole('admin'), validate(schemas.auth.adminListUsers, 'query'), ah(async (req, res) => {
+  res.json({ users: await auth.listUsersByAdmin(req.user, req.query) });
+}));
+
+router.post('/admin/users', requireAuth, requireRole('admin'), validate(schemas.auth.adminCreateUser), ah(async (req, res) => {
+  res.status(201).json({ user: await auth.createUserByAdmin(req.user, req.body, { ip: req.ip }) });
 }));
 
 module.exports = router;
