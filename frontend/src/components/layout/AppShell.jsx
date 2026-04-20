@@ -11,7 +11,6 @@ import {
   Settings,
   LogOut,
   ChevronDown,
-  CircleDot,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import ThemeToggle from "@/components/shared/ThemeToggle";
@@ -35,8 +34,10 @@ function isActivePath(pathname, target) {
 
 const NAV = {
   admin: [
+    { to: "/admin/overview", icon: LayoutDashboard, label: "Overview", testid: "nav-overview" },
     { to: "/admin/queue", icon: ListChecks, label: "Review Queue", testid: "nav-queue" },
     { to: "/admin/review", icon: Inbox, label: "Workbench", testid: "nav-workbench" },
+    { to: "/admin/brackets", icon: Users, label: "Brackets", testid: "nav-brackets" },
     { to: "/admin/appeals", icon: Gavel, label: "Appeals", testid: "nav-appeals" },
     { to: "/admin/reports", icon: BarChart3, label: "Reports", testid: "nav-reports" },
     { to: "/admin/circulars", icon: Newspaper, label: "Circulars", testid: "nav-circulars" },
@@ -63,22 +64,16 @@ function Brand() {
       </div>
       <div className="leading-tight">
         <div className="font-display font-semibold tracking-tight text-[15px]">TournamentOS</div>
-        <div className="text-[10px] uppercase tracking-[0.14em] text-tertiary">MMA · Sanctioning</div>
+        <div className="text-[10px] uppercase tracking-[0.14em] text-tertiary">Martial arts · workflow</div>
       </div>
     </div>
   );
 }
 
 function RoleSwitcher() {
-  const { user, switchRole, logout, MOCK_USERS } = useAuth();
+  const { user, logout } = useAuth();
   const router = useRouter();
   if (!user) return null;
-
-  const go = (role) => {
-    switchRole(role);
-    const routes = { admin: "/admin/queue", reviewer: "/admin/queue", club: "/club", applicant: "/applicant" };
-    router.push(routes[role] || "/");
-  };
 
   return (
     <DropdownMenu>
@@ -101,14 +96,11 @@ function RoleSwitcher() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" side="top" className="w-60">
         <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-tertiary">
-          Switch role (demo)
+          Signed in
         </DropdownMenuLabel>
-        {Object.keys(MOCK_USERS).map((r) => (
-          <DropdownMenuItem key={r} onClick={() => go(r)} data-testid={`switch-role-${r}`} className="capitalize">
-            <CircleDot className={`size-3.5 ${user.role === r ? "text-primary" : "text-tertiary"}`} />
-            {r}
-          </DropdownMenuItem>
-        ))}
+        <DropdownMenuItem disabled>
+          {user.email}
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem>
           <Settings className="size-3.5" />

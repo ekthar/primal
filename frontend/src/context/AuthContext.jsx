@@ -1,47 +1,83 @@
 import { createContext, useContext, useEffect, useState } from "react";
+import api, { clearSession, setSession } from "@/lib/api";
 
 const AuthContext = createContext(null);
+const STORAGE_KEY = "tos-auth-user";
 
-const STORAGE_KEY = "tos-auth";
-
-const MOCK_USERS = {
-  admin: { id: "u-admin", name: "Mei Tanaka", email: "mei@tournamentos.io", role: "admin", avatar: "MT" },
-  reviewer: { id: "u-rev", name: "Luca Moretti", email: "luca@tournamentos.io", role: "reviewer", avatar: "LM" },
-  club: { id: "u-club", name: "Sakura Gym", email: "ops@sakuragym.jp", role: "club", avatar: "SG" },
-  applicant: { id: "u-app", name: "Diego Ruiz", email: "diego.ruiz@mail.com", role: "applicant", avatar: "DR" },
-};
+function routeForRole(role) {
+  return {
+    admin: "/admin/overview",
+    reviewer: "/admin/queue",
+    club: "/club",
+    applicant: "/applicant",
+  }[role] || "/";
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
-      setUser(raw ? JSON.parse(raw) : null);
-    } catch {
-      setUser(null);
-    } finally {
-      setReady(true);
+    let ignore = false;
+    async function bootstrap() {
+      try {
+        const stored = window.localStorage.getItem(STORAGE_KEY);
+        if (stored) setUser(JSON.parse(stored));
+        const { data, error } = await api.me();
+        if (!ignore) {
+          if (error) {
+            clearSession();
+            setUser(null);
+          } else {
+            setUser(data.user);
+          }
+        }
+      } catch {
+        if (!ignore) setUser(null);
+      } finally {
+        if (!ignore) setReady(true);
+      }
     }
+    bootstrap();
+    return () => { ignore = true; };
   }, []);
 
   useEffect(() => {
     if (!ready) return;
-    if (user) localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
-    else localStorage.removeItem(STORAGE_KEY);
+    if (user) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+    else window.localStorage.removeItem(STORAGE_KEY);
   }, [ready, user]);
 
-  const login = (role = "admin") => {
-    const u = MOCK_USERS[role] || MOCK_USERS.admin;
-    setUser({ ...u, token: "mock-jwt." + btoa(u.email) + ".sig" });
-    return u;
+  const login = async ({ email, password }) => {
+    const { data, error } = await api.login({ email, password });
+    if (error) return { user: null, error };
+    setSession({ accessToken: data.accessToken, refreshToken: data.refreshToken });
+    setUser(data.user);
+    return { user: data.user, error: null, nextRoute: routeForRole(data.user.role) };
   };
-  const logout = () => setUser(null);
-  const switchRole = (role) => login(role);
+
+  const register = async (payload) => {
+    const { data, error } = await api.register(payload);
+    if (error) return { user: null, error };
+    setSession({ accessToken: data.accessToken, refreshToken: data.refreshToken });
+    setUser(data.user);
+    return { user: data.user, error: null, nextRoute: routeForRole(data.user.role) };
+  };
+
+  const logout = async () => {
+    await api.logout();
+    clearSession();
+    setUser(null);
+  };
+
+  const refreshMe = async () => {
+    const { data, error } = await api.me();
+    if (!error) setUser(data.user);
+    return { data, error };
+  };
 
   return (
-    <AuthContext.Provider value={{ user, ready, login, logout, switchRole, MOCK_USERS }}>
+    <AuthContext.Provider value={{ user, ready, login, logout, refreshMe, register }}>
       {children}
     </AuthContext.Provider>
   );

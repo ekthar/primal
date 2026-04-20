@@ -1,129 +1,142 @@
-import { useMemo } from "react";
-import Link from "next/link";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Separator } from "@/components/ui/separator";
+import { useEffect, useState } from "react";
+import { Download, FileCheck2, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { FileEdit, Send, AlertTriangle, ChevronRight, Download } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
 import StatusPill from "@/components/shared/StatusPill";
-import Timeline from "@/components/shared/Timeline";
-import { FIGHTERS, STATUS } from "@/lib/mockData";
+import EmptyState from "@/components/shared/EmptyState";
+import api from "@/lib/api";
 
 export default function ApplicantDashboard() {
-  // Pick a representative applicant (one in "needs_correction" for demo richness)
-  const me = useMemo(() => {
-    return FIGHTERS.find((f) => f.status === STATUS.NEEDS_CORRECTION) || FIGHTERS[0];
+  const [profile, setProfile] = useState(null);
+  const [applications, setApplications] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([api.getMyProfile(), api.listApplications()]).then(([profileRes, appRes]) => {
+      if (!profileRes.error) setProfile(profileRes.data.profile);
+      if (!appRes.error) setApplications(appRes.data.items || []);
+      setLoading(false);
+    });
   }, []);
 
-  const statusOrder = [STATUS.DRAFT, STATUS.SUBMITTED, STATUS.UNDER_REVIEW, STATUS.APPROVED];
-  const currentIdx = statusOrder.indexOf(me.status);
+  if (loading) return <div className="max-w-6xl mx-auto px-6 py-8 text-sm text-secondary-muted">Loading application workspace...</div>;
+  if (!profile) {
+    return (
+      <div className="p-10">
+        <EmptyState icon={FileCheck2} title="No applicant profile found" description="Complete registration to create your reusable profile and tournament application." />
+      </div>
+    );
+  }
+
+  const approvedCount = applications.filter((application) => application.status === "approved").length;
+  const pendingCount = applications.filter((application) => ["submitted", "under_review", "needs_correction"].includes(application.status)).length;
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8">
-      {/* Hero card */}
-      <div className="rounded-3xl border border-border bg-surface overflow-hidden elev-card">
-        <div className="relative bg-gradient-to-br from-surface-muted to-surface p-6 sm:p-8">
-          <div className="flex items-start gap-4 flex-wrap">
-            <Avatar className="size-16 border border-border">
-              <AvatarImage src={me.avatar} alt="" />
-              <AvatarFallback className="bg-surface-muted text-sm font-semibold">{me.initials}</AvatarFallback>
-            </Avatar>
-            <div className="min-w-0 flex-1">
+    <div className="max-w-6xl mx-auto px-6 py-8">
+      <div className="rounded-3xl border border-border bg-surface elev-card overflow-hidden">
+        <div className="bg-gradient-to-br from-surface-muted to-surface p-6 sm:p-8">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="min-w-0">
               <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">My application</div>
-              <h1 className="font-display text-3xl font-semibold tracking-tight mt-1">{me.fullName}</h1>
-              <div className="mt-2 flex items-center gap-3 flex-wrap">
-                <StatusPill status={me.status} />
-                <span className="text-sm text-secondary-muted">{me.clubName} · {me.weightClass} · {me.discipline}</span>
-              </div>
+              <h1 className="font-display text-3xl font-semibold tracking-tight mt-1">{profile.first_name} {profile.last_name}</h1>
+              <p className="text-sm text-secondary-muted mt-2 max-w-2xl">
+                Your reusable profile is saved once and reused across tournaments. Each submission enters the review queue with full status history.
+              </p>
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" className="h-9" data-testid="applicant-download">
-                <Download className="size-3.5" /> Download PDF
-              </Button>
-            </div>
+            {applications[0] && (
+              <a href={api.exportApplicationPdf(applications[0].id)} target="_blank" rel="noreferrer">
+                <Button variant="outline" size="sm" className="h-9">
+                  <Download className="size-3.5" /> Application PDF
+                </Button>
+              </a>
+            )}
           </div>
 
-          {/* Status tracker */}
-          <div className="mt-8">
-            <div className="relative">
-              <div className="absolute inset-x-0 top-4 h-0.5 bg-border" />
-              <div
-                className="absolute top-4 left-0 h-0.5 bg-foreground transition-all duration-700 ease-ios"
-                style={{ width: `${(currentIdx / (statusOrder.length - 1)) * 100}%` }}
-              />
-              <div className="relative grid grid-cols-4 gap-2">
-                {statusOrder.map((s, i) => {
-                  const done = i < currentIdx;
-                  const current = i === currentIdx;
-                  return (
-                    <div key={s} className="flex flex-col items-center gap-2">
-                      <div
-                        className={`size-9 rounded-full border flex items-center justify-center transition-all duration-300 ${
-                          done
-                            ? "bg-foreground text-background border-foreground"
-                            : current
-                              ? "bg-background text-foreground border-foreground animate-pulse-ring"
-                              : "bg-surface text-tertiary border-border"
-                        }`}
-                      >
-                        <span className="text-xs font-mono">{i + 1}</span>
-                      </div>
-                      <span className={`text-[11px] font-medium text-center ${done || current ? "text-foreground" : "text-tertiary"}`}>
-                        {s === "under_review" ? "Under review" : s === "draft" ? "Draft" : s === "submitted" ? "Submitted" : "Approved"}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+          <div className="mt-8 grid sm:grid-cols-3 gap-3">
+            <Metric label="Applications" value={applications.length} helper="Tournament submissions" />
+            <Metric label="Approved" value={approvedCount} helper="Cleared by the review team" />
+            <Metric label="Pending review" value={pendingCount} helper="Still moving through workflow" />
           </div>
         </div>
-
-        {/* Notes banner if needs correction */}
-        {me.status === STATUS.NEEDS_CORRECTION && me.notes && (
-          <div className="px-6 sm:px-8 py-4 border-t border-orange-200 dark:border-orange-900/50 bg-orange-50/60 dark:bg-orange-950/30 flex items-start gap-3">
-            <AlertTriangle className="size-5 text-orange-600 dark:text-orange-400 shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <div className="text-[10px] uppercase tracking-wider text-orange-700 dark:text-orange-300 font-semibold">Action needed</div>
-              <p className="mt-1 text-sm text-orange-900 dark:text-orange-100">{me.notes}</p>
-            </div>
-            <Link to="/club">
-              <Button className="bg-orange-600 hover:bg-orange-700 text-white shrink-0" data-testid="applicant-fix-btn">
-                Fix now <ChevronRight className="size-4 ml-1" />
-              </Button>
-            </Link>
-          </div>
-        )}
+        <div className="border-t border-border px-6 sm:px-8 py-5 bg-surface-muted/30 flex items-center gap-2 text-sm">
+          <FileCheck2 className="size-4 text-primary" />
+          <span className="font-medium">Workflow:</span>
+          <span className="text-secondary-muted">draft → submitted → under review → correction loop → approved or rejected</span>
+        </div>
       </div>
 
-      {/* Details grid */}
-      <div className="grid lg:grid-cols-3 gap-5 mt-6">
-        <div className="lg:col-span-2 rounded-2xl border border-border bg-surface p-6">
-          <h2 className="font-display text-xl font-semibold tracking-tight">Application timeline</h2>
-          <Separator className="my-4" />
-          <Timeline events={me.timeline} />
+      <div className="grid lg:grid-cols-[1.45fr_0.85fr] gap-5 mt-6">
+        <div className="rounded-3xl border border-border bg-surface elev-card p-6">
+          <div>
+            <h2 className="font-display text-2xl font-semibold tracking-tight">Tournament submissions</h2>
+            <p className="text-sm text-secondary-muted mt-1">Every submission is API-backed and exportable.</p>
+          </div>
+          <div className="mt-5 space-y-4">
+            {applications.map((application) => (
+              <article key={application.id} className="rounded-2xl border border-border bg-background/60 p-4">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div>
+                    <div className="font-display text-xl font-semibold tracking-tight">{application.tournament_name}</div>
+                    <div className="text-sm text-secondary-muted mt-1">
+                      {application.discipline || "Profile discipline pending"} · {application.weight_class || "Weight class pending"}
+                    </div>
+                  </div>
+                  <StatusPill status={application.status} />
+                </div>
+                <div className="grid sm:grid-cols-3 gap-3 mt-4 text-sm">
+                  <Detail label="Updated" value={new Date(application.updated_at).toLocaleDateString()} />
+                  <Detail label="Reviewer" value={application.reviewer_id || "Unassigned"} />
+                  <Detail label="Correction due" value={application.correction_due_at ? new Date(application.correction_due_at).toLocaleDateString() : "-"} />
+                </div>
+              </article>
+            ))}
+          </div>
         </div>
-        <div className="rounded-2xl border border-border bg-surface p-6 h-max">
-          <h2 className="font-display text-xl font-semibold tracking-tight">Summary</h2>
-          <Separator className="my-4" />
-          <dl className="space-y-3 text-sm">
-            <Row label="Fighter ID" value={<span className="font-mono">{me.id}</span>} />
-            <Row label="Weight" value={`${me.weight} kg`} />
-            <Row label="Record" value={me.record} />
-            <Row label="Age" value={me.age} />
-            <Row label="Medical" value={me.medicalValid ? <span className="text-emerald-600 dark:text-emerald-400 font-medium">Valid</span> : <span className="text-orange-600 dark:text-orange-400 font-medium">Review</span>} />
-            <Row label="Discipline" value={me.discipline} />
-          </dl>
+
+        <div className="space-y-5">
+          <div className="rounded-3xl border border-border bg-surface elev-card p-6">
+            <h2 className="font-display text-xl font-semibold tracking-tight">Profile summary</h2>
+            <Separator className="my-4" />
+            <dl className="space-y-3 text-sm">
+              <Detail label="Nationality" value={profile.nationality || "-"} />
+              <Detail label="Discipline" value={profile.discipline || "-"} />
+              <Detail label="Weight" value={profile.weight_kg ? `${profile.weight_kg} kg` : "-"} />
+              <Detail label="Weight class" value={profile.weight_class || "-"} />
+            </dl>
+          </div>
+
+          <div className="rounded-3xl border border-border bg-surface elev-card p-6">
+            <div className="flex items-start gap-3">
+              <ShieldAlert className="size-5 text-primary shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-display text-xl font-semibold tracking-tight">Appeals and correction loop</h3>
+                <p className="text-sm text-secondary-muted mt-2">
+                  If a reviewer requests changes, edit is allowed only inside the correction window. Rejections can be appealed and reopened by admin.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function Row({ label, value }) {
+function Metric({ label, value, helper }) {
+  return (
+    <div className="rounded-2xl border border-border bg-background/60 p-4">
+      <div className="text-[10px] uppercase tracking-wider text-tertiary font-semibold">{label}</div>
+      <div className="font-display text-3xl font-semibold tracking-tight mt-2">{value}</div>
+      <div className="text-xs text-secondary-muted mt-1">{helper}</div>
+    </div>
+  );
+}
+
+function Detail({ label, value }) {
   return (
     <div className="flex items-center justify-between gap-4">
       <dt className="text-[10px] uppercase tracking-wider text-tertiary font-semibold">{label}</dt>
-      <dd className="text-sm text-right">{value}</dd>
+      <dd className="text-right">{value}</dd>
     </div>
   );
 }

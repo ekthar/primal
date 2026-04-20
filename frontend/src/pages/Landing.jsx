@@ -169,7 +169,7 @@ function Nav() {
       }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between">
-        <Link to="/" className="flex items-center gap-2" data-testid="nav-brand">
+        <Link href="/" className="flex items-center gap-2" data-testid="nav-brand">
           <div className="size-8 rounded-lg bg-foreground text-background flex items-center justify-center font-display font-bold text-sm">P</div>
           <span className="font-display font-semibold tracking-tight">Primal</span>
         </Link>
@@ -181,8 +181,8 @@ function Nav() {
         </nav>
         <div className="flex items-center gap-2">
           <ThemeToggle compact />
-          <Link to="/login"><Button variant="ghost" size="sm" data-testid="nav-login">Sign in</Button></Link>
-          <Link to="/register">
+          <Link href="/login"><Button variant="ghost" size="sm" data-testid="nav-login">Sign in</Button></Link>
+          <Link href="/register">
             <Button size="sm" className="bg-foreground text-background hover:bg-foreground/90 rounded-full px-4" data-testid="nav-register">
               Register
             </Button>
@@ -267,18 +267,18 @@ function Hero() {
 
             <Reveal delay={0.4}>
               <div className="mt-10 flex flex-wrap items-center gap-3">
-                <Link to="/register">
+                <Link href="/register">
                   <Button size="lg" className="bg-primary hover:bg-primary-hover text-primary-foreground h-12 px-6 rounded-full" data-testid="hero-cta-register">
                     Register to compete
                     <ArrowRight className="size-4 ml-1" />
                   </Button>
                 </Link>
-                <Link to="/register?track=club">
+                <Link href="/register?track=club">
                   <Button size="lg" variant="outline" className="h-12 px-6 rounded-full bg-surface/60 backdrop-blur border-border" data-testid="hero-cta-club">
                     Register a gym <ArrowUpRight className="size-4 ml-1" />
                   </Button>
                 </Link>
-                <Link to="/login">
+                <Link href="/login">
                   <Button size="lg" variant="ghost" className="h-12 px-5 rounded-full" data-testid="hero-cta-admin">
                     Staff access
                   </Button>
@@ -462,7 +462,7 @@ function Announcements() {
 
                   {u.ctaLabel && u.ctaUrl ? (
                     <div className="mt-6">
-                      <Link to={u.ctaUrl}>
+                      <Link href={u.ctaUrl}>
                         <Button variant="outline" className="rounded-full bg-surface/70 backdrop-blur border-border">
                           {u.ctaLabel} <ArrowUpRight className="size-4 ml-1" />
                         </Button>
@@ -520,7 +520,7 @@ function Paths() {
           {paths.map((p, i) => (
             <Reveal key={p.testid} delay={i * 0.1}>
               <Link
-                to={p.to}
+                href={p.to}
                 data-testid={p.testid}
                 className="group block h-full rounded-3xl border border-border bg-surface p-8 relative overflow-hidden hover:-translate-y-1 transition-all duration-500 ease-ios elev-card"
               >
@@ -654,7 +654,7 @@ function AdminShowcase() {
               </li>
             ))}
           </ul>
-          <Link to="/login" className="mt-10 inline-flex">
+          <Link href="/login" className="mt-10 inline-flex">
             <Button size="lg" className="bg-foreground text-background hover:bg-foreground/90 rounded-full px-6 h-12" data-testid="admin-cta">
               Open the admin preview <ArrowRight className="size-4 ml-1" />
             </Button>
@@ -779,17 +779,17 @@ function CTA() {
                 Your fighters are ready. Your platform should be too.
               </h2>
               <div className="mt-10 flex flex-wrap gap-3">
-                <Link to="/register">
+                <Link href="/register">
                   <Button size="lg" className="bg-primary hover:bg-primary-hover text-primary-foreground h-12 px-6 rounded-full" data-testid="cta-apply">
                     Apply Now <ArrowRight className="size-4 ml-1" />
                   </Button>
                 </Link>
-                <Link to="/register?track=club">
+                <Link href="/register?track=club">
                   <Button size="lg" variant="outline" className="h-12 px-6 rounded-full bg-transparent border-background/30 text-background hover:bg-background/10 hover:text-background" data-testid="cta-club">
                     Club Onboarding
                   </Button>
                 </Link>
-                <Link to="/login">
+                <Link href="/login">
                   <Button size="lg" variant="ghost" className="h-12 px-5 rounded-full text-background hover:bg-background/10 hover:text-background" data-testid="cta-admin">
                     Admin Access <ArrowUpRight className="size-4 ml-1" />
                   </Button>
@@ -822,9 +822,9 @@ function Footer() {
         </div>
         <div className="flex flex-col gap-2">
           <div className="font-semibold text-foreground text-xs uppercase tracking-wider">Access</div>
-          <Link to="/login">Sign in</Link>
-          <Link to="/register">Register</Link>
-          <Link to="/register?track=club">Club onboarding</Link>
+          <Link href="/login">Sign in</Link>
+          <Link href="/register">Register</Link>
+          <Link href="/register?track=club">Club onboarding</Link>
         </div>
       </div>
       <div className="mt-10 text-center text-[11px] text-tertiary flex items-center justify-center gap-2">

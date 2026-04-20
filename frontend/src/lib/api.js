@@ -1,116 +1,160 @@
-// Thin HTTP client for the TournamentOS Node API.
-// Uses REACT_APP_BACKEND_URL. Token is read from localStorage.
-// All methods return { data, error }. On error, error is { code, message, details? }.
+const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.REACT_APP_BACKEND_URL || "";
+const ACCESS_TOKEN_KEY = "tos-access-token";
+const REFRESH_TOKEN_KEY = "tos-refresh-token";
 
-const BASE_URL = process.env.REACT_APP_BACKEND_URL || '';
-const TOKEN_KEY = 'tos-token';
-
-export function setToken(token) {
-  if (token) localStorage.setItem(TOKEN_KEY, token);
-  else localStorage.removeItem(TOKEN_KEY);
-}
-export function getToken() {
-  return localStorage.getItem(TOKEN_KEY);
+export function setSession({ accessToken, refreshToken }) {
+  if (typeof window === "undefined") return;
+  if (accessToken) localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
+  if (refreshToken) localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
 }
 
-async function request(method, path, { body, query, headers = {} } = {}) {
+export function clearSession() {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(ACCESS_TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
+}
+
+export function getAccessToken() {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(ACCESS_TOKEN_KEY);
+}
+
+export function getRefreshToken() {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(REFRESH_TOKEN_KEY);
+}
+
+async function refreshAccessToken() {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return false;
+
+  const url = new URL(`${BASE_URL}/api/auth/refresh`, window.location.origin);
+  const res = await fetch(url.toString(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refreshToken }),
+  });
+
+  if (!res.ok) {
+    clearSession();
+    return false;
+  }
+
+  const payload = await res.json();
+  setSession({ accessToken: payload.accessToken, refreshToken: payload.refreshToken });
+  return true;
+}
+
+async function request(method, path, { body, query, headers = {}, raw = false, retry = true } = {}) {
   const url = new URL(`${BASE_URL}${path}`, window.location.origin);
   if (query) {
-    Object.entries(query).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, v);
+    Object.entries(query).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== "") url.searchParams.set(key, value);
     });
   }
-  const token = getToken();
+
+  const accessToken = getAccessToken();
+  const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
   const init = {
     method,
     headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       ...headers,
     },
   };
-  if (body !== undefined) init.body = JSON.stringify(body);
+  if (body !== undefined) init.body = isFormData ? body : JSON.stringify(body);
 
   try {
     const res = await fetch(url.toString(), init);
-    const isJson = res.headers.get('content-type')?.includes('application/json');
+    if (res.status === 401 && retry && !path.includes("/api/auth/")) {
+      const refreshed = await refreshAccessToken();
+      if (refreshed) {
+        return request(method, path, { body, query, headers, raw, retry: false });
+      }
+    }
+
+    if (raw) return { data: res, error: null };
+
+    const isJson = res.headers.get("content-type")?.includes("application/json");
     const payload = isJson ? await res.json() : await res.text();
-    if (!res.ok) return { data: null, error: payload?.error || { code: 'HTTP_' + res.status, message: res.statusText } };
+    if (!res.ok) return { data: null, error: payload?.error || { code: `HTTP_${res.status}`, message: res.statusText } };
     return { data: payload, error: null };
   } catch (err) {
-    return { data: null, error: { code: 'NETWORK', message: err.message } };
+    return { data: null, error: { code: "NETWORK", message: err.message } };
   }
 }
 
 export const api = {
-  // auth
-  register: (body) => request('POST', '/api/auth/register', { body }),
-  login: (body) => request('POST', '/api/auth/login', { body }),
-  loginWithGoogle: (idToken) => request('POST', '/api/auth/google', { body: { idToken } }),
-  me: () => request('GET', '/api/auth/me'),
-  logout: () => request('POST', '/api/auth/logout'),
+  register: (body) => request("POST", "/api/auth/register", { body }),
+  login: (body) => request("POST", "/api/auth/login", { body }),
+  loginWithGoogle: (idToken) => request("POST", "/api/auth/google", { body: { idToken } }),
+  refresh: (refreshToken) => request("POST", "/api/auth/refresh", { body: { refreshToken } }),
+  me: () => request("GET", "/api/auth/me"),
+  logout: () => request("POST", "/api/auth/logout", { body: { refreshToken: getRefreshToken() } }),
 
-  // profiles
-  getMyProfile: () => request('GET', '/api/profiles/me'),
-  upsertMyProfile: (body) => request('PUT', '/api/profiles/me', { body }),
+  getMyProfile: () => request("GET", "/api/profiles/me"),
+  upsertMyProfile: (body) => request("PUT", "/api/profiles/me", { body }),
 
-  // clubs
-  createClub: (body) => request('POST', '/api/clubs', { body }),
-  listClubs: (query) => request('GET', '/api/clubs', { query }),
+  createClub: (body) => request("POST", "/api/clubs", { body }),
+  listClubs: (query) => request("GET", "/api/clubs", { query }),
+  updateClub: (id, body) => request("PATCH", `/api/clubs/${id}`, { body }),
 
-  // applications
-  createApplication: (body) => request('POST', '/api/applications', { body }),
-  listApplications: (query) => request('GET', '/api/applications', { query }),
-  getApplication: (id) => request('GET', `/api/applications/${id}`),
-  updateApplication: (id, body) => request('PATCH', `/api/applications/${id}`, { body }),
-  submitApplication: (id) => request('POST', `/api/applications/${id}/submit`),
+  createApplication: (body) => request("POST", "/api/applications", { body }),
+  listApplications: (query) => request("GET", "/api/applications", { query }),
+  getApplication: (id) => request("GET", `/api/applications/${id}`),
+  updateApplication: (id, body) => request("PATCH", `/api/applications/${id}`, { body }),
+  submitApplication: (id) => request("POST", `/api/applications/${id}/submit`),
+  resubmitApplication: (id) => request("POST", `/api/applications/${id}/resubmit`),
+  listApplicationDocuments: (id) => request("GET", `/api/applications/${id}/documents`),
+  uploadApplicationDocument: (id, { file, kind, label, expiresOn }) => {
+    const body = new FormData();
+    body.append("file", file);
+    body.append("kind", kind);
+    if (label) body.append("label", label);
+    if (expiresOn) body.append("expiresOn", expiresOn);
+    return request("POST", `/api/applications/${id}/documents`, { body });
+  },
 
-  // review
-  assignReviewer: (id, reviewerId) => request('POST', `/api/reviews/${id}/assign`, { body: { reviewerId } }),
-  startReview: (id) => request('POST', `/api/reviews/${id}/start`),
-  decide: (id, body) => request('POST', `/api/reviews/${id}/decision`, { body }),
-  bulkDecide: (body) => request('POST', `/api/reviews/bulk/decision`, { body }),
-  reopen: (id, reason) => request('POST', `/api/reviews/${id}/reopen`, { body: { reason } }),
+  assignReviewer: (id, reviewerId) => request("POST", `/api/reviews/${id}/assign`, { body: { reviewerId } }),
+  startReview: (id) => request("POST", `/api/reviews/${id}/start`),
+  decide: (id, body) => request("POST", `/api/reviews/${id}/decision`, { body }),
+  bulkDecide: (body) => request("POST", `/api/reviews/bulk/decision`, { body }),
+  reopen: (id, reason) => request("POST", `/api/reviews/${id}/reopen`, { body: { reason } }),
 
-  // queue
-  queueBoard: (query) => request('GET', '/api/queue', { query }),
-  queueSla: () => request('GET', '/api/queue/sla'),
-  queueWorkload: () => request('GET', '/api/queue/workload'),
+  queueBoard: (query) => request("GET", "/api/queue", { query }),
+  queueSla: () => request("GET", "/api/queue/sla"),
+  queueWorkload: () => request("GET", "/api/queue/workload"),
 
-  // appeals
-  fileAppeal: (body) => request('POST', '/api/appeals', { body }),
-  openAppeals: () => request('GET', '/api/appeals/open'),
-  decideAppeal: (id, body) => request('POST', `/api/appeals/${id}/decision`, { body }),
+  fileAppeal: (body) => request("POST", "/api/appeals", { body }),
+  openAppeals: () => request("GET", "/api/appeals/open"),
+  decideAppeal: (id, body) => request("POST", `/api/appeals/${id}/decision`, { body }),
 
-  // reports
-  reportSummary: () => request('GET', '/api/reports/summary'),
+  reportSummary: () => request("GET", "/api/reports/summary"),
   exportApprovedXlsx: () => `${BASE_URL}/api/reports/approved.xlsx`,
   exportApplicationPdf: (id) => `${BASE_URL}/api/reports/applications/${id}.pdf`,
 
-  // public
-  publicTournaments: () => request('GET', '/api/public/tournaments'),
-  publicParticipants: (query) => request('GET', '/api/public/participants', { query }),
-  publicClubs: (query) => request('GET', '/api/public/clubs', { query }),
-  publicCirculars: (query) => request('GET', '/api/public/circulars', { query }),
+  verifyAudit: () => request("GET", "/api/audit/verify"),
+  auditForEntity: (type, id) => request("GET", `/api/audit/entity/${type}/${id}`),
+  exportAuditXlsx: () => `${BASE_URL}/api/audit/export.xlsx`,
 
-  // circulars (admin)
-  listCirculars: (query) => request('GET', '/api/circulars', { query }),
-  createCircular: (body) => request('POST', '/api/circulars', { body }),
-  updateCircular: (id, body) => request('PATCH', `/api/circulars/${id}`, { body }),
-  deleteCircular: (id) => request('DELETE', `/api/circulars/${id}`),
+  publicTournaments: () => request("GET", "/api/public/tournaments"),
+  publicParticipants: (query) => request("GET", "/api/public/participants", { query }),
+  publicClubs: (query) => request("GET", "/api/public/clubs", { query }),
+  publicCirculars: (query) => request("GET", "/api/public/circulars", { query }),
 
-  // audit
-  verifyAudit: () => request('GET', '/api/audit/verify'),
-  auditForEntity: (type, id) => request('GET', `/api/audit/entity/${type}/${id}`),
+  listCirculars: (query) => request("GET", "/api/circulars", { query }),
+  createCircular: (body) => request("POST", "/api/circulars", { body }),
+  updateCircular: (id, body) => request("PATCH", `/api/circulars/${id}`, { body }),
+  deleteCircular: (id) => request("DELETE", `/api/circulars/${id}`),
 };
 
-/** Check whether the API is reachable (for wire-it-up detection). */
 export async function isApiLive() {
   try {
     const res = await fetch(`${BASE_URL}/api/health`);
     if (!res.ok) return false;
     const body = await res.json();
-    return body?.ok === true && body?.env !== undefined;
+    return body?.ok === true;
   } catch {
     return false;
   }

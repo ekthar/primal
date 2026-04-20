@@ -25,29 +25,30 @@ export default function Login() {
   const [password, setPassword] = useState("demo1234");
   const [loading, setLoading] = useState(false);
 
-  const pickRole = (r) => {
-    setRole(r.id);
-    setEmail(r.email);
+  const pickRole = (item) => {
+    setRole(item.id);
+    setEmail(item.email);
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
     if (!email || !password) {
       toast.error("Please enter your email and password");
       return;
     }
     setLoading(true);
-    setTimeout(() => {
-      login(role);
-      toast.success(`Welcome back — signed in as ${role}`);
-      const routes = { admin: "/admin/queue", reviewer: "/admin/queue", club: "/club", applicant: "/applicant" };
-        router.push(routes[role]);
-    }, 600);
+    const { user, error, nextRoute } = await login({ email, password });
+    setLoading(false);
+    if (error) {
+      toast.error(error.message || "Sign in failed");
+      return;
+    }
+    toast.success(`Welcome back - signed in as ${user.role}`);
+    router.push(nextRoute || "/");
   };
 
   return (
     <div className="min-h-screen flex bg-background">
-      {/* Left — form */}
       <div className="flex-1 flex flex-col">
         <div className="flex items-center justify-between px-6 sm:px-10 py-5">
           <Link href="/" className="flex items-center gap-2" data-testid="back-home">
@@ -61,23 +62,23 @@ export default function Login() {
           <div className="w-full max-w-md">
             <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">Sign in</div>
             <h1 className="font-display mt-2 text-3xl sm:text-4xl font-semibold tracking-tight">Welcome back.</h1>
-            <p className="mt-2 text-sm text-secondary-muted">Choose a demo role to preview the platform.</p>
+            <p className="mt-2 text-sm text-secondary-muted">Seeded backend users are prefilled here so you can access the live workflow immediately.</p>
 
             <div className="grid grid-cols-2 gap-2 mt-7">
-              {ROLES.map((r) => (
+              {ROLES.map((item) => (
                 <button
-                  key={r.id}
+                  key={item.id}
                   type="button"
-                  onClick={() => pickRole(r)}
-                  data-testid={`role-${r.id}`}
+                  onClick={() => pickRole(item)}
+                  data-testid={`role-${item.id}`}
                   className={`text-left rounded-xl border p-3 transition-all duration-200 ease-ios focus-ring ${
-                    role === r.id
+                    role === item.id
                       ? "border-foreground bg-surface-muted shadow-soft"
                       : "border-border bg-surface hover:bg-surface-muted"
                   }`}
                 >
-                  <div className="text-sm font-medium">{r.label}</div>
-                  <div className="text-[11px] text-tertiary">{r.sub}</div>
+                  <div className="text-sm font-medium">{item.label}</div>
+                  <div className="text-[11px] text-tertiary">{item.sub}</div>
                 </button>
               ))}
             </div>
@@ -88,7 +89,7 @@ export default function Login() {
                 <Input
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(event) => setEmail(event.target.value)}
                   data-testid="login-email"
                   className="mt-1.5 h-11 bg-surface"
                   placeholder="you@federation.org"
@@ -99,10 +100,10 @@ export default function Login() {
                 <Input
                   type="password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(event) => setPassword(event.target.value)}
                   data-testid="login-password"
                   className="mt-1.5 h-11 bg-surface"
-                  placeholder="••••••••"
+                  placeholder="demo1234"
                 />
               </div>
               <Button
@@ -116,13 +117,12 @@ export default function Login() {
             </form>
 
             <p className="mt-6 text-xs text-tertiary text-center">
-              Demo prototype · Any password works · <Link href="/register" className="text-foreground hover:underline">Register instead</Link>
+              Seed password: `demo1234` · <Link href="/register" className="text-foreground hover:underline">Register instead</Link>
             </p>
           </div>
         </div>
       </div>
 
-      {/* Right — visual */}
       <div className="hidden lg:block w-[46%] relative overflow-hidden border-l border-border">
         <div
           className="absolute inset-0"
@@ -140,7 +140,7 @@ export default function Login() {
             <p className="font-display mt-2 text-2xl font-semibold tracking-tight leading-snug text-balance">
               "We cut review times from 4 days to 4 hours."
             </p>
-            <div className="mt-3 text-xs text-secondary-muted">Kenji Ito — Chief Sanctioning Officer, All-Japan Combat League</div>
+            <div className="mt-3 text-xs text-secondary-muted">Kenji Ito - Chief Sanctioning Officer, All-Japan Combat League</div>
           </div>
         </div>
       </div>
