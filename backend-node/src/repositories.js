@@ -135,10 +135,14 @@ const applications = {
   },
   findById: async (id) => (await query(`SELECT * FROM applications WHERE id=$1 AND ${ACTIVE}`, [id])).rows[0],
   findFullById: async (id) => (await query(
-    `SELECT a.*, p.first_name, p.last_name, p.weight_class, p.weight_kg, p.discipline,
-            c.name AS club_name, c.slug AS club_slug, t.name AS tournament_name, t.slug AS tournament_slug
+      `SELECT a.*, p.user_id, p.first_name, p.last_name, p.date_of_birth, p.gender, p.nationality,
+        p.weight_class, p.weight_kg, p.discipline, p.record_wins, p.record_losses, p.record_draws,
+        p.bio, p.metadata,
+        u.email, u.phone,
+        c.name AS club_name, c.slug AS club_slug, t.name AS tournament_name, t.slug AS tournament_slug
      FROM applications a
      JOIN profiles p ON p.id = a.profile_id
+       JOIN users u ON u.id = p.user_id
      LEFT JOIN clubs c ON c.id = a.club_id
      JOIN tournaments t ON t.id = a.tournament_id
      WHERE a.id = $1 AND a.${ACTIVE}`, [id])).rows[0],

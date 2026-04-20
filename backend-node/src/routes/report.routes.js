@@ -5,14 +5,14 @@ const queue = require('../services/queue.service');
 
 const router = Router();
 
-router.use(requireAuth, requireRole('admin', 'reviewer'));
+router.use(requireAuth);
 
-router.get('/summary', ah(async (_req, res) => {
+router.get('/summary', requireRole('admin', 'reviewer'), ah(async (_req, res) => {
   const [sla, workload] = await Promise.all([queue.slaSummary(), queue.reviewerWorkload()]);
   res.json({ sla, workload });
 }));
 
-router.get('/approved.xlsx', ah(async (req, res) => {
+router.get('/approved.xlsx', requireRole('admin', 'reviewer'), ah(async (req, res) => {
   await exporter.approvedToExcel(res, { tournamentId: req.query.tournamentId });
 }));
 

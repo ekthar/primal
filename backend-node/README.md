@@ -59,6 +59,33 @@ Notes:
 - SSL is auto-enabled for Neon/Azure hostnames and `sslmode=require` URLs.
 - If you run into TLS verification issues in a non-standard environment, temporarily set `PG_SSL_REJECT_UNAUTHORIZED=false`.
 
+## PDF branding options
+
+Application PDF exports support optional branding and public digital-signature QR verification:
+
+```bash
+PDF_BRAND_NAME=Primal
+PDF_BRAND_PRIMARY=#0b0b0b
+PDF_BRAND_ACCENT=#ef1a1a
+PDF_LOGO_PATH=./assets/primal-logo.png
+PDF_FONT_BODY_PATH=./assets/fonts/InterTight-Regular.ttf
+PDF_FONT_BODY_BOLD_PATH=./assets/fonts/InterTight-SemiBold.ttf
+PDF_FONT_HEADING_PATH=./assets/fonts/Manrope-SemiBold.ttf
+PDF_FONT_HEADING_BOLD_PATH=./assets/fonts/Manrope-Bold.ttf
+PDF_SIGNATURE_SECRET=<strong-random-secret>
+PDF_VERIFY_BASE_URL=https://api.example.com/api/public/verify/application-signature
+```
+
+Notes:
+- `PDF_LOGO_PATH` supports PNG/JPG/JPEG.
+- `PDF_FONT_*` supports TTF/OTF files.
+- Inter Tight is used for body/details text and Manrope is used for headings when those files exist.
+- Recommended: place your logo at `backend-node/assets/primal-logo.png` so branding works without extra setup.
+- Recommended font files location: `backend-node/assets/fonts/`.
+- If `PDF_LOGO_PATH` is empty or invalid, exports use a generated initials logo block.
+- If font files are missing or invalid, exports safely fall back to built-in Helvetica fonts.
+- QR verification endpoint is public and validates tamper-evidence using signed digest data.
+
 Health check: `GET /api/health`.
 
 ## Architecture

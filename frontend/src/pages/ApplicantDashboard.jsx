@@ -14,6 +14,7 @@ export default function ApplicantDashboard() {
   const [appealsByApplication, setAppealsByApplication] = useState({});
   const [appealDrafts, setAppealDrafts] = useState({});
   const [filingAppealId, setFilingAppealId] = useState(null);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -52,6 +53,18 @@ export default function ApplicantDashboard() {
     toast.success("Appeal filed successfully");
   }
 
+  async function downloadApplicationPdf(applicationId) {
+    if (!applicationId) return;
+    setDownloadingPdf(true);
+    const { error } = await api.downloadApplicationPdf(applicationId);
+    setDownloadingPdf(false);
+    if (error) {
+      toast.error(error.message || "Failed to download application PDF");
+      return;
+    }
+    toast.success("Application PDF download started");
+  }
+
   if (loading) return <div className="max-w-6xl mx-auto px-6 py-8 text-sm text-secondary-muted">Loading application workspace...</div>;
   if (!profile) {
     return (
@@ -78,11 +91,15 @@ export default function ApplicantDashboard() {
               </p>
             </div>
             {applications[0] && (
-              <a href={api.exportApplicationPdf(applications[0].id)} target="_blank" rel="noreferrer">
-                <Button variant="outline" size="sm" className="h-9">
-                  <Download className="size-3.5" /> Application PDF
-                </Button>
-              </a>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9"
+                disabled={downloadingPdf}
+                onClick={() => downloadApplicationPdf(applications[0].id)}
+              >
+                <Download className="size-3.5" /> {downloadingPdf ? "Preparing PDF..." : "Application PDF"}
+              </Button>
             )}
           </div>
 

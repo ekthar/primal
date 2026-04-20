@@ -46,6 +46,19 @@ const config = {
     appealWindowDays: parseInt(process.env.APPEAL_WINDOW_DAYS || '14', 10),
   },
 
+  pdf: {
+    brandName: process.env.PDF_BRAND_NAME || 'Primal',
+    brandPrimary: process.env.PDF_BRAND_PRIMARY || '#0b0b0b',
+    brandAccent: process.env.PDF_BRAND_ACCENT || '#ef1a1a',
+    logoPath: process.env.PDF_LOGO_PATH || './assets/primal-logo.png',
+    fontBodyPath: process.env.PDF_FONT_BODY_PATH || './assets/fonts/InterTight-Regular.ttf',
+    fontBodyBoldPath: process.env.PDF_FONT_BODY_BOLD_PATH || './assets/fonts/InterTight-SemiBold.ttf',
+    fontHeadingPath: process.env.PDF_FONT_HEADING_PATH || './assets/fonts/Manrope-SemiBold.ttf',
+    fontHeadingBoldPath: process.env.PDF_FONT_HEADING_BOLD_PATH || './assets/fonts/Manrope-Bold.ttf',
+    signatureSecret: process.env.PDF_SIGNATURE_SECRET || process.env.JWT_SECRET || 'dev-only-change-me',
+    verifyBaseUrl: process.env.PDF_VERIFY_BASE_URL || `${process.env.APP_BASE_URL || 'http://localhost:4000'}/api/public/verify/application-signature`,
+  },
+
   uploadDir: process.env.UPLOAD_DIR || './uploads',
   maxUploadMb: parseInt(process.env.MAX_UPLOAD_MB || '10', 10),
 };
