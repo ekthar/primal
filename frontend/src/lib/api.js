@@ -91,6 +91,13 @@ export const api = {
   publicTournaments: () => request('GET', '/api/public/tournaments'),
   publicParticipants: (query) => request('GET', '/api/public/participants', { query }),
   publicClubs: (query) => request('GET', '/api/public/clubs', { query }),
+  publicCirculars: (query) => request('GET', '/api/public/circulars', { query }),
+
+  // circulars (admin)
+  listCirculars: (query) => request('GET', '/api/circulars', { query }),
+  createCircular: (body) => request('POST', '/api/circulars', { body }),
+  updateCircular: (id, body) => request('PATCH', `/api/circulars/${id}`, { body }),
+  deleteCircular: (id) => request('DELETE', `/api/circulars/${id}`),
 
   // audit
   verifyAudit: () => request('GET', '/api/audit/verify'),

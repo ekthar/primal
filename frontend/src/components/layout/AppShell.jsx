@@ -6,6 +6,7 @@ import {
   ListChecks,
   Gavel,
   BarChart3,
+  Newspaper,
   Settings,
   LogOut,
   ChevronDown,
@@ -30,6 +31,7 @@ const NAV = {
     { to: "/admin/review", icon: Inbox, label: "Workbench", testid: "nav-workbench" },
     { to: "/admin/appeals", icon: Gavel, label: "Appeals", testid: "nav-appeals" },
     { to: "/admin/reports", icon: BarChart3, label: "Reports", testid: "nav-reports" },
+    { to: "/admin/circulars", icon: Newspaper, label: "Circulars", testid: "nav-circulars" },
   ],
   reviewer: [
     { to: "/admin/queue", icon: ListChecks, label: "Review Queue", testid: "nav-queue" },

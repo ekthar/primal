@@ -175,6 +175,77 @@ const statusEvents = {
     `SELECT * FROM status_events WHERE application_id = $1 ORDER BY created_at ASC`, [applicationId])).rows,
 };
 
+// --------- circulars ---------
+const circulars = {
+  create: async ({ title, subtitle = null, kind = 'notice', body = '', coverImageUrl = null, ctaLabel = null, ctaUrl = null, isPublished = false, publishedAt = null, showFrom = null, showUntil = null, pinned = false, createdBy = null }) => {
+    const { rows } = await query(
+      `INSERT INTO circulars (title, subtitle, kind, body, cover_image_url, cta_label, cta_url, is_published, published_at, show_from, show_until, pinned, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+       RETURNING *`,
+      [title, subtitle, kind, body, coverImageUrl, ctaLabel, ctaUrl, isPublished, publishedAt, showFrom, showUntil, pinned, createdBy]
+    );
+    return rows[0];
+  },
+  findById: async (id) => (await query(`SELECT * FROM circulars WHERE id=$1 AND ${ACTIVE}`, [id])).rows[0],
+  listAdmin: async ({ q, published, kind, limit = 50, offset = 0 } = {}) => {
+    const where = [`${ACTIVE}`]; const args = [];
+    if (published === true) where.push(`is_published = TRUE`);
+    if (published === false) where.push(`is_published = FALSE`);
+    if (kind) { args.push(kind); where.push(`kind = $${args.length}`); }
+    if (q) { args.push(`%${q}%`); where.push(`(title ILIKE $${args.length} OR subtitle ILIKE $${args.length} OR body ILIKE $${args.length})`); }
+    args.push(limit); args.push(offset);
+    const sql = `SELECT * FROM circulars WHERE ${where.join(' AND ')}
+                 ORDER BY pinned DESC, COALESCE(published_at, created_at) DESC
+                 LIMIT $${args.length - 1} OFFSET $${args.length}`;
+    return (await query(sql, args)).rows;
+  },
+  listPublic: async ({ kind, limit = 20 } = {}) => {
+    const where = [
+      `${ACTIVE}`,
+      `is_published = TRUE`,
+      `(show_from IS NULL OR show_from <= NOW())`,
+      `(show_until IS NULL OR show_until >= NOW())`,
+    ];
+    const args = [];
+    if (kind) { args.push(kind); where.push(`kind = $${args.length}`); }
+    args.push(limit);
+    const sql = `SELECT id, title, subtitle, kind, body, cover_image_url, cta_label, cta_url,
+                        published_at, show_from, show_until, pinned
+                 FROM circulars
+                 WHERE ${where.join(' AND ')}
+                 ORDER BY pinned DESC, COALESCE(published_at, created_at) DESC
+                 LIMIT $${args.length}`;
+    return (await query(sql, args)).rows;
+  },
+  update: async (id, patch) => {
+    const fields = []; const args = [];
+    const map = {
+      title: 'title',
+      subtitle: 'subtitle',
+      kind: 'kind',
+      body: 'body',
+      coverImageUrl: 'cover_image_url',
+      ctaLabel: 'cta_label',
+      ctaUrl: 'cta_url',
+      isPublished: 'is_published',
+      publishedAt: 'published_at',
+      showFrom: 'show_from',
+      showUntil: 'show_until',
+      pinned: 'pinned',
+    };
+    for (const [k, v] of Object.entries(patch)) {
+      if (!(k in map)) continue;
+      args.push(v);
+      fields.push(`${map[k]} = $${args.length}`);
+    }
+    if (!fields.length) return circulars.findById(id);
+    args.push(id);
+    const { rows } = await query(`UPDATE circulars SET ${fields.join(', ')} WHERE id = $${args.length} RETURNING *`, args);
+    return rows[0];
+  },
+  softDelete: (id) => query(`UPDATE circulars SET deleted_at = NOW() WHERE id = $1`, [id]),
+};
+
 // --------- appeals ---------
 const appeals = {
   create: async ({ applicationId, filedBy, reason }) =>
@@ -207,4 +278,4 @@ const reviewers = {
      ORDER BY open_count ASC, u.created_at ASC LIMIT 1`)).rows[0],
 };
 
-module.exports = { users, clubs, profiles, tournaments, applications, statusEvents, appeals, reviewers };
+module.exports = { users, clubs, profiles, tournaments, applications, statusEvents, appeals, reviewers, circulars };

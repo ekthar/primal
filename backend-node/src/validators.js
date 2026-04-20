@@ -125,6 +125,61 @@ const schemas = {
       offset: Joi.number().integer().min(0).default(0),
     }),
   },
+
+  circulars: {
+    create: Joi.object({
+      title: Joi.string().min(3).max(200).required(),
+      subtitle: Joi.string().max(240).allow(null, ''),
+      kind: Joi.string().valid('registration', 'window', 'rules', 'notice').default('notice'),
+      body: Joi.string().max(12000).allow('').default(''),
+      coverImageUrl: Joi.string().uri().allow(null, ''),
+      ctaLabel: Joi.string().max(40).allow(null, ''),
+      ctaUrl: Joi.string().uri().allow(null, ''),
+      pinned: Joi.boolean().default(false),
+      isPublished: Joi.boolean().default(false),
+      publishedAt: Joi.date().iso().allow(null),
+      showFrom: Joi.date().iso().allow(null),
+      showUntil: Joi.date().iso().allow(null),
+    }).custom((val, helpers) => {
+      if (val.showFrom && val.showUntil && new Date(val.showFrom) > new Date(val.showUntil)) {
+        return helpers.error('any.invalid');
+      }
+      return val;
+    }, 'date range'),
+
+    update: Joi.object({
+      title: Joi.string().min(3).max(200),
+      subtitle: Joi.string().max(240).allow(null, ''),
+      kind: Joi.string().valid('registration', 'window', 'rules', 'notice'),
+      body: Joi.string().max(12000).allow(''),
+      coverImageUrl: Joi.string().uri().allow(null, ''),
+      ctaLabel: Joi.string().max(40).allow(null, ''),
+      ctaUrl: Joi.string().uri().allow(null, ''),
+      pinned: Joi.boolean(),
+      isPublished: Joi.boolean(),
+      publishedAt: Joi.date().iso().allow(null),
+      showFrom: Joi.date().iso().allow(null),
+      showUntil: Joi.date().iso().allow(null),
+    }).min(1).custom((val, helpers) => {
+      const from = val.showFrom ? new Date(val.showFrom) : null;
+      const until = val.showUntil ? new Date(val.showUntil) : null;
+      if (from && until && from > until) return helpers.error('any.invalid');
+      return val;
+    }, 'date range'),
+
+    listAdmin: Joi.object({
+      q: Joi.string().max(200).allow(''),
+      kind: Joi.string().valid('registration', 'window', 'rules', 'notice'),
+      published: Joi.string().valid('true', 'false', 'all').default('all'),
+      limit: Joi.number().integer().min(1).max(200).default(50),
+      offset: Joi.number().integer().min(0).default(0),
+    }),
+
+    listPublic: Joi.object({
+      kind: Joi.string().valid('registration', 'window', 'rules', 'notice'),
+      limit: Joi.number().integer().min(1).max(50).default(12),
+    }),
+  },
 };
 
 module.exports = { schemas };

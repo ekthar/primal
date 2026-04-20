@@ -1,5 +1,8 @@
 // Mock data for TournamentOS — MMA / martial arts tournament platform
 
+import frame020 from "@/assets/veo-frames/020.png";
+import frame100 from "@/assets/veo-frames/100.png";
+
 export const STATUS = {
   DRAFT: "draft",
   SUBMITTED: "submitted",
@@ -53,8 +56,8 @@ const AVATAR_POOL = [
   "https://images.pexels.com/photos/36763067/pexels-photo-36763067.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
 ];
 
-export const HERO_IMAGE = "https://static.prod-images.emergentagent.com/jobs/bd549dfe-9938-4400-b660-7645e98fe567/images/4b840e3988393e715cdd6047052c576e4fbbed0c03c05558cd52613d9e761ba3.png";
-export const TEXTURE_IMAGE = "https://static.prod-images.emergentagent.com/jobs/bd549dfe-9938-4400-b660-7645e98fe567/images/bc270ff15427769bf8ec447b187efba89c6f030fb1648042081cfd38dd6fb9c4.png";
+export const HERO_IMAGE = frame100;
+export const TEXTURE_IMAGE = frame020;
 
 const firstNames = ["Diego", "Aiko", "Marcus", "Lena", "Kofi", "Sasha", "Hiro", "Mina", "Rafael", "Yuki", "Emre", "Priya", "Noah", "Zara", "Ivan", "Olga", "Tariq", "Jade", "Viktor", "Nadia"];
 const lastNames = ["Ruiz", "Tanaka", "Okafor", "Ivanov", "Silva", "Kim", "Nakamura", "Patel", "Sato", "Oliveira", "Demir", "Kowalski", "Anderson", "Khan", "Petrov", "Rossi", "Haddad", "Wong", "Dubois", "Abramov"];

@@ -20,6 +20,7 @@ const appealRoutes = require('./src/routes/appeal.routes');
 const reportRoutes = require('./src/routes/report.routes');
 const auditRoutes = require('./src/routes/audit.routes');
 const publicRoutes = require('./src/routes/public.routes');
+const circularRoutes = require('./src/routes/circular.routes');
 
 const app = express();
 
@@ -54,6 +55,7 @@ app.use('/api/queue', queueRoutes);
 app.use('/api/appeals', appealRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/audit', auditRoutes);
+app.use('/api/circulars', circularRoutes);
 app.use('/api/public', publicRoutes);
 
 app.use(notFound);

@@ -23,6 +23,12 @@ import {
 import { Button } from "@/components/ui/button";
 import ThemeToggle from "@/components/shared/ThemeToggle";
 import { HERO_IMAGE, TEXTURE_IMAGE } from "@/lib/mockData";
+import { api } from "@/lib/api";
+import frame001 from "@/assets/veo-frames/001.png";
+import frame020 from "@/assets/veo-frames/020.png";
+import frame050 from "@/assets/veo-frames/050.png";
+import frame080 from "@/assets/veo-frames/080.png";
+import frame100 from "@/assets/veo-frames/100.png";
 
 // ---------- primitives ---------------------------------------------------------
 
@@ -83,6 +89,69 @@ function Marquee({ items }) {
   );
 }
 
+function FightTapeMarquee({ items, duration = 22 }) {
+  const reduced = useReducedMotion();
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-border bg-surface/70 backdrop-blur">
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.08] dark:opacity-[0.12]"
+        style={{ backgroundImage: `url(${TEXTURE_IMAGE})`, backgroundSize: "cover", backgroundPosition: "center" }}
+        aria-hidden
+      />
+      <div className="relative">
+        <motion.div
+          className="flex items-center gap-2 whitespace-nowrap py-3"
+          animate={reduced ? undefined : { x: ["0%", "-50%"] }}
+          transition={reduced ? undefined : { duration, ease: "linear", repeat: Infinity }}
+          aria-hidden
+        >
+          {[...items, ...items].map((item, i) => (
+            <span
+              key={i}
+              className="inline-flex items-center gap-2 px-3 text-[11px] sm:text-xs font-display uppercase tracking-[0.22em] text-tertiary"
+            >
+              <span className="size-1.5 rounded-full bg-primary/70" />
+              {item}
+            </span>
+          ))}
+        </motion.div>
+      </div>
+    </div>
+  );
+}
+
+function InfiniteTileColumn({ images, duration = 18, className = "" }) {
+  const reduced = useReducedMotion();
+  const tiles = images.filter(Boolean);
+  const loop = [...tiles, ...tiles];
+  return (
+    <div className={`relative overflow-hidden rounded-3xl border border-border bg-surface/40 backdrop-blur ${className}`}>
+      <motion.div
+        className="flex flex-col gap-3 p-3"
+        animate={reduced ? undefined : { y: ["0%", "-50%"] }}
+        transition={reduced ? undefined : { duration, ease: "linear", repeat: Infinity }}
+        aria-hidden
+      >
+        {loop.map((src, i) => (
+          <div
+            key={i}
+            className="relative aspect-[16/10] overflow-hidden rounded-2xl border border-border bg-surface shadow-soft"
+          >
+            <img
+              src={src}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover opacity-[0.88] contrast-125 saturate-90"
+              loading="lazy"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-background/60 via-transparent to-transparent" aria-hidden />
+          </div>
+        ))}
+      </motion.div>
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-background via-transparent to-background" aria-hidden />
+    </div>
+  );
+}
+
 // ---------- sections -----------------------------------------------------------
 
 function Nav() {
@@ -101,8 +170,8 @@ function Nav() {
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2" data-testid="nav-brand">
-          <div className="size-8 rounded-lg bg-foreground text-background flex items-center justify-center font-display font-bold text-sm">T</div>
-          <span className="font-display font-semibold tracking-tight">TournamentOS</span>
+          <div className="size-8 rounded-lg bg-foreground text-background flex items-center justify-center font-display font-bold text-sm">P</div>
+          <span className="font-display font-semibold tracking-tight">Primal</span>
         </Link>
         <nav className="hidden md:flex items-center gap-7 text-sm text-secondary-muted">
           <a href="#paths" className="hover:text-foreground transition-colors">Who it's for</a>
@@ -136,61 +205,106 @@ function Hero() {
   return (
     <section ref={ref} className="relative min-h-[92vh] overflow-hidden flex items-center pt-20">
       <motion.div
-        style={{ y: reduced ? 0 : imgY, scale: reduced ? 1 : imgScale, backgroundImage: `url(${HERO_IMAGE})` }}
-        className="absolute inset-0 -z-20 bg-cover bg-center opacity-[0.4] dark:opacity-[0.22]"
+        style={{ y: reduced ? 0 : imgY, scale: reduced ? 1 : imgScale, backgroundImage: `url(${frame080})` }}
+        className="absolute inset-0 -z-30 bg-cover bg-center opacity-[0.55] dark:opacity-[0.28]"
+      />
+      <div
+        className="absolute inset-0 -z-20 opacity-[0.08] dark:opacity-[0.12] pointer-events-none"
+        style={{ backgroundImage: `url(${TEXTURE_IMAGE})`, backgroundSize: "cover", backgroundPosition: "center" }}
+        aria-hidden
       />
       <motion.div
         style={{ opacity: reduced ? 0.5 : overlay }}
-        className="absolute inset-0 -z-10 bg-gradient-to-b from-background/30 via-background/70 to-background"
+        className="absolute inset-0 -z-10 bg-gradient-to-b from-background/15 via-background/75 to-background"
       />
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-        <motion.div style={{ y: reduced ? 0 : textY }}>
-          <Reveal>
-            <div className="inline-flex items-center gap-2 rounded-full border border-border bg-surface/70 backdrop-blur px-3 py-1 text-xs font-medium">
-              <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Season 2026 — self-registration is live</span>
+        <div className="grid lg:grid-cols-[1.2fr_0.8fr] gap-10 lg:gap-12 items-center">
+          <motion.div style={{ y: reduced ? 0 : textY }}>
+            <Reveal>
+              <div className="inline-flex items-center gap-2 rounded-full border border-border bg-surface/70 backdrop-blur px-3 py-1 text-xs font-medium">
+                <span className="size-1.5 rounded-full bg-primary animate-pulse" />
+                <span>2026 season — registrations open</span>
+              </div>
+            </Reveal>
+
+            <div className="mt-8">
+              <SplitHeadline parts={[
+                { text: "Primal" },
+                { text: "Fight" },
+                { text: "Series", italic: true },
+                { br: true },
+                { text: "Built" },
+                { text: "for" },
+                { text: "gyms." },
+              ]} />
+            </div>
+
+            <Reveal delay={0.25}>
+              <p className="mt-8 max-w-2xl text-base sm:text-xl text-secondary-muted leading-relaxed text-pretty">
+                One home for MMA and martial arts events — teams, fighters, brackets, and approvals.
+                Fast onboarding for gyms, clean registration for athletes, and a public-ready tournament feed.
+              </p>
+            </Reveal>
+
+            <Reveal delay={0.33}>
+              <div className="mt-8 max-w-2xl">
+                <FightTapeMarquee
+                  items={[
+                    "MMA",
+                    "Muay Thai",
+                    "BJJ",
+                    "Boxing",
+                    "Kickboxing",
+                    "Wrestling",
+                    "Weigh-ins",
+                    "Brackets",
+                    "Fight cards",
+                  ]}
+                />
+              </div>
+            </Reveal>
+
+            <Reveal delay={0.4}>
+              <div className="mt-10 flex flex-wrap items-center gap-3">
+                <Link to="/register">
+                  <Button size="lg" className="bg-primary hover:bg-primary-hover text-primary-foreground h-12 px-6 rounded-full" data-testid="hero-cta-register">
+                    Register to compete
+                    <ArrowRight className="size-4 ml-1" />
+                  </Button>
+                </Link>
+                <Link to="/register?track=club">
+                  <Button size="lg" variant="outline" className="h-12 px-6 rounded-full bg-surface/60 backdrop-blur border-border" data-testid="hero-cta-club">
+                    Register a gym <ArrowUpRight className="size-4 ml-1" />
+                  </Button>
+                </Link>
+                <Link to="/login">
+                  <Button size="lg" variant="ghost" className="h-12 px-5 rounded-full" data-testid="hero-cta-admin">
+                    Staff access
+                  </Button>
+                </Link>
+              </div>
+            </Reveal>
+          </motion.div>
+
+          <Reveal delay={0.2} className="hidden lg:block">
+            <div className="relative">
+              <div className="grid grid-cols-2 gap-4">
+                <InfiniteTileColumn
+                  images={[frame050, frame020, frame080, frame001, frame100]}
+                  duration={20}
+                  className="h-[520px]"
+                />
+                <InfiniteTileColumn
+                  images={[frame080, frame100, frame001, frame020, frame050]}
+                  duration={24}
+                  className="h-[520px] translate-y-8"
+                />
+              </div>
+              <div className="pointer-events-none absolute -inset-8 bg-primary/10 blur-3xl -z-10 rounded-full" aria-hidden />
             </div>
           </Reveal>
-
-          <div className="mt-8">
-            <SplitHeadline parts={[
-              { text: "Sanction" },
-              { text: "fights." },
-              { br: true },
-              { text: "Not" },
-              { text: "paperwork." },
-            ]} />
-          </div>
-
-          <Reveal delay={0.25}>
-            <p className="mt-8 max-w-2xl text-base sm:text-xl text-secondary-muted leading-relaxed text-pretty">
-              Clubs and fighters register themselves. Reviewers clear medicals in minutes.
-              Approvals flow to the public bracket in real time. One platform, zero chaos.
-            </p>
-          </Reveal>
-
-          <Reveal delay={0.4}>
-            <div className="mt-10 flex flex-wrap items-center gap-3">
-              <Link to="/register">
-                <Button size="lg" className="bg-primary hover:bg-primary-hover text-primary-foreground h-12 px-6 rounded-full" data-testid="hero-cta-register">
-                  Register as a fighter
-                  <ArrowRight className="size-4 ml-1" />
-                </Button>
-              </Link>
-              <Link to="/register?track=club">
-                <Button size="lg" variant="outline" className="h-12 px-6 rounded-full bg-surface/60 backdrop-blur border-border" data-testid="hero-cta-club">
-                  Onboard a club <ArrowUpRight className="size-4 ml-1" />
-                </Button>
-              </Link>
-              <Link to="/login">
-                <Button size="lg" variant="ghost" className="h-12 px-5 rounded-full" data-testid="hero-cta-admin">
-                  Admin access
-                </Button>
-              </Link>
-            </div>
-          </Reveal>
-        </motion.div>
+        </div>
       </div>
 
       {/* floating status chip rail */}
@@ -216,6 +330,157 @@ function Hero() {
           ))}
         </div>
       </Reveal>
+    </section>
+  );
+}
+
+function Announcements() {
+  const reduced = useReducedMotion();
+  const [items, setItems] = useState([]);
+  const [status, setStatus] = useState("loading"); // loading | live | fallback
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await api.publicCirculars({ limit: 8 });
+      if (cancelled) return;
+      if (error || !data?.circulars) {
+        setStatus("fallback");
+        setItems([
+          { id: "demo-1", kind: "registration", title: "Registration is open", subtitle: "Athletes & gyms", body: "Create your profile, pick your division, and lock your entry. Early entries get priority seeding.", pinned: true, publishedAt: new Date().toISOString(), coverImageUrl: frame080, ctaLabel: "Register", ctaUrl: "/register" },
+          { id: "demo-2", kind: "window", title: "Editing window closes in 48 hours", subtitle: "Weight class · documents", body: "Update weight class, documents, and discipline before the lock to avoid delays at check-in.", pinned: false, publishedAt: new Date().toISOString(), coverImageUrl: frame020 },
+          { id: "demo-3", kind: "notice", title: "Gym roster verification", subtitle: "Managers only", body: "Add fighters to your gym roster and verify identity once — reuse across events.", pinned: false, publishedAt: new Date().toISOString(), coverImageUrl: frame001 },
+          { id: "demo-4", kind: "rules", title: "Ruleset & weigh-in circular published", subtitle: "Read before check-in", body: "Unified check-in flow across MMA, striking, and grappling divisions. Bring photo ID and medical clearance.", pinned: false, publishedAt: new Date().toISOString(), coverImageUrl: frame100 },
+        ]);
+        return;
+      }
+      setStatus("live");
+      setItems(data.circulars);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const kindMeta = {
+    registration: { tag: "Registration", icon: Zap, accent: "from-primary/25" },
+    window: { tag: "Editing window", icon: Timer, accent: "from-amber-500/20" },
+    rules: { tag: "Rules", icon: Shield, accent: "from-sky-500/20" },
+    notice: { tag: "Circular", icon: FileCheck2, accent: "from-emerald-500/15" },
+  };
+
+  const fmt = (d) => {
+    if (!d) return null;
+    try {
+      return new Intl.DateTimeFormat(undefined, { month: "short", day: "2-digit" }).format(new Date(d));
+    } catch {
+      return null;
+    }
+  };
+
+  return (
+    <section id="updates" className="py-20 sm:py-24">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <Reveal>
+          <div className="flex items-end justify-between gap-6 flex-wrap">
+            <div>
+              <div className="text-[10px] uppercase tracking-[0.22em] text-tertiary font-semibold">Public updates</div>
+              <h2 className="font-display mt-3 text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight text-balance max-w-3xl">
+                Official circulars and announcements.
+              </h2>
+            </div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-border bg-surface/70 backdrop-blur px-3 py-1 text-xs font-medium">
+              <span className={`size-1.5 rounded-full ${status === "live" ? "bg-emerald-500" : "bg-primary"} ${status === "loading" ? "animate-pulse" : ""}`} />
+              <span>{status === "live" ? "Live from admin desk" : status === "loading" ? "Loading…" : "Demo data (API offline)"}</span>
+            </div>
+          </div>
+        </Reveal>
+
+        <div className="mt-10 grid md:grid-cols-2 gap-5">
+          {items.map((u, i) => {
+            const meta = kindMeta[u.kind] || kindMeta.notice;
+            const Icon = meta.icon;
+            const date = fmt(u.publishedAt || u.createdAt);
+            const cover = u.coverImageUrl || frame080;
+            return (
+            <Reveal key={u.id || i} delay={i * 0.07}>
+              <motion.article
+                initial={reduced ? false : { opacity: 0, y: 10 }}
+                whileInView={reduced ? undefined : { opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-10% 0px" }}
+                transition={{ duration: 0.6, ease: [0.25, 1, 0.5, 1] }}
+                className="group relative rounded-3xl border border-border bg-surface overflow-hidden elev-card"
+              >
+                {/* pamphlet cover */}
+                <div className="relative h-32 sm:h-36">
+                  <div
+                    className="absolute inset-0 bg-cover bg-center"
+                    style={{ backgroundImage: `url(${cover})` }}
+                    aria-hidden
+                  />
+                  <div className={`absolute inset-0 bg-gradient-to-b ${meta.accent} via-background/40 to-background`} aria-hidden />
+                  <div
+                    className="absolute inset-0 opacity-[0.12] mix-blend-overlay pointer-events-none"
+                    style={{ backgroundImage: `url(${TEXTURE_IMAGE})`, backgroundSize: "cover", backgroundPosition: "center" }}
+                    aria-hidden
+                  />
+                  <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-background to-transparent" aria-hidden />
+                </div>
+
+                <div className="p-7">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="size-11 rounded-2xl bg-surface-muted border border-border flex items-center justify-center">
+                        <Icon className="size-5" strokeWidth={1.75} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">{meta.tag}</div>
+                          {u.pinned ? (
+                            <span className="text-[10px] uppercase tracking-[0.18em] font-semibold text-primary">Pinned</span>
+                          ) : null}
+                        </div>
+                        <div className="font-display text-xl sm:text-2xl font-semibold tracking-tight mt-1 truncate">{u.title}</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-medium border border-border bg-surface-muted/60 text-secondary-muted">
+                        <span className="size-1.5 rounded-full bg-emerald-500/80" />
+                        Public
+                      </div>
+                      {date ? <div className="mt-2 text-[11px] text-tertiary font-mono">{date}</div> : null}
+                    </div>
+                  </div>
+
+                  {u.subtitle ? (
+                    <div className="mt-3 text-[11px] uppercase tracking-[0.18em] text-tertiary font-semibold">
+                      {u.subtitle}
+                    </div>
+                  ) : null}
+
+                  <p className="mt-3 text-sm sm:text-base text-secondary-muted leading-relaxed max-w-[60ch]">
+                    {u.body}
+                  </p>
+
+                  {u.ctaLabel && u.ctaUrl ? (
+                    <div className="mt-6">
+                      <Link to={u.ctaUrl}>
+                        <Button variant="outline" className="rounded-full bg-surface/70 backdrop-blur border-border">
+                          {u.ctaLabel} <ArrowUpRight className="size-4 ml-1" />
+                        </Button>
+                      </Link>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div
+                  className="absolute -bottom-24 -right-24 size-72 rounded-full bg-primary/8 blur-3xl opacity-70 group-hover:opacity-100 transition-opacity duration-500"
+                  aria-hidden
+                />
+              </motion.article>
+            </Reveal>
+          );
+          })}
+        </div>
+      </div>
     </section>
   );
 }
@@ -576,14 +841,15 @@ export default function Landing() {
     <div className="min-h-screen bg-background text-foreground">
       <Nav />
       <Hero />
+      <Announcements />
       <Marquee items={[
-        "Sakura Gym · Tokyo",
-        "Apex Combat Club · Montréal",
-        "Legion MMA · São Paulo",
-        "Titan Fight Academy · Warsaw",
-        "Black Flag Muay Thai · Bangkok",
-        "Iron Crane · Seoul",
-        "Nordic Grapplers · Oslo",
+        "Primal · Fight Series",
+        "Registration · Open",
+        "Gym onboarding · Fast",
+        "Medical checks · Streamlined",
+        "Brackets · Live",
+        "Teams · Verified",
+        "Athletes · Ready",
       ]} />
       <Paths />
       <WorkflowScrollytell />

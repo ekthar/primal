@@ -14,6 +14,7 @@ import AdminQueue from "@/pages/AdminQueue";
 import ReviewerWorkbench from "@/pages/ReviewerWorkbench";
 import Appeals from "@/pages/Appeals";
 import Reports from "@/pages/Reports";
+import AdminCirculars from "@/pages/AdminCirculars";
 
 function Protected({ children }) {
   const { user } = useAuth();
@@ -40,6 +41,7 @@ export default function App() {
                 <Route path="/admin/review" element={<ReviewerWorkbench />} />
                 <Route path="/admin/appeals" element={<Appeals />} />
                 <Route path="/admin/reports" element={<Reports />} />
+                <Route path="/admin/circulars" element={<AdminCirculars />} />
               </Route>
 
               <Route path="*" element={<Navigate to="/" replace />} />
