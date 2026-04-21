@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/context/AuthContext";
 import { InlineLoadingLabel, SectionLoader } from "@/components/shared/PrimalLoader";
+import { PageSectionHeader, ResponsivePageShell } from "@/components/shared/ResponsivePrimitives";
 import api from "@/lib/api";
 import { toast } from "sonner";
 
@@ -231,17 +232,15 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8 space-y-6">
-      <div>
-        <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">Admin settings</div>
-        <h1 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight mt-1">Registration windows and weigh-in control</h1>
-        <p className="text-sm text-secondary-muted mt-2 max-w-3xl">
-          Manage per-tournament registration timing, correction windows, and club-wise weigh-in updates that automatically refresh weight class for grouping.
-        </p>
-      </div>
+    <ResponsivePageShell className="space-y-6">
+      <PageSectionHeader
+        eyebrow="Admin settings"
+        title="Registration windows and weigh-in control"
+        description="Manage per-tournament registration timing, correction windows, and club-wise weigh-in updates that automatically refresh weight class for grouping."
+      />
 
       <Tabs defaultValue={initialTab} className="space-y-5">
-        <TabsList className="bg-surface-muted p-1 rounded-xl h-auto">
+        <TabsList className="bg-surface-muted p-1 rounded-xl h-auto flex w-full justify-start overflow-x-auto">
           <TabsTrigger value="tournaments" className="data-[state=active]:bg-surface rounded-lg px-4 py-2">Tournament windows</TabsTrigger>
           <TabsTrigger value="weighin" className="data-[state=active]:bg-surface rounded-lg px-4 py-2">Weigh-in updates</TabsTrigger>
           <TabsTrigger value="backlog" className="data-[state=active]:bg-surface rounded-lg px-4 py-2">Pending roadmap</TabsTrigger>
@@ -300,7 +299,7 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
                         </Button>
                       </div>
 
-                      <div className="mt-4 grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+                      <div className="mt-4 grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
                         <Field label="Registration opens">
                           <Input
                             type="datetime-local"
@@ -402,7 +401,7 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
               </Button>
             </div>
 
-            <div className="mt-5 grid md:grid-cols-[220px_1fr] gap-4">
+            <div className="mt-5 grid gap-4 md:grid-cols-[220px_1fr]">
               <Field label="Club filter">
                 <Select value={clubFilter} onValueChange={setClubFilter}>
                   <SelectTrigger className="h-10 bg-background">
@@ -441,7 +440,43 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
                 {participantsByClub.map(([clubName, rows]) => (
                   <section key={clubName} className="rounded-2xl border border-border bg-background/50 overflow-hidden">
                     <div className="px-4 py-3 border-b border-border font-medium text-sm">{clubName}</div>
-                    <div className="overflow-x-auto">
+                    <div className="md:hidden space-y-3 p-4">
+                      {rows.map((participant) => {
+                        const draftWeight = weightDrafts[participant.id] || "";
+                        return (
+                          <article key={participant.id} className="rounded-2xl border border-border bg-surface p-4">
+                            <div className="font-medium">{participant.first_name} {participant.last_name}</div>
+                            <div className="mt-1 text-[11px] text-tertiary">{participant.email || "-"}</div>
+                            <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                              <DetailLite label="Current weight" value={participant.weight_kg ? `${participant.weight_kg} kg` : "-"} />
+                              <DetailLite label="Current class" value={participant.weight_class || "-"} />
+                              <DetailLite label="New class" value={draftWeight ? deriveWeightClass(participant.gender, draftWeight) : "-"} />
+                            </div>
+                            <div className="mt-4">
+                              <Input
+                                type="number"
+                                min="1"
+                                max="300"
+                                step="0.1"
+                                className="h-10 bg-surface"
+                                value={draftWeight}
+                                onChange={(event) => setWeightDrafts((current) => ({ ...current, [participant.id]: event.target.value }))}
+                              />
+                            </div>
+                            <div className="mt-4">
+                              <Button className="w-full" size="sm" onClick={() => saveReweigh(participant.id)} disabled={savingProfileId === participant.id}>
+                                <InlineLoadingLabel loading={savingProfileId === participant.id} loadingText="Saving...">
+                                  <>
+                                    <Save className="size-3.5" /> Save weigh-in
+                                  </>
+                                </InlineLoadingLabel>
+                              </Button>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                    <div className="hidden md:block overflow-x-auto">
                       <table className="w-full text-left">
                         <thead>
                           <tr className="text-[10px] uppercase tracking-wider text-tertiary font-semibold border-b border-border">
@@ -510,7 +545,7 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
                 </p>
               </div>
             </div>
-            <div className="mt-5 grid md:grid-cols-2 gap-3">
+            <div className="mt-5 grid sm:grid-cols-2 gap-3">
               {BACKLOG_ITEMS.map((item) => (
                 <div key={item} className="rounded-2xl border border-border bg-background/50 px-4 py-4 text-sm">
                   {item}
@@ -520,7 +555,7 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
           </section>
         </TabsContent>
       </Tabs>
-    </div>
+    </ResponsivePageShell>
   );
 }
 
@@ -529,6 +564,15 @@ function Field({ label, children }) {
     <div>
       <Label className="text-[11px] uppercase tracking-wider font-semibold text-secondary-muted">{label}</Label>
       <div className="mt-1.5">{children}</div>
+    </div>
+  );
+}
+
+function DetailLite({ label, value }) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-wider text-tertiary font-semibold">{label}</div>
+      <div className="mt-1 text-sm">{value}</div>
     </div>
   );
 }

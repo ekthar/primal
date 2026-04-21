@@ -3,6 +3,7 @@ import { Download, Timer, AlertTriangle, Users, Gauge, RefreshCcw } from "lucide
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { InlineLoadingLabel, SectionLoader } from "@/components/shared/PrimalLoader";
+import { PageSectionHeader, ResponsivePageShell, ResponsiveTable } from "@/components/shared/ResponsivePrimitives";
 import api from "@/lib/api";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
@@ -154,16 +155,13 @@ export default function Reports() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">Reports</div>
-          <h1 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight mt-1">Review operations report</h1>
-          <p className="text-sm text-secondary-muted mt-2 max-w-3xl">
-            Live SLA, reviewer workload, and approved participant reports.
-          </p>
-        </div>
-        <div className="flex gap-2 flex-wrap">
+    <ResponsivePageShell>
+      <PageSectionHeader
+        eyebrow="Reports"
+        title="Review operations report"
+        description="Live SLA, reviewer workload, and approved participant reports."
+        actions={(
+          <>
           <Button variant="outline" onClick={handleApprovedExport}>
             <Download className="size-4" /> Approved applications
           </Button>
@@ -177,8 +175,9 @@ export default function Reports() {
               <Download className="size-4" /> Audit Excel
             </Button>
           )}
-        </div>
-      </div>
+          </>
+        )}
+      />
 
       {loading ? (
         <div className="mt-8">
@@ -213,7 +212,20 @@ export default function Reports() {
               <Button variant="outline" size="sm" onClick={loadSummary}>Refresh</Button>
             </div>
 
-            <div className="mt-5 overflow-x-auto">
+            <div className="mt-5 md:hidden space-y-3">
+              {workload.map((reviewer) => (
+                <div key={reviewer.id} className="rounded-2xl border border-border bg-background/60 p-4">
+                  <div className="font-medium">{reviewer.name}</div>
+                  <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
+                    <DetailStat label="Open" value={reviewer.open} />
+                    <DetailStat label="Approved" value={reviewer.approved7d} />
+                    <DetailStat label="Rejected" value={reviewer.rejected7d} />
+                  </div>
+                </div>
+              ))}
+              {!workload.length && <div className="py-4 text-sm text-secondary-muted">No reviewer data found.</div>}
+            </div>
+            <ResponsiveTable className="hidden md:block">
               <table className="w-full text-left">
                 <thead>
                   <tr className="text-[10px] uppercase tracking-wider text-tertiary font-semibold border-b border-border">
@@ -235,7 +247,7 @@ export default function Reports() {
                 </tbody>
               </table>
               {!workload.length && <div className="py-4 text-sm text-secondary-muted">No reviewer data found.</div>}
-            </div>
+            </ResponsiveTable>
           </div>
 
           {isAdmin && (
@@ -304,7 +316,7 @@ export default function Reports() {
           )}
         </>
       )}
-    </div>
+    </ResponsivePageShell>
   );
 }
 
@@ -328,7 +340,27 @@ function ParticipantTable({ title, rows, showClub, onDownloadApplication }) {
   return (
     <div className="rounded-2xl border border-border bg-background/50 overflow-hidden">
       <div className="px-4 py-3 border-b border-border font-medium text-sm">{title}</div>
-      <div className="overflow-x-auto">
+      <div className="space-y-3 p-4 md:hidden">
+        {rows.map((row) => (
+          <article key={`${row.applicationId}-${row.profileId}`} className="rounded-2xl border border-border bg-surface p-4">
+            <div className="font-medium">{row.participantName}</div>
+            <div className="mt-1 text-[11px] text-tertiary">{row.tournamentName}</div>
+            <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+              <DetailStat label="DOB" value={row.dateOfBirth || "-"} />
+              <DetailStat label="Age" value={row.ageToday ?? "-"} />
+              <DetailStat label="Sex" value={row.sex || "-"} />
+              <DetailStat label="Discipline" value={row.discipline || "-"} />
+              {showClub ? <DetailStat label="Club" value={row.clubName || "-"} /> : null}
+            </div>
+            <div className="mt-4">
+              <Button variant="outline" size="sm" className="w-full" onClick={() => onDownloadApplication(row.applicationId)}>
+                <Download className="size-3.5" /> PDF
+              </Button>
+            </div>
+          </article>
+        ))}
+      </div>
+      <ResponsiveTable className="hidden md:block">
         <table className="w-full text-left">
           <thead>
             <tr className="text-[10px] uppercase tracking-wider text-tertiary font-semibold border-b border-border">
@@ -362,7 +394,7 @@ function ParticipantTable({ title, rows, showClub, onDownloadApplication }) {
             ))}
           </tbody>
         </table>
-      </div>
+      </ResponsiveTable>
       {!rows.length && <div className="px-4 py-4 text-sm text-secondary-muted">No rows found.</div>}
     </div>
   );
@@ -384,6 +416,15 @@ function Kpi({ icon: Icon, label, value, helper, tone = "default" }) {
       </div>
       <div className={`font-display text-3xl font-semibold tracking-tight mt-3 ${tones[tone]}`}>{value}</div>
       <div className="text-xs text-secondary-muted mt-1">{helper}</div>
+    </div>
+  );
+}
+
+function DetailStat({ label, value }) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-wider text-tertiary font-semibold">{label}</div>
+      <div className="mt-1 text-sm capitalize">{value}</div>
     </div>
   );
 }

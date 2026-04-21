@@ -91,6 +91,10 @@
     @apply border-border;
   }
 
+  html, body, #__next {
+    min-height: 100%;
+  }
+
   html {
     font-feature-settings: 'ss01', 'ss02', 'cv01', 'cv11';
   }
@@ -239,6 +243,18 @@
     background-size: 200% 100%;
     animation: shimmer 1.8s infinite;
   }
+
+  .app-shell-safe-bottom {
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+  }
+
+  .mobile-scroll-snap {
+    scroll-snap-type: x proximity;
+  }
+
+  .mobile-scroll-snap > * {
+    scroll-snap-align: start;
+  }
 }
 
 @layer base {
@@ -252,5 +268,12 @@
     border-left-width: inherit; border-right-width: inherit; border-top-width: inherit; border-bottom-width: inherit;
     border-left-style: inherit; border-right-style: inherit; border-top-style: inherit; border-bottom-style: inherit;
     border-left-color: inherit; border-right-color: inherit; border-top-color: inherit; border-bottom-color: inherit;
+  }
+}
+
+@media (max-height: 820px) {
+  .short-screen-tight {
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
   }
 }

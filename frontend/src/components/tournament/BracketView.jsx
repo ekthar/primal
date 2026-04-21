@@ -67,7 +67,20 @@ function FixtureTable({ fixtures }) {
         </div>
       </div>
 
-      <div className="mt-5 overflow-x-auto">
+      <div className="mt-5 space-y-3 md:hidden">
+        {fixtures.map((fixture) => (
+          <div key={fixture.id} className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-sm text-zinc-100">Bout #{fixture.boutNumber}</div>
+              <div className="text-[11px] uppercase tracking-wider text-zinc-500">{fixture.status.replace(/-/g, " ")}</div>
+            </div>
+            <div className="mt-2 text-sm text-zinc-400">{fixture.session} · {fixture.arena}</div>
+            <div className="mt-3 text-sm text-red-200">Red: {fixture.red?.name || "Bye"}</div>
+            <div className="text-sm text-sky-200">Blue: {fixture.blue?.name || "Bye"}</div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-5 hidden md:block overflow-x-auto">
         <table className="w-full text-left">
           <thead>
             <tr className="text-[10px] uppercase tracking-[0.18em] text-zinc-500 border-b border-zinc-800">
@@ -156,7 +169,39 @@ export default function BracketView({ bracket, onAdvanceWinner }) {
         <div className="mt-4 text-sm text-emerald-300">No round-one conflict warnings in the generated draw.</div>
       )}
 
-      <div className="mt-6 overflow-x-auto">
+      <div className="mt-6 md:hidden space-y-4">
+        {bracket.rounds.map((round) => (
+          <section key={round.id} className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500 font-semibold">{round.label}</div>
+            <div className="mt-1 text-xs text-zinc-400">{round.matches.length} fight card slot{round.matches.length > 1 ? "s" : ""}</div>
+            <div className="mt-4 space-y-3">
+              {round.matches.map((match) => (
+                <article key={match.id} className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
+                  <div className="flex items-center justify-between gap-3 text-[10px] uppercase tracking-[0.16em] text-zinc-500 font-semibold">
+                    <span>{match.label}</span>
+                    <span>{match.status}</span>
+                  </div>
+                  {match.sides.map((side, sideIndex) => (
+                    <div key={`${match.id}-${side.name}-${side.corner}`} className="mt-3">
+                      <SideCard
+                        side={side}
+                        winner={match.winnerIndex === sideIndex}
+                        onAdvance={
+                          onAdvanceWinner && !side.isBye && match.status !== "completed"
+                            ? () => onAdvanceWinner(match.round - 1, Number(match.id.split("-m")[1]) - 1, sideIndex)
+                            : null
+                        }
+                      />
+                    </div>
+                  ))}
+                </article>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+
+      <div className="mt-6 hidden md:block overflow-x-auto">
         <div className="inline-flex min-w-full gap-5 pb-2">
           {bracket.rounds.map((round) => (
             <section key={round.id} className="min-w-[320px] flex-1">

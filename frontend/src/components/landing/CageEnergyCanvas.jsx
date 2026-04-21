@@ -1,21 +1,32 @@
-import { useEffect, useRef } from "react";
-import { useReducedMotion } from "framer-motion";
+import { useEffect, useRef, useState } from "react";
+import { useMotionProfile } from "@/lib/motion";
 import * as THREE from "three";
 
 export default function CageEnergyCanvas() {
   const mountRef = useRef(null);
-  const reducedMotion = useReducedMotion();
+  const { reducedMotion, allowCinematicMotion, isTablet, isPhone } = useMotionProfile();
+  const [isInView, setIsInView] = useState(false);
 
   useEffect(() => {
-    if (!mountRef.current || reducedMotion) return undefined;
+    if (!mountRef.current) return undefined;
+    const observer = new IntersectionObserver(
+      ([entry]) => setIsInView(entry.isIntersecting),
+      { threshold: 0.2 }
+    );
+    observer.observe(mountRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!mountRef.current || reducedMotion || !allowCinematicMotion || !isInView) return undefined;
 
     const mount = mountRef.current;
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(52, mount.clientWidth / mount.clientHeight, 0.1, 100);
     camera.position.set(0, 0, 8.5);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.7));
+    const renderer = new THREE.WebGLRenderer({ antialias: !isTablet, alpha: true, powerPreference: "high-performance" });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, isTablet ? 1.15 : 1.5));
     renderer.setSize(mount.clientWidth, mount.clientHeight);
     renderer.setClearColor(0x000000, 0);
     mount.appendChild(renderer.domElement);
@@ -55,7 +66,7 @@ export default function CageEnergyCanvas() {
     }
     scene.add(cageSegments);
 
-    const particlesCount = 220;
+    const particlesCount = isPhone ? 80 : isTablet ? 120 : 180;
     const particlesGeometry = new THREE.BufferGeometry();
     const positions = new Float32Array(particlesCount * 3);
     for (let i = 0; i < particlesCount; i += 1) {
@@ -96,12 +107,12 @@ export default function CageEnergyCanvas() {
 
     const animate = (time) => {
       const elapsed = (time - start) * 0.001;
-      octagon.rotation.z = elapsed * 0.18;
-      innerRing.rotation.z = -elapsed * 0.13;
-      cageSegments.rotation.z = elapsed * 0.08;
-      particles.rotation.z = elapsed * 0.03;
-      camera.position.x = Math.sin(elapsed * 0.22) * 0.18;
-      camera.position.y = Math.cos(elapsed * 0.16) * 0.12;
+      octagon.rotation.z = elapsed * 0.14;
+      innerRing.rotation.z = -elapsed * 0.1;
+      cageSegments.rotation.z = elapsed * 0.05;
+      particles.rotation.z = elapsed * 0.02;
+      camera.position.x = Math.sin(elapsed * 0.18) * 0.12;
+      camera.position.y = Math.cos(elapsed * 0.14) * 0.08;
       camera.lookAt(0, 0, 0);
 
       const particlePositions = particlesGeometry.attributes.position.array;
@@ -132,7 +143,7 @@ export default function CageEnergyCanvas() {
       });
       mount.removeChild(renderer.domElement);
     };
-  }, [reducedMotion]);
+  }, [allowCinematicMotion, isInView, isPhone, isTablet, reducedMotion]);
 
   return (
     <div className="absolute inset-0 -z-30 overflow-hidden">

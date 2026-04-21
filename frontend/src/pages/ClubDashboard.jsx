@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import StatusPill from "@/components/shared/StatusPill";
 import EmptyState from "@/components/shared/EmptyState";
 import { SectionLoader } from "@/components/shared/PrimalLoader";
+import { ResponsivePageShell, ResponsiveTable } from "@/components/shared/ResponsivePrimitives";
 import { DISCIPLINE_DEFINITIONS, GENDER_OPTIONS } from "@/lib/tournamentWorkflow";
 import api from "@/lib/api";
 import { toast } from "sonner";
@@ -488,15 +489,15 @@ export default function ClubDashboard() {
   };
 
   return (
-    <div className="px-6 py-6 md:py-8 max-w-7xl mx-auto">
+    <ResponsivePageShell>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">Club dashboard</div>
           <h1 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight mt-1">{clubs[0]?.name || "Club workspace"}</h1>
           <p className="text-sm text-secondary-muted mt-1">{clubs[0]?.city || "-"} · {applications.length} club-scoped applications</p>
         </div>
-        <Link href="/register?track=club">
-          <Button className="bg-foreground text-background hover:bg-foreground/90">
+        <Link href="/register?track=club" className="w-full sm:w-auto">
+          <Button className="w-full sm:w-auto bg-foreground text-background hover:bg-foreground/90">
             <Plus className="size-4 mr-1" /> Update club setup
           </Button>
         </Link>
@@ -622,7 +623,7 @@ export default function ClubDashboard() {
       </section>
 
       <Tabs defaultValue="inbox" className="mt-8">
-        <TabsList className="bg-surface-muted p-1 rounded-xl h-auto">
+        <TabsList className="bg-surface-muted p-1 rounded-xl h-auto flex w-full justify-start overflow-x-auto">
           <TabsTrigger value="inbox" className="data-[state=active]:bg-surface data-[state=active]:shadow-soft rounded-lg px-4 py-2">
             Correction inbox
           </TabsTrigger>
@@ -783,7 +784,7 @@ export default function ClubDashboard() {
           ) : participants.length === 0 ? (
             <EmptyState icon={Plus} title="No participants yet" description="Use the onboarding form to add participants under this club." />
           ) : (
-            <div className="rounded-2xl border border-border bg-surface overflow-hidden">
+            <ResponsiveTable>
               <table className="w-full text-left">
                 <thead>
                   <tr className="text-[10px] uppercase tracking-wider text-tertiary font-semibold border-b border-border">
@@ -823,7 +824,7 @@ export default function ClubDashboard() {
                   })}
                 </tbody>
               </table>
-            </div>
+            </ResponsiveTable>
           )}
         </TabsContent>
 
@@ -831,7 +832,7 @@ export default function ClubDashboard() {
           {participants.length === 0 ? (
             <EmptyState icon={Inbox} title="No fighter accounts yet" description="Create participants first to manage login credentials." />
           ) : (
-            <div className="rounded-2xl border border-border bg-surface overflow-hidden">
+            <ResponsiveTable>
               <table className="w-full text-left">
                 <thead>
                   <tr className="text-[10px] uppercase tracking-wider text-tertiary font-semibold border-b border-border">
@@ -869,11 +870,11 @@ export default function ClubDashboard() {
                   })}
                 </tbody>
               </table>
-            </div>
+            </ResponsiveTable>
           )}
         </TabsContent>
       </Tabs>
-    </div>
+    </ResponsivePageShell>
   );
 }
 

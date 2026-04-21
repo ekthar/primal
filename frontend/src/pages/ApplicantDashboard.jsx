@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import StatusPill from "@/components/shared/StatusPill";
 import EmptyState from "@/components/shared/EmptyState";
 import { InlineLoadingLabel, SectionLoader } from "@/components/shared/PrimalLoader";
+import { ResponsivePageShell, StickyActionBar } from "@/components/shared/ResponsivePrimitives";
 import api from "@/lib/api";
 import { toast } from "sonner";
 
@@ -97,14 +98,14 @@ export default function ApplicantDashboard() {
 
   if (loading) {
     return (
-      <div className="max-w-6xl mx-auto px-6 py-8">
+      <ResponsivePageShell className="max-w-6xl">
         <SectionLoader
           title="Loading application workspace"
           description="Fetching your profile, applications, and appeal history."
           cards={2}
           rows={4}
         />
-      </div>
+      </ResponsivePageShell>
     );
   }
   if (!profile) {
@@ -120,7 +121,7 @@ export default function ApplicantDashboard() {
   const address = profile.metadata?.address || null;
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-8">
+    <ResponsivePageShell className="max-w-6xl">
       <div className="rounded-3xl border border-border bg-surface elev-card overflow-hidden">
         <div className="bg-gradient-to-br from-surface-muted to-surface p-6 sm:p-8">
           <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -135,7 +136,7 @@ export default function ApplicantDashboard() {
               <Button
                 variant="outline"
                 size="sm"
-                className="h-9"
+                className="h-9 w-full sm:w-auto"
                 disabled={downloadingPdf}
                 onClick={() => downloadApplicationPdf(applications[0].id)}
               >
@@ -186,7 +187,7 @@ export default function ApplicantDashboard() {
                     <Detail label="Correction due" value={application.correction_due_at ? new Date(application.correction_due_at).toLocaleDateString() : "-"} />
                   </div>
                   <div className="mt-4 flex justify-end">
-                    <Button variant="outline" onClick={() => openApplication(application)} disabled={loadingApplicationId === application.id}>
+                    <Button className="w-full sm:w-auto" variant="outline" onClick={() => openApplication(application)} disabled={loadingApplicationId === application.id}>
                       <InlineLoadingLabel loading={loadingApplicationId === application.id} loadingText="Opening...">
                         <>
                           <Eye className="size-3.5" /> View application
@@ -218,6 +219,7 @@ export default function ApplicantDashboard() {
                           />
                           <div className="mt-3">
                             <Button
+                              className="w-full sm:w-auto"
                               variant="outline"
                               onClick={() => submitAppeal(application.id)}
                               disabled={filingAppealId === application.id}
@@ -308,7 +310,14 @@ export default function ApplicantDashboard() {
           </div>
         </div>
       </div>
-    </div>
+      {activeApplicationDetails ? (
+        <StickyActionBar className="md:hidden">
+          <Button variant="outline" className="w-full" onClick={() => { setActiveApplication(null); setActiveApplicationDetails(null); }}>
+            Close details
+          </Button>
+        </StickyActionBar>
+      ) : null}
+    </ResponsivePageShell>
   );
 }
 

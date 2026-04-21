@@ -3,6 +3,7 @@ import { AlertTriangle, RefreshCw, Shield, Shuffle, Swords, Trophy } from "lucid
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import BracketView from "@/components/tournament/BracketView";
+import { ResponsivePageShell } from "@/components/shared/ResponsivePrimitives";
 import {
   CATEGORY_REPORT,
   DEFAULT_BRACKETS,
@@ -39,7 +40,7 @@ export default function AdminBrackets() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
+    <ResponsivePageShell>
       <section className="rounded-[32px] overflow-hidden border border-zinc-800 bg-[radial-gradient(circle_at_top_left,rgba(239,68,68,0.22),transparent_30%),radial-gradient(circle_at_top_right,rgba(59,130,246,0.14),transparent_28%),linear-gradient(180deg,#090909_0%,#111111_100%)] p-7 sm:p-8 text-white shadow-[0_24px_120px_rgba(0,0,0,0.45)]">
         <div className="grid lg:grid-cols-[1.15fr_0.85fr] gap-6 items-start">
           <div>
@@ -100,7 +101,7 @@ export default function AdminBrackets() {
         </div>
       </section>
 
-      <div className="mt-6 grid lg:grid-cols-[330px_1fr] gap-5">
+      <div className="mt-6 grid xl:grid-cols-[330px_1fr] gap-5">
         <aside className="rounded-3xl border border-border bg-surface elev-card p-5 h-max">
           <div className="flex items-start gap-3">
             <Trophy className="size-5 text-primary shrink-0 mt-0.5" />
@@ -137,11 +138,11 @@ export default function AdminBrackets() {
           </div>
         </aside>
 
-        <section className="space-y-5">
+        <section className="space-y-5 min-w-0">
           {selectedCategory && bracket ? (
             <>
               <Tabs defaultValue="warroom" className="space-y-5">
-                <TabsList className="bg-surface-muted p-1 rounded-xl h-auto">
+                <TabsList className="bg-surface-muted p-1 rounded-xl h-auto flex w-full justify-start overflow-x-auto">
                   <TabsTrigger value="warroom" className="data-[state=active]:bg-surface rounded-lg px-4 py-2">War room</TabsTrigger>
                   <TabsTrigger value="policy" className="data-[state=active]:bg-surface rounded-lg px-4 py-2">Rules</TabsTrigger>
                 </TabsList>
@@ -178,7 +179,7 @@ export default function AdminBrackets() {
           )}
         </section>
       </div>
-    </div>
+    </ResponsivePageShell>
   );
 }
 

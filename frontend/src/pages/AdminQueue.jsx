@@ -6,6 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import EmptyState from "@/components/shared/EmptyState";
 import { SectionLoader } from "@/components/shared/PrimalLoader";
+import { PageSectionHeader, ResponsivePageShell, StickyActionBar } from "@/components/shared/ResponsivePrimitives";
 import StatusPill from "@/components/shared/StatusPill";
 import api from "@/lib/api";
 import { toast } from "sonner";
@@ -129,27 +130,28 @@ export default function AdminQueue() {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <ResponsivePageShell className="flex flex-col h-full">
       <header className="sticky top-0 z-20 border-b border-border bg-background/85 backdrop-blur-xl">
-        <div className="px-6 py-5 flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">Admin queue</div>
-            <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight mt-1">Discipline-by-discipline review</h1>
-            <p className="text-sm text-secondary-muted mt-1">
-              {items.length} queued application{items.length === 1 ? "" : "s"} - live from review API
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-9"
-            onClick={handleExportApproved}
-          >
-            <Download className="size-4" /> Export approved
-          </Button>
+        <div className="py-5">
+          <PageSectionHeader
+            eyebrow="Admin queue"
+            title="Discipline-by-discipline review"
+            description={`${items.length} queued application${items.length === 1 ? "" : "s"} - live from review API`}
+            actions={(
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 w-full sm:w-auto"
+                onClick={handleExportApproved}
+              >
+                <Download className="size-4" /> Export approved
+              </Button>
+            )}
+            compact
+          />
         </div>
 
-        <div className="px-6 pb-4 flex gap-3">
+        <div className="pb-4 flex gap-3">
           <div className="relative flex-1 max-w-xl">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-tertiary" />
             <Input
@@ -161,7 +163,7 @@ export default function AdminQueue() {
           </div>
         </div>
 
-        <div className="px-6 pb-4 flex items-center gap-2 overflow-x-auto">
+        <div className="pb-4 flex items-center gap-2 overflow-x-auto mobile-scroll-snap">
           {STATUS_FILTERS.map((filter) => (
             <button
               key={filter.id}
@@ -182,7 +184,7 @@ export default function AdminQueue() {
 
       <div className="flex-1 overflow-auto">
         {loading ? (
-          <div className="p-6">
+          <div className="py-2">
             <SectionLoader
               title="Loading review queue"
               description="Pulling the latest fighters, filters, and queue counts from the live review API."
@@ -191,11 +193,38 @@ export default function AdminQueue() {
             />
           </div>
         ) : items.length === 0 ? (
-          <div className="p-10">
+          <div className="py-10">
             <EmptyState icon={Search} title="No entries match these filters" description="Clear the search or switch the discipline and status filters." />
           </div>
         ) : (
-          <table className="w-full text-left border-collapse">
+          <>
+          <div className="space-y-3 md:hidden">
+            {items.map((entry) => (
+              <article
+                key={entry.id}
+                className={`rounded-2xl border p-4 ${selected.has(entry.id) ? "border-primary/50 bg-primary/5" : "border-border bg-surface/70"}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium">{entry.first_name} {entry.last_name}</div>
+                    <div className="mt-1 text-[11px] text-tertiary break-all">{entry.id}</div>
+                    <div className="mt-2 text-sm text-secondary-muted">{entry.tournament_name}</div>
+                    <div className="text-sm text-secondary-muted">{entry.club_name || "Individual"}</div>
+                  </div>
+                  <div className="flex flex-col items-end gap-2">
+                    <Checkbox checked={selected.has(entry.id)} onCheckedChange={() => toggleSelect(entry.id)} />
+                    <StatusPill status={entry.status} size="xs" />
+                  </div>
+                </div>
+                <div className="mt-4 flex gap-2">
+                  <Button variant="outline" size="sm" className="flex-1" onClick={() => router.push(`/admin/review/${entry.id}`)}>
+                    Open
+                  </Button>
+                </div>
+              </article>
+            ))}
+          </div>
+          <table className="hidden md:table w-full text-left border-collapse">
             <thead className="sticky top-0 bg-background/95 backdrop-blur-xl">
               <tr className="text-[10px] uppercase tracking-wider text-tertiary font-semibold border-b border-border">
                 <th className="pl-6 py-3 w-10">
@@ -231,27 +260,26 @@ export default function AdminQueue() {
               ))}
             </tbody>
           </table>
+          </>
         )}
       </div>
 
       {selected.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 animate-slide-up">
-          <div className="glass rounded-full px-2 py-2 flex items-center gap-1.5 shadow-elev">
-            <div className="pl-3 pr-2 text-sm font-medium">
-              <span className="font-mono tabular-nums">{selected.size}</span> selected
-            </div>
-            <Button size="sm" variant="ghost" className="h-8 rounded-full" disabled={runningBulkAction} onClick={() => bulkSetStatus("approve")}>
-              <CheckCheck className="size-3.5" /> Approve
-            </Button>
-            <Button size="sm" variant="ghost" className="h-8 rounded-full" disabled={runningBulkAction} onClick={() => bulkSetStatus("request_correction")}>
-              <Filter className="size-3.5" /> Correction
-            </Button>
-            <Button size="sm" variant="ghost" className="h-8 rounded-full" disabled={runningBulkAction} onClick={() => bulkSetStatus("reject")}>
-              <XCircle className="size-3.5" /> Reject
-            </Button>
+        <StickyActionBar className="animate-slide-up">
+          <div className="w-full text-sm font-medium sm:w-auto sm:pr-2">
+            <span className="font-mono tabular-nums">{selected.size}</span> selected
           </div>
-        </div>
+          <Button size="sm" variant="ghost" className="flex-1 sm:flex-none" disabled={runningBulkAction} onClick={() => bulkSetStatus("approve")}>
+            <CheckCheck className="size-3.5" /> Approve
+          </Button>
+          <Button size="sm" variant="ghost" className="flex-1 sm:flex-none" disabled={runningBulkAction} onClick={() => bulkSetStatus("request_correction")}>
+            <Filter className="size-3.5" /> Correction
+          </Button>
+          <Button size="sm" variant="ghost" className="flex-1 sm:flex-none" disabled={runningBulkAction} onClick={() => bulkSetStatus("reject")}>
+            <XCircle className="size-3.5" /> Reject
+          </Button>
+        </StickyActionBar>
       )}
-    </div>
+    </ResponsivePageShell>
   );
 }

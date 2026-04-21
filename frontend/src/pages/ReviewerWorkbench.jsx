@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   ChevronRight,
   FileWarning,
+  ListChecks,
   RefreshCcw,
   Search,
   ShieldCheck,
@@ -17,6 +18,8 @@ import { Separator } from "@/components/ui/separator";
 import StatusPill from "@/components/shared/StatusPill";
 import EmptyState from "@/components/shared/EmptyState";
 import { SectionLoader } from "@/components/shared/PrimalLoader";
+import { StickyActionBar } from "@/components/shared/ResponsivePrimitives";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import api from "@/lib/api";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
@@ -171,7 +174,7 @@ export default function ReviewerWorkbench() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-0px)] md:h-screen">
+    <div className="flex min-h-[calc(100vh-3.5rem)] md:min-h-screen">
       <aside className="hidden lg:flex w-[340px] shrink-0 flex-col border-r border-border bg-surface/40">
         <div className="p-4 border-b border-border">
           <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">Participant review</div>
@@ -245,7 +248,7 @@ export default function ReviewerWorkbench() {
                 <span className="text-xs text-tertiary">{activeApplication.club_name || "Individual applicant"}</span>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="hidden lg:flex items-center gap-2">
               {activeApplication.status === "submitted" && (
                 <Button variant="outline" disabled={actionBusy} onClick={handleStartReview}>
                   <RefreshCcw className="size-4 mr-1.5" /> Start review
@@ -272,6 +275,52 @@ export default function ReviewerWorkbench() {
                 </Button>
               )}
               <Button variant="ghost" disabled={actionBusy} onClick={refreshAll}>
+                Refresh
+              </Button>
+            </div>
+            <div className="flex w-full items-center justify-between gap-2 lg:hidden">
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button variant="outline" className="flex-1 sm:flex-none">
+                    <ListChecks className="size-4 mr-1.5" /> Queue
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="left" className="w-[92vw] max-w-sm p-0">
+                  <SheetHeader className="border-b border-border p-4 text-left">
+                    <SheetTitle>Review queue</SheetTitle>
+                  </SheetHeader>
+                  <div className="p-4 border-b border-border">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-tertiary" />
+                      <Input value={search} onChange={(event) => setSearch(event.target.value)} className="pl-8 h-9 bg-surface" placeholder="Search queue" />
+                    </div>
+                  </div>
+                  <div className="overflow-y-auto">
+                    {queue.map((entry) => (
+                      <button
+                        key={entry.id}
+                        type="button"
+                        onClick={() => {
+                          setActiveId(entry.id);
+                          router.replace(`/admin/review/${entry.id}`);
+                        }}
+                        className={`w-full text-left border-b border-border px-4 py-3 transition-colors ${entry.id === activeId ? "bg-surface-muted border-l-2 border-l-primary" : "hover:bg-surface-muted/50 border-l-2 border-l-transparent"}`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium truncate">{entry.first_name} {entry.last_name}</div>
+                            <div className="text-[11px] text-tertiary mt-1 truncate">
+                              {entry.tournament_name}
+                            </div>
+                          </div>
+                          <StatusPill status={entry.status} size="xs" />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </SheetContent>
+              </Sheet>
+              <Button variant="ghost" className="flex-1 sm:flex-none" disabled={actionBusy} onClick={refreshAll}>
                 Refresh
               </Button>
             </div>
@@ -359,6 +408,33 @@ export default function ReviewerWorkbench() {
             </section>
           </div>
         </div>
+        <StickyActionBar className="lg:hidden">
+          {activeApplication.status === "submitted" && (
+            <Button variant="outline" className="flex-1" disabled={actionBusy} onClick={handleStartReview}>
+              <RefreshCcw className="size-4 mr-1.5" /> Start review
+            </Button>
+          )}
+          {canDecide && (
+            <Button variant="outline" className="flex-1" disabled={actionBusy} onClick={() => handleDecision("request_correction")}>
+              <FileWarning className="size-4 mr-1.5" /> Correction
+            </Button>
+          )}
+          {canDecide && (
+            <Button variant="outline" className="flex-1" disabled={actionBusy} onClick={() => handleDecision("reject")}>
+              <XCircle className="size-4 mr-1.5" /> Reject
+            </Button>
+          )}
+          {canDecide && (
+            <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white" disabled={actionBusy} onClick={() => handleDecision("approve")}>
+              <CheckCircle2 className="size-4 mr-1.5" /> Approve
+            </Button>
+          )}
+          {canReopen && (
+            <Button variant="outline" className="flex-1" disabled={actionBusy} onClick={handleReopen}>
+              <Undo2 className="size-4 mr-1.5" /> Reopen
+            </Button>
+          )}
+        </StickyActionBar>
           </>
         )}
       </section>

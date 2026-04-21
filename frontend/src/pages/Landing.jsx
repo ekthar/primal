@@ -25,6 +25,7 @@ import ThemeToggle from "@/components/shared/ThemeToggle";
 import CageEnergyCanvas from "@/components/landing/CageEnergyCanvas";
 import { HERO_IMAGE, TEXTURE_IMAGE } from "@/lib/mockData";
 import { api } from "@/lib/api";
+import { useMotionProfile } from "@/lib/motion";
 import frame001 from "@/assets/veo-frames/001.png";
 import frame020 from "@/assets/veo-frames/020.png";
 import frame050 from "@/assets/veo-frames/050.png";
@@ -77,12 +78,13 @@ function SplitHeadline({ parts }) {
 }
 
 function Marquee({ items }) {
+  const { allowContinuousMotion } = useMotionProfile();
   return (
-    <div className="relative overflow-hidden py-6 border-y border-border bg-surface-muted/40">
+    <div className="relative overflow-hidden py-4 sm:py-6 border-y border-border bg-surface-muted/40">
       <motion.div
         className="flex gap-14 whitespace-nowrap"
-        animate={{ x: ["0%", "-50%"] }}
-        transition={{ duration: 38, ease: "linear", repeat: Infinity }}
+        animate={allowContinuousMotion ? { x: ["0%", "-50%"] } : undefined}
+        transition={allowContinuousMotion ? { duration: 38, ease: "linear", repeat: Infinity } : undefined}
         aria-hidden
       >
         {[...items, ...items].map((item, i) => (
@@ -96,7 +98,7 @@ function Marquee({ items }) {
 }
 
 function FightTapeMarquee({ items, duration = 22 }) {
-  const reduced = useReducedMotion();
+  const { reducedMotion, allowContinuousMotion } = useMotionProfile();
   return (
     <div className="relative overflow-hidden rounded-2xl border border-border bg-surface/70 backdrop-blur">
       <div
@@ -107,8 +109,8 @@ function FightTapeMarquee({ items, duration = 22 }) {
       <div className="relative">
         <motion.div
           className="flex items-center gap-2 whitespace-nowrap py-3"
-          animate={reduced ? undefined : { x: ["0%", "-50%"] }}
-          transition={reduced ? undefined : { duration, ease: "linear", repeat: Infinity }}
+          animate={allowContinuousMotion && !reducedMotion ? { x: ["0%", "-50%"] } : undefined}
+          transition={allowContinuousMotion && !reducedMotion ? { duration, ease: "linear", repeat: Infinity } : undefined}
           aria-hidden
         >
           {[...items, ...items].map((item, i) => (
@@ -127,15 +129,15 @@ function FightTapeMarquee({ items, duration = 22 }) {
 }
 
 function InfiniteTileColumn({ images, duration = 18, className = "" }) {
-  const reduced = useReducedMotion();
+  const { reducedMotion, allowContinuousMotion } = useMotionProfile();
   const tiles = images.filter(Boolean).map(toImgSrc);
   const loop = [...tiles, ...tiles];
   return (
     <div className={`relative overflow-hidden rounded-3xl border border-border bg-surface/40 backdrop-blur ${className}`}>
       <motion.div
         className="flex flex-col gap-3 p-3"
-        animate={reduced ? undefined : { y: ["0%", "-50%"] }}
-        transition={reduced ? undefined : { duration, ease: "linear", repeat: Infinity }}
+        animate={allowContinuousMotion && !reducedMotion ? { y: ["0%", "-50%"] } : undefined}
+        transition={allowContinuousMotion && !reducedMotion ? { duration, ease: "linear", repeat: Infinity } : undefined}
         aria-hidden
       >
         {loop.map((src, i) => (
@@ -174,20 +176,20 @@ function Nav() {
         scrolled ? "bg-background/70 backdrop-blur-xl border-b border-border" : ""
       }`}
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between gap-3">
         <Link href="/" className="flex items-center gap-2" data-testid="nav-brand">
           <div className="size-8 rounded-lg bg-foreground text-background flex items-center justify-center font-display font-bold text-sm">P</div>
           <span className="font-display font-semibold tracking-tight">Primal</span>
         </Link>
-        <nav className="hidden md:flex items-center gap-7 text-sm text-secondary-muted">
+        <nav className="hidden lg:flex items-center gap-7 text-sm text-secondary-muted">
           <a href="#paths" className="hover:text-foreground transition-colors">Who it's for</a>
           <a href="#workflow" className="hover:text-foreground transition-colors">Workflow</a>
           <a href="#admin" className="hover:text-foreground transition-colors">Admin</a>
           <a href="#stats" className="hover:text-foreground transition-colors">Numbers</a>
         </nav>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <ThemeToggle compact />
-          <Link href="/login"><Button variant="ghost" size="sm" data-testid="nav-login">Sign in</Button></Link>
+          <Link href="/login"><Button variant="ghost" size="sm" className="hidden sm:inline-flex" data-testid="nav-login">Sign in</Button></Link>
           <Link href="/register">
             <Button size="sm" className="bg-foreground text-background hover:bg-foreground/90 rounded-full px-4" data-testid="nav-register">
               Register
@@ -202,6 +204,7 @@ function Nav() {
 function Hero() {
   const ref = useRef(null);
   const reduced = useReducedMotion();
+  const { allowCinematicMotion } = useMotionProfile();
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
   const imgY = useTransform(scrollYProgress, [0, 1], [0, 120]);
   const imgScale = useTransform(scrollYProgress, [0, 1], [1.05, 1.15]);
@@ -209,9 +212,9 @@ function Hero() {
   const overlay = useTransform(scrollYProgress, [0, 1], [0.35, 0.75]);
 
   return (
-    <section ref={ref} className="relative min-h-[92vh] overflow-hidden flex items-center pt-20">
+    <section ref={ref} className="relative min-h-[92vh] overflow-hidden flex items-center pt-16 sm:pt-20 short-screen-tight">
       <motion.div
-        style={{ y: reduced ? 0 : imgY, scale: reduced ? 1 : imgScale, backgroundImage: `url(${frame080Src})` }}
+        style={{ y: !allowCinematicMotion || reduced ? 0 : imgY, scale: !allowCinematicMotion || reduced ? 1 : imgScale, backgroundImage: `url(${frame080Src})` }}
         className="absolute inset-0 -z-30 bg-cover bg-center opacity-[0.55] dark:opacity-[0.28]"
       />
       <CageEnergyCanvas />
@@ -226,8 +229,8 @@ function Hero() {
       />
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-        <div className="grid lg:grid-cols-[1.2fr_0.8fr] gap-10 lg:gap-12 items-center">
-          <motion.div style={{ y: reduced ? 0 : textY }}>
+        <div className="grid lg:grid-cols-[1.2fr_0.8fr] gap-8 lg:gap-12 items-center">
+          <motion.div style={{ y: !allowCinematicMotion || reduced ? 0 : textY }}>
             <Reveal>
               <div className="inline-flex items-center gap-2 rounded-full border border-border bg-surface/70 backdrop-blur px-3 py-1 text-xs font-medium">
                 <span className="size-1.5 rounded-full bg-primary animate-pulse" />
@@ -248,7 +251,7 @@ function Hero() {
             </div>
 
             <Reveal delay={0.25}>
-              <p className="mt-8 max-w-2xl text-base sm:text-xl text-secondary-muted leading-relaxed text-pretty">
+              <p className="mt-6 sm:mt-8 max-w-2xl text-sm sm:text-lg lg:text-xl text-secondary-muted leading-relaxed text-pretty">
                 One home for MMA and martial arts events - teams, fighters, brackets, weigh-ins, and approvals.
                 Fast onboarding for gyms, clean registration for athletes, and a public-ready tournament feed.
               </p>
@@ -273,20 +276,20 @@ function Hero() {
             </Reveal>
 
             <Reveal delay={0.4}>
-              <div className="mt-10 flex flex-wrap items-center gap-3">
+              <div className="mt-8 sm:mt-10 flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-3 max-w-md sm:max-w-none">
                 <Link href="/register">
-                  <Button size="lg" className="bg-primary hover:bg-primary-hover text-primary-foreground h-12 px-6 rounded-full" data-testid="hero-cta-register">
+                  <Button size="lg" className="w-full sm:w-auto bg-primary hover:bg-primary-hover text-primary-foreground h-12 px-6 rounded-full" data-testid="hero-cta-register">
                     Register to compete
                     <ArrowRight className="size-4 ml-1" />
                   </Button>
                 </Link>
                 <Link href="/register?track=club">
-                  <Button size="lg" variant="outline" className="h-12 px-6 rounded-full bg-surface/60 backdrop-blur border-border" data-testid="hero-cta-club">
+                  <Button size="lg" variant="outline" className="w-full sm:w-auto h-12 px-6 rounded-full bg-surface/60 backdrop-blur border-border" data-testid="hero-cta-club">
                     Register a gym <ArrowUpRight className="size-4 ml-1" />
                   </Button>
                 </Link>
                 <Link href="/login">
-                  <Button size="lg" variant="ghost" className="h-12 px-5 rounded-full" data-testid="hero-cta-admin">
+                  <Button size="lg" variant="ghost" className="w-full sm:w-auto h-12 px-5 rounded-full" data-testid="hero-cta-admin">
                     Staff access
                   </Button>
                 </Link>
@@ -294,7 +297,7 @@ function Hero() {
             </Reveal>
           </motion.div>
 
-          <Reveal delay={0.2} className="hidden lg:block">
+          <Reveal delay={0.2} className="hidden xl:block">
             <div className="relative">
               <div className="grid grid-cols-2 gap-4">
                 <InfiniteTileColumn
@@ -315,7 +318,7 @@ function Hero() {
       </div>
 
       {/* floating status chip rail */}
-      <Reveal delay={0.6} className="absolute bottom-10 inset-x-0 flex justify-center">
+      <Reveal delay={0.6} className="absolute bottom-10 inset-x-0 hidden md:flex justify-center">
         <div className="glass rounded-full px-2 py-2 flex items-center gap-1.5 shadow-soft">
           {[
             ["draft", "Draft"],

@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import {
@@ -13,6 +14,8 @@ import {
   Scale,
   LogOut,
   ChevronDown,
+  Menu,
+  Trophy,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import ThemeToggle from "@/components/shared/ThemeToggle";
@@ -25,6 +28,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 
 function isActivePath(pathname, target) {
   if (target === "/admin/review") {
@@ -36,37 +47,37 @@ function isActivePath(pathname, target) {
 
 const NAV = {
   admin: [
-    { to: "/admin/overview", icon: LayoutDashboard, label: "Overview", testid: "nav-overview" },
-    { to: "/admin/queue", icon: ListChecks, label: "Review Queue", testid: "nav-queue" },
-    { to: "/admin/review", icon: Inbox, label: "Workbench", testid: "nav-workbench" },
-    { to: "/admin/settings", icon: SlidersHorizontal, label: "Settings", testid: "nav-settings" },
-    { to: "/admin/weighin", icon: Scale, label: "Weigh-In", testid: "nav-weighin" },
-    { to: "/admin/users", icon: Users, label: "Users", testid: "nav-users" },
-    { to: "/admin/brackets", icon: Users, label: "Brackets", testid: "nav-brackets" },
-    { to: "/admin/appeals", icon: Gavel, label: "Appeals", testid: "nav-appeals" },
-    { to: "/admin/reports", icon: BarChart3, label: "Reports", testid: "nav-reports" },
-    { to: "/admin/circulars", icon: Newspaper, label: "Circulars", testid: "nav-circulars" },
+    { to: "/admin/overview", icon: LayoutDashboard, label: "Overview", shortLabel: "Home", testid: "nav-overview" },
+    { to: "/admin/queue", icon: ListChecks, label: "Review Queue", shortLabel: "Queue", testid: "nav-queue" },
+    { to: "/admin/review", icon: Inbox, label: "Workbench", shortLabel: "Desk", testid: "nav-workbench" },
+    { to: "/admin/settings", icon: SlidersHorizontal, label: "Settings", shortLabel: "Settings", testid: "nav-settings" },
+    { to: "/admin/weighin", icon: Scale, label: "Weigh-In", shortLabel: "Weigh-in", testid: "nav-weighin" },
+    { to: "/admin/users", icon: Users, label: "Users", shortLabel: "Users", testid: "nav-users" },
+    { to: "/admin/brackets", icon: Trophy, label: "Brackets", shortLabel: "Brackets", testid: "nav-brackets" },
+    { to: "/admin/appeals", icon: Gavel, label: "Appeals", shortLabel: "Appeals", testid: "nav-appeals" },
+    { to: "/admin/reports", icon: BarChart3, label: "Reports", shortLabel: "Reports", testid: "nav-reports" },
+    { to: "/admin/circulars", icon: Newspaper, label: "Circulars", shortLabel: "Circulars", testid: "nav-circulars" },
   ],
   reviewer: [
-    { to: "/admin/queue", icon: ListChecks, label: "Review Queue", testid: "nav-queue" },
-    { to: "/admin/review", icon: Inbox, label: "Workbench", testid: "nav-workbench" },
-    { to: "/admin/appeals", icon: Gavel, label: "Appeals", testid: "nav-appeals" },
+    { to: "/admin/queue", icon: ListChecks, label: "Review Queue", shortLabel: "Queue", testid: "nav-queue" },
+    { to: "/admin/review", icon: Inbox, label: "Workbench", shortLabel: "Desk", testid: "nav-workbench" },
+    { to: "/admin/appeals", icon: Gavel, label: "Appeals", shortLabel: "Appeals", testid: "nav-appeals" },
   ],
   club: [
-    { to: "/club", icon: LayoutDashboard, label: "Club Dashboard", testid: "nav-club" },
+    { to: "/club", icon: LayoutDashboard, label: "Club Dashboard", shortLabel: "Club", testid: "nav-club" },
   ],
   applicant: [
-    { to: "/applicant", icon: LayoutDashboard, label: "My Application", testid: "nav-applicant" },
+    { to: "/applicant", icon: LayoutDashboard, label: "My Application", shortLabel: "My app", testid: "nav-applicant" },
   ],
 };
 
-function Brand() {
+function Brand({ compact = false }) {
   return (
     <div className="flex items-center gap-2">
       <div className="size-8 rounded-lg bg-foreground text-background flex items-center justify-center font-display font-bold text-sm">
         P
       </div>
-      <div className="leading-tight">
+      <div className={`leading-tight ${compact ? "hidden min-[420px]:block" : ""}`}>
         <div className="font-display font-semibold tracking-tight text-[15px]">Primal</div>
         <div className="text-[10px] uppercase tracking-[0.14em] text-tertiary">Fight operations</div>
       </div>
@@ -91,11 +102,11 @@ function RoleSwitcher() {
               {user.avatar}
             </AvatarFallback>
           </Avatar>
-          <div className="flex-1 text-left min-w-0">
+          <div className="hidden xl:block flex-1 text-left min-w-0">
             <div className="text-sm font-medium truncate">{user.name}</div>
             <div className="text-[11px] text-tertiary capitalize truncate">{user.role}</div>
           </div>
-          <ChevronDown className="size-4 text-tertiary" />
+          <ChevronDown className="hidden xl:block size-4 text-tertiary" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" side="top" className="w-60">
@@ -119,51 +130,99 @@ function RoleSwitcher() {
   );
 }
 
-function Sidebar() {
-  const { user } = useAuth();
+function NavLink({ item, compact = false, onNavigate }) {
   const router = useRouter();
+  const active = isActivePath(router.pathname, item.to);
+  return (
+    <Link
+      href={item.to}
+      onClick={onNavigate}
+      data-testid={item.testid}
+      className={`group flex items-center gap-3 rounded-lg text-sm transition-all duration-200 ease-ios ${
+        compact
+          ? `justify-center px-3 py-3 ${active ? "bg-surface-muted text-foreground font-medium shadow-inner-top" : "text-secondary-muted hover:text-foreground hover:bg-surface-muted/60"}`
+          : `px-3 py-2 ${active ? "bg-surface-muted text-foreground font-medium shadow-inner-top" : "text-secondary-muted hover:text-foreground hover:bg-surface-muted/60"}`
+      }`}
+    >
+      <item.icon className={`size-[18px] shrink-0 ${active ? "text-primary" : ""}`} strokeWidth={1.75} />
+      {!compact ? <span className="truncate">{item.label}</span> : <span className="sr-only">{item.label}</span>}
+    </Link>
+  );
+}
+
+function DesktopSidebar() {
+  const { user } = useAuth();
   const nav = NAV[user?.role] || [];
   return (
-    <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-border bg-surface/40 backdrop-blur-xl">
-      <div className="px-5 py-5 border-b border-border">
+    <aside className="hidden md:flex md:w-[84px] xl:w-64 shrink-0 flex-col border-r border-border bg-surface/40 backdrop-blur-xl">
+      <div className="px-4 xl:px-5 py-5 border-b border-border flex justify-center xl:justify-start">
         <Brand />
       </div>
-      <nav className="flex-1 px-3 py-4 space-y-0.5">
-        <div className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-tertiary">
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        <div className="hidden xl:block px-2 pb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-tertiary">
           Workspace
         </div>
         {nav.map((n) => (
-          <Link
-            key={n.to}
-            href={n.to}
-            data-testid={n.testid}
-            className={`group flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ease-ios ${
-              isActivePath(router.pathname, n.to)
-                ? "bg-surface-muted text-foreground font-medium shadow-inner-top"
-                : "text-secondary-muted hover:text-foreground hover:bg-surface-muted/60"
-            }`}
-          >
-            <n.icon className={`size-[17px] ${isActivePath(router.pathname, n.to) ? "text-primary" : ""}`} strokeWidth={1.75} />
-            <span>{n.label}</span>
-          </Link>
+          <NavLink key={n.to} item={n} compact />
         ))}
       </nav>
       <div className="p-3 border-t border-border space-y-2">
         <RoleSwitcher />
-        <div className="flex items-center justify-between px-1 pt-1">
+        <div className="hidden xl:flex items-center justify-between px-1 pt-1">
           <span className="text-[10px] uppercase tracking-wider text-tertiary">Theme</span>
           <ThemeToggle />
+        </div>
+        <div className="flex xl:hidden justify-center pt-1">
+          <ThemeToggle compact />
         </div>
       </div>
     </aside>
   );
 }
 
-function MobileTopbar() {
+function MobileNavSheet({ nav }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
+        <button className="inline-flex size-10 items-center justify-center rounded-xl border border-border bg-surface hover:bg-surface-muted focus-ring">
+          <Menu className="size-4" />
+          <span className="sr-only">Open navigation</span>
+        </button>
+      </SheetTrigger>
+      <SheetContent side="left" className="w-[88vw] max-w-sm border-r border-border bg-background p-0">
+        <SheetHeader className="border-b border-border px-5 py-5">
+          <Brand />
+          <SheetTitle className="sr-only">Primal navigation</SheetTitle>
+          <SheetDescription className="sr-only">Move between workspaces and organizer tools.</SheetDescription>
+        </SheetHeader>
+        <div className="flex h-full flex-col">
+          <nav className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
+            {nav.map((n) => (
+              <NavLink key={n.to} item={n} onNavigate={() => setOpen(false)} />
+            ))}
+          </nav>
+          <div className="border-t border-border p-4 space-y-3">
+            <RoleSwitcher />
+            <div className="flex items-center justify-between px-1">
+              <span className="text-[10px] uppercase tracking-wider text-tertiary">Theme</span>
+              <ThemeToggle compact />
+            </div>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function MobileTopbar({ nav }) {
   const { user } = useAuth();
   return (
-    <div data-testid="mobile-topbar" className="md:hidden sticky top-0 z-30 flex items-center justify-between px-4 h-14 border-b border-border bg-background/80 backdrop-blur-xl">
-      <Brand />
+    <div data-testid="mobile-topbar" className="md:hidden sticky top-0 z-30 flex items-center justify-between gap-3 px-4 h-14 border-b border-border bg-background/85 backdrop-blur-xl">
+      <div className="flex items-center gap-3 min-w-0">
+        <MobileNavSheet nav={nav} />
+        <Brand compact />
+      </div>
       <div className="flex items-center gap-2">
         <ThemeToggle compact />
         <Avatar className="size-8 border border-border">
@@ -176,13 +235,43 @@ function MobileTopbar() {
   );
 }
 
+function MobileBottomNav({ nav }) {
+  const router = useRouter();
+  const primary = useMemo(() => nav.slice(0, Math.min(5, nav.length)), [nav]);
+  return (
+    <nav className="md:hidden fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur-xl px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2">
+      <div className="grid grid-cols-5 gap-1">
+        {primary.map((item) => {
+          const active = isActivePath(router.pathname, item.to);
+          return (
+            <Link
+              key={item.to}
+              href={item.to}
+              className={`flex min-h-14 flex-col items-center justify-center rounded-xl px-2 text-[10px] font-medium transition-colors ${
+                active ? "bg-surface-muted text-foreground" : "text-tertiary hover:bg-surface-muted/60 hover:text-foreground"
+              }`}
+            >
+              <item.icon className={`size-[18px] ${active ? "text-primary" : ""}`} strokeWidth={1.75} />
+              <span className="mt-1 truncate max-w-full">{item.shortLabel || item.label}</span>
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
 export default function AppShell({ children }) {
+  const { user } = useAuth();
+  const nav = NAV[user?.role] || [];
+
   return (
     <div className="flex min-h-screen bg-background">
-      <Sidebar />
-      <main className="flex-1 flex flex-col min-w-0">
-        <MobileTopbar />
-        <div className="flex-1">{children}</div>
+      <DesktopSidebar />
+      <main className="flex-1 flex min-w-0 flex-col">
+        <MobileTopbar nav={nav} />
+        <div className="flex-1 min-w-0 app-shell-safe-bottom md:pb-0">{children}</div>
+        <MobileBottomNav nav={nav} />
       </main>
     </div>
   );
