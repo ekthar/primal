@@ -45,6 +45,10 @@ router.post('/:id/resubmit', requireAuth, ah(async (req, res) => {
   res.json({ application: await apps.submit(req.user, req.params.id, { ip: req.ip }) });
 }));
 
+router.post('/:id/cancel-request', requireAuth, validate(schemas.application.cancelRequest), ah(async (req, res) => {
+  res.json({ application: await apps.requestCancel(req.user, req.params.id, req.body, { ip: req.ip }) });
+}));
+
 router.get('/:id/documents', requireAuth, ah(async (req, res) => {
   res.json({ documents: await apps.listDocuments(req.user, req.params.id) });
 }));

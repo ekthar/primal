@@ -41,4 +41,8 @@ router.post('/:id/participants', requireAuth, validate(schemas.club.createPartic
   res.status(201).json({ participant: await clubs.createParticipant(req.user, req.params.id, req.body, { ip: req.ip }) });
 }));
 
+router.post('/:id/participants/:profileId/reset-link', requireAuth, ah(async (req, res) => {
+  res.json({ participant: await clubs.issueParticipantResetLink(req.user, req.params.id, req.params.profileId, { ip: req.ip }) });
+}));
+
 module.exports = router;

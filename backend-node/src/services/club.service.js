@@ -5,6 +5,9 @@ const { hashPassword } = require('../security');
 const { validateIndiaAddress } = require('../indiaLocations');
 const { issuePasswordResetForUser, publicUser } = require('./auth.service');
 const { randomBytes } = require('crypto');
+const { customAlphabet } = require('nanoid');
+
+const createCode = customAlphabet('ABCDEFGHJKLMNPQRSTUVWXYZ23456789', 10);
 
 async function assertClubAccess(user, clubId) {
   const club = await clubsRepo.findById(clubId);
@@ -16,7 +19,14 @@ async function assertClubAccess(user, clubId) {
 }
 
 async function createClub(user, data, ctx = {}) {
-  const payload = { ...data, country: 'India' };
+  const payload = {
+    ...data,
+    country: 'India',
+    metadata: {
+      ...(data.metadata || {}),
+      clubCode: data?.metadata?.clubCode || `CLB-${createCode()}`,
+    },
+  };
   const existing = await clubsRepo.findBySlug(payload.slug);
   if (existing) throw ApiError.conflict('Slug already taken', { field: 'slug' });
   const club = await clubsRepo.create({ ...payload, primaryUserId: user.id });
@@ -105,8 +115,10 @@ async function createParticipant(user, clubId, payload, ctx = {}) {
 
   let participantUser = await usersRepo.findByEmail(email);
   let createdUser = false;
+  let temporaryPassword = null;
   if (!participantUser) {
     const tempPassword = randomBytes(12).toString('base64url');
+    temporaryPassword = tempPassword;
     participantUser = await usersRepo.create({
       email,
       passwordHash: await hashPassword(tempPassword),
@@ -143,6 +155,8 @@ async function createParticipant(user, clubId, payload, ctx = {}) {
       phone: payload.phone || participantUser.phone || null,
       address: addressValidation.normalized,
       managedByClub: true,
+      fighterCode: existingProfile?.metadata?.fighterCode || `FIG-${createCode()}`,
+      selectedDisciplines: Array.isArray(payload.selectedDisciplines) ? payload.selectedDisciplines : [],
     },
   });
 
@@ -158,9 +172,40 @@ async function createParticipant(user, clubId, payload, ctx = {}) {
   const out = {
     user: publicUser(participantUser),
     profile,
+    loginId: participantUser.email,
+    fighterCode: profile?.metadata?.fighterCode || null,
   };
+  if (temporaryPassword) out.temporaryPassword = temporaryPassword;
   if (resetUrl && user.role !== 'admin') out.resetUrl = resetUrl;
   return out;
+}
+
+async function issueParticipantResetLink(user, clubId, profileId, ctx = {}) {
+  const club = await assertClubAccess(user, clubId);
+  const profile = await profilesRepo.findById(profileId);
+  if (!profile || profile.club_id !== club.id) {
+    throw ApiError.notFound('Club participant not found');
+  }
+  const participantUser = await usersRepo.findById(profile.user_id);
+  if (!participantUser) throw ApiError.notFound('Participant user not found');
+
+  const issued = await issuePasswordResetForUser(participantUser, ctx);
+  await auditWrite({
+    actorUserId: user.id,
+    actorRole: user.role,
+    action: 'club.participant.reset_link',
+    entityType: 'profile',
+    entityId: profile.id,
+    payload: { clubId: club.id, userId: participantUser.id },
+    requestIp: ctx.ip,
+  });
+
+  return {
+    profileId: profile.id,
+    loginId: participantUser.email,
+    fighterCode: profile?.metadata?.fighterCode || null,
+    resetUrl: issued.resetUrl,
+  };
 }
 
 module.exports = {
@@ -174,4 +219,5 @@ module.exports = {
   restoreClub,
   listParticipants,
   createParticipant,
+  issueParticipantResetLink,
 };

@@ -135,12 +135,80 @@ const profiles = {
     );
     return rows[0];
   },
+  listForAdminReweigh: async ({ clubId, q, limit = 200, offset = 0 } = {}) => {
+    const args = [];
+    const where = [`p.${ACTIVE}`];
+    if (clubId) {
+      args.push(clubId);
+      where.push(`p.club_id = $${args.length}`);
+    }
+    if (q) {
+      args.push(`%${q}%`);
+      where.push(`(p.first_name ILIKE $${args.length} OR p.last_name ILIKE $${args.length} OR u.email ILIKE $${args.length} OR COALESCE(c.name, '') ILIKE $${args.length})`);
+    }
+    args.push(limit);
+    args.push(offset);
+    const sql = `
+      SELECT p.*, u.email, c.name AS club_name
+      FROM profiles p
+      JOIN users u ON u.id = p.user_id
+      LEFT JOIN clubs c ON c.id = p.club_id
+      WHERE ${where.join(' AND ')}
+      ORDER BY c.name NULLS LAST, p.first_name ASC, p.last_name ASC
+      LIMIT $${args.length - 1} OFFSET $${args.length}`;
+    return (await query(sql, args)).rows;
+  },
+  updateWeightByProfileId: async (profileId, { weightKg, weightClass }) => {
+    const { rows } = await query(
+      `UPDATE profiles
+       SET weight_kg = $1,
+           weight_class = $2,
+           updated_at = NOW()
+       WHERE id = $3 AND deleted_at IS NULL
+       RETURNING *`,
+      [weightKg, weightClass, profileId]
+    );
+    return rows[0];
+  },
 };
 
 // --------- tournaments ---------
 const tournaments = {
   listPublic: async () => (await query(`SELECT * FROM tournaments WHERE is_public = TRUE AND ${ACTIVE} ORDER BY starts_on DESC`)).rows,
   findById: async (id) => (await query(`SELECT * FROM tournaments WHERE id=$1 AND ${ACTIVE}`, [id])).rows[0],
+  listAdmin: async ({ q, limit = 200, offset = 0 } = {}) => {
+    const where = [`${ACTIVE}`];
+    const args = [];
+    if (q) {
+      args.push(`%${q}%`);
+      where.push(`(name ILIKE $${args.length} OR slug ILIKE $${args.length} OR COALESCE(season, '') ILIKE $${args.length})`);
+    }
+    args.push(limit);
+    args.push(offset);
+    const sql = `SELECT * FROM tournaments WHERE ${where.join(' AND ')} ORDER BY starts_on DESC NULLS LAST, created_at DESC LIMIT $${args.length - 1} OFFSET $${args.length}`;
+    return (await query(sql, args)).rows;
+  },
+  updateAdmin: async (id, patch) => {
+    const map = {
+      registrationOpenAt: 'registration_open_at',
+      registrationCloseAt: 'registration_close_at',
+      correctionWindowHours: 'correction_window_hours',
+      startsOn: 'starts_on',
+      endsOn: 'ends_on',
+      isPublic: 'is_public',
+    };
+    const fields = [];
+    const args = [];
+    for (const [key, value] of Object.entries(patch || {})) {
+      if (!(key in map)) continue;
+      args.push(value);
+      fields.push(`${map[key]} = $${args.length}`);
+    }
+    if (!fields.length) return tournaments.findById(id);
+    args.push(id);
+    const sql = `UPDATE tournaments SET ${fields.join(', ')}, updated_at = NOW() WHERE id = $${args.length} RETURNING *`;
+    return (await query(sql, args)).rows[0];
+  },
 };
 
 // --------- applications ---------

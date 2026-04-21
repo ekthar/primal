@@ -80,11 +80,6 @@ export default function Register() {
   }, []);
 
   useEffect(() => {
-    if (isClubTrack) {
-      setLoadingStates(false);
-      return;
-    }
-
     let ignore = false;
     async function loadIndiaStates() {
       setLoadingStates(true);
@@ -103,10 +98,9 @@ export default function Register() {
     return () => {
       ignore = true;
     };
-  }, [isClubTrack]);
+  }, []);
 
   useEffect(() => {
-    if (isClubTrack) return;
     if (!form.state) {
       setDistrictOptions([]);
       return;
@@ -130,10 +124,9 @@ export default function Register() {
     return () => {
       ignore = true;
     };
-  }, [form.state, isClubTrack]);
+  }, [form.state]);
 
   useEffect(() => {
-    if (isClubTrack) return;
     const pin = String(form.postalCode || "").replace(/\D/g, "");
 
     if (!pin) {
@@ -188,7 +181,7 @@ export default function Register() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [form.postalCode, isClubTrack]);
+  }, [form.postalCode]);
 
   const entryPreview = useMemo(() => createPreviewEntries(form), [form]);
   const validEntries = entryPreview.filter((entry) => entry.valid);
@@ -233,6 +226,21 @@ export default function Register() {
       if (isClubTrack) {
         if (!form.clubName) nextErrors.clubName = "Required";
         if (!form.clubSlug) nextErrors.clubSlug = "Required";
+        if (!form.state) nextErrors.state = "Required";
+        if (!form.district) nextErrors.district = "Required";
+        if (!/^[1-9][0-9]{5}$/.test(form.postalCode)) {
+          nextErrors.postalCode = "Enter a valid 6-digit India PIN";
+        }
+        if (!pincodeResolution) {
+          nextErrors.postalCode = nextErrors.postalCode || "PIN autolocation is required";
+        }
+        if (pincodeResolution && (
+          pincodeResolution.pincode !== form.postalCode
+          || pincodeResolution.state.toLowerCase() !== String(form.state || "").toLowerCase()
+          || pincodeResolution.district.toLowerCase() !== String(form.district || "").toLowerCase()
+        )) {
+          nextErrors.postalCode = "State and district must match the resolved PIN";
+        }
       } else {
         if (!form.gender) nextErrors.gender = "Required";
         if (!form.dob) nextErrors.dob = "Required";
@@ -326,9 +334,18 @@ export default function Register() {
       const clubRes = await api.createClub({
         name: form.clubName,
         slug: form.clubSlug,
-        city: form.clubCity,
+        city: form.clubCity || form.district,
         country: "India",
-        metadata: { contactName: form.fullName, phone: form.phone },
+        metadata: {
+          contactName: form.fullName,
+          phone: form.phone,
+          address: {
+            country: "India",
+            state: form.state,
+            district: form.district,
+            postalCode: form.postalCode,
+          },
+        },
       });
       setLoading(false);
       if (clubRes.error) {
@@ -476,7 +493,50 @@ export default function Register() {
                     <>
                       <Field label="Club name" error={errors.clubName}><Input value={form.clubName} onChange={(e) => setField("clubName", e.target.value)} className="h-11 bg-surface" /></Field>
                       <Field label="Club slug" error={errors.clubSlug}><Input value={form.clubSlug} onChange={(e) => setField("clubSlug", e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))} className="h-11 bg-surface" /></Field>
-                      <Field label="City"><Input value={form.clubCity} onChange={(e) => setField("clubCity", e.target.value)} className="h-11 bg-surface" /></Field>
+                      <Field label="State" error={errors.state}>
+                        <Select value={form.state} onValueChange={setState} disabled={loadingStates || !stateOptions.length}>
+                          <SelectTrigger className="h-11 bg-surface">
+                            <SelectValue placeholder={loadingStates ? "Loading states..." : "Select state"} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {stateOptions.map((stateName) => (
+                              <SelectItem key={stateName} value={stateName}>{stateName}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </Field>
+                      <Field label="District" error={errors.district}>
+                        <Select value={form.district} onValueChange={setDistrict} disabled={loadingDistricts || !districtOptions.length}>
+                          <SelectTrigger className="h-11 bg-surface">
+                            <SelectValue placeholder={loadingDistricts ? "Loading districts..." : "Select district"} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {districtOptions.map((districtName) => (
+                              <SelectItem key={districtName} value={districtName}>{districtName}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </Field>
+                      <Field label="Postal code" error={errors.postalCode}>
+                        <Input
+                          value={form.postalCode}
+                          onChange={(e) => {
+                            const postalCode = e.target.value.replace(/\D/g, "").slice(0, 6);
+                            setField("postalCode", postalCode);
+                            setPincodeResolution(null);
+                            setPincodeHint(postalCode ? "Resolving PIN..." : "");
+                          }}
+                          className="h-11 bg-surface"
+                          inputMode="numeric"
+                          maxLength={6}
+                        />
+                        {pincodeHint ? (
+                          <p className={`text-[11px] mt-1 ${pincodeResolution ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}>
+                            {pincodeLookupBusy ? "Validating PIN..." : pincodeHint}
+                          </p>
+                        ) : null}
+                      </Field>
+                      <Field label="City (optional)"><Input value={form.clubCity} onChange={(e) => setField("clubCity", e.target.value)} className="h-11 bg-surface" /></Field>
                       <Field label="Country"><Input value="India" disabled className="h-11 bg-surface" /></Field>
                     </>
                   ) : (
@@ -652,7 +712,7 @@ export default function Register() {
                     ["Track", isClubTrack ? "Club onboarding" : "Individual application"],
                     ["Club", isClubTrack ? form.clubName || "-" : "Self-registration"],
                     ["Nationality", isClubTrack ? "-" : form.nationality || "-"],
-                    ["State / District", isClubTrack ? "-" : `${form.state || "-"} / ${form.district || "-"}`],
+                    ["State / District", `${form.state || "-"} / ${form.district || "-"}`],
                     ["Disciplines", isClubTrack ? "-" : (form.selectedDisciplines.map((disciplineId) => DISCIPLINE_DEFINITIONS.find((discipline) => discipline.id === disciplineId)?.label).join(", ") || "-")],
                     ["Documents", isClubTrack ? "Not required" : `${Object.values(documents).filter(Boolean).length}/3 uploaded`],
                   ].map(([label, value]) => (

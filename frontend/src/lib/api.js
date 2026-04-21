@@ -137,6 +137,7 @@ export const api = {
   updateClub: (id, body) => request("PATCH", `/api/clubs/${id}`, { body }),
   listClubParticipants: (clubId, query) => request("GET", `/api/clubs/${clubId}/participants`, { query }),
   createClubParticipant: (clubId, body) => request("POST", `/api/clubs/${clubId}/participants`, { body }),
+  createClubParticipantResetLink: (clubId, profileId) => request("POST", `/api/clubs/${clubId}/participants/${profileId}/reset-link`),
 
   createApplication: (body) => request("POST", "/api/applications", { body }),
   listApplications: (query) => request("GET", "/api/applications", { query }),
@@ -144,6 +145,7 @@ export const api = {
   updateApplication: (id, body) => request("PATCH", `/api/applications/${id}`, { body }),
   submitApplication: (id) => request("POST", `/api/applications/${id}/submit`),
   resubmitApplication: (id) => request("POST", `/api/applications/${id}/resubmit`),
+  requestApplicationCancel: (id, body) => request("POST", `/api/applications/${id}/cancel-request`, { body }),
   listApplicationDocuments: (id) => request("GET", `/api/applications/${id}/documents`),
   uploadApplicationDocument: (id, { file, kind, label, expiresOn }) => {
     const body = new FormData();

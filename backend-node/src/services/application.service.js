@@ -191,6 +191,48 @@ async function listForMe(user, query = {}) {
   return appsRepo.query({ ...query }).then((list) => list.filter((a) => a.profile_id === profile.id));
 }
 
+async function requestCancel(user, id, { reason }, ctx = {}) {
+  const app = await appsRepo.findById(id);
+  if (!app) throw ApiError.notFound();
+  await assertCanView(user, app);
+
+  if ([STATUS.APPROVED, STATUS.REJECTED].includes(app.status)) {
+    throw ApiError.badRequest('Cancellation request is only allowed before final decision');
+  }
+
+  const nextFormData = {
+    ...(app.form_data || {}),
+    cancelRequest: {
+      requestedBy: user.id,
+      requestedRole: user.role,
+      reason,
+      requestedAt: new Date().toISOString(),
+      status: 'pending',
+    },
+  };
+
+  const updated = await appsRepo.updateForm(id, nextFormData);
+  await seRepo.add({
+    applicationId: id,
+    fromStatus: app.status,
+    toStatus: app.status,
+    actorUserId: user.id,
+    actorRole: user.role,
+    reason: `Cancellation requested: ${reason}`,
+    metadata: { kind: 'cancel_request' },
+  });
+  await auditWrite({
+    actorUserId: user.id,
+    actorRole: user.role,
+    action: 'application.cancel_request',
+    entityType: 'application',
+    entityId: id,
+    payload: { reason },
+    requestIp: ctx.ip,
+  });
+  return updated;
+}
+
 // ---- Notifications -----------------------------------------------------------
 async function notifySubmission(app) {
   const full = await appsRepo.findFullById(app.id);
@@ -213,4 +255,4 @@ async function notifySubmission(app) {
   });
 }
 
-module.exports = { create, updateDraft, submit, uploadDocument, listDocuments, getById, listForMe, assertCanView, assertCanEdit };
+module.exports = { create, updateDraft, submit, uploadDocument, listDocuments, getById, listForMe, requestCancel, assertCanView, assertCanEdit };

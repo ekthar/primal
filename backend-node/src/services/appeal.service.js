@@ -6,9 +6,24 @@ const { write: auditWrite } = require('../audit');
 
 const DAY = 24 * 60 * 60 * 1000;
 
+async function assertCanAppeal(user, app) {
+  if (user.role === 'admin' || user.role === 'reviewer') return;
+  if (user.role === 'club') {
+    if (!app.club_id) throw ApiError.forbidden();
+    const { clubs: clubsRepo } = require('../repositories');
+    const club = await clubsRepo.findById(app.club_id);
+    if (!club || club.primary_user_id !== user.id) throw ApiError.forbidden();
+    return;
+  }
+  const { profiles: profilesRepo } = require('../repositories');
+  const profile = await profilesRepo.findById(app.profile_id);
+  if (!profile || profile.user_id !== user.id) throw ApiError.forbidden();
+}
+
 async function file(user, { applicationId, reason }, ctx = {}) {
   const app = await appsRepo.findById(applicationId);
   if (!app) throw ApiError.notFound();
+  await assertCanAppeal(user, app);
   if (![STATUS.REJECTED, STATUS.NEEDS_CORRECTION].includes(app.status)) {
     throw ApiError.badRequest('Only rejected or correction-required applications can be appealed');
   }

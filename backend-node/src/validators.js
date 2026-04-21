@@ -79,6 +79,38 @@ const schemas = {
         address: indiaAddressSchema,
       }).unknown(true).required(),
     }),
+    adminReweighList: Joi.object({
+      clubId: uuid,
+      q: Joi.string().max(200).allow(''),
+      limit: Joi.number().integer().min(1).max(500).default(200),
+      offset: Joi.number().integer().min(0).default(0),
+    }),
+    adminReweigh: Joi.object({
+      weightKg: Joi.number().positive().max(300).required(),
+    }),
+  },
+
+  tournament: {
+    adminList: Joi.object({
+      q: Joi.string().max(200).allow(''),
+      limit: Joi.number().integer().min(1).max(500).default(200),
+      offset: Joi.number().integer().min(0).default(0),
+    }),
+    adminUpdate: Joi.object({
+      registrationOpenAt: Joi.date().iso().allow(null),
+      registrationCloseAt: Joi.date().iso().allow(null),
+      correctionWindowHours: Joi.number().integer().min(1).max(720).allow(null),
+      startsOn: Joi.date().iso().allow(null),
+      endsOn: Joi.date().iso().allow(null),
+      isPublic: Joi.boolean(),
+    }).min(1).custom((value, helpers) => {
+      if (value.registrationOpenAt && value.registrationCloseAt) {
+        if (new Date(value.registrationOpenAt) > new Date(value.registrationCloseAt)) {
+          return helpers.error('any.invalid');
+        }
+      }
+      return value;
+    }, 'registration window validation'),
   },
 
   club: {
@@ -108,6 +140,7 @@ const schemas = {
       dateOfBirth: Joi.date().iso().less('now').allow(null),
       gender: Joi.string().max(30).allow(null, ''),
       discipline: Joi.string().max(60).allow(null, ''),
+      selectedDisciplines: Joi.array().items(Joi.string().max(120)).max(20).default([]),
       weightKg: Joi.number().positive().max(300).allow(null),
       weightClass: Joi.string().max(60).allow(null, ''),
       bio: Joi.string().max(2000).allow(null, ''),
@@ -130,6 +163,9 @@ const schemas = {
     }),
     bulk: Joi.object({
       ids: Joi.array().items(uuid).min(1).max(500).required(),
+    }),
+    cancelRequest: Joi.object({
+      reason: Joi.string().min(10).max(2000).required(),
     }),
   },
 
