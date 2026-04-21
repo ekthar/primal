@@ -1,0 +1,23 @@
+
+> frontend@0.1.0 dev
+> next dev
+
+   ▲ Next.js 15.5.15
+   - Local:        http://localhost:3000
+   - Network:      http://100.71.43.56:3000
+
+ ✓ Starting...
+ ✓ Ready in 3.7s
+ ○ Compiling /admin/weighin ...
+ ✓ Compiled /admin/weighin in 41.1s (598 modules)
+ GET /admin/weighin 200 in 6452ms
+ GET /admin/review 200 in 25402ms
+ GET /admin/review 200 in 1393ms
+ GET /admin/weighin 200 in 1407ms
+ GET /admin/weighin 200 in 366ms
+ GET /admin/weighin 200 in 276ms
+ ○ Compiling /admin/users ...
+ ✓ Compiled /admin/review in 1482ms (607 modules)
+ GET /admin/review 200 in 1732ms
+ ○ Compiling /admin/brackets ...
+ ✓ Compiled /admin/brackets in 913ms (622 modules)

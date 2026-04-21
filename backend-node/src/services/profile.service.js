@@ -90,7 +90,12 @@ async function adminReweigh(actor, profileId, { weightKg }, ctx = {}) {
     action: 'profile.reweigh',
     entityType: 'profile',
     entityId: profileId,
-    payload: { weightKg, weightClass },
+    payload: {
+      previousWeightKg: profile.weight_kg,
+      previousWeightClass: profile.weight_class,
+      weightKg,
+      weightClass,
+    },
     requestIp: ctx.ip,
   });
   return updated;

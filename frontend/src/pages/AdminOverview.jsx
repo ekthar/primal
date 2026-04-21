@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Layers3, ListChecks, TimerReset, RefreshCcw, Download } from "lucide-react";
+import { ArrowRight, Layers3, ListChecks, TimerReset, RefreshCcw, Download, Scale, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import api from "@/lib/api";
 import { toast } from "sonner";
@@ -60,6 +60,8 @@ export default function AdminOverview() {
         </div>
         <div className="flex gap-2">
           <Link href="/admin/queue"><Button variant="outline"><ListChecks className="size-4" /> Review queue</Button></Link>
+          <Link href="/admin/weighin"><Button variant="outline"><Scale className="size-4" /> Weigh-in updates</Button></Link>
+          <Link href="/admin/settings"><Button variant="outline"><SlidersHorizontal className="size-4" /> Tournament settings</Button></Link>
           <Button variant="outline" onClick={handleApprovedParticipantsExport}><Download className="size-4" /> Approved participants</Button>
           <Button variant="outline" onClick={loadOverview}><RefreshCcw className="size-4" /> Refresh</Button>
         </div>
@@ -136,6 +138,32 @@ export default function AdminOverview() {
             </p>
           </div>
         </section>
+      </div>
+
+      <div className="mt-6 grid md:grid-cols-2 gap-5">
+        <Link href="/admin/weighin" className="rounded-3xl border border-border bg-surface elev-card p-6 block hover:bg-surface-muted/40 transition-colors">
+          <div className="flex items-start gap-3">
+            <Scale className="size-5 text-primary shrink-0 mt-0.5" />
+            <div>
+              <h2 className="font-display text-2xl font-semibold tracking-tight">Participant weigh-in updates</h2>
+              <p className="text-sm text-secondary-muted mt-2">
+                Update match-day weight for all participants, club by club, and refresh weight class automatically for grouping.
+              </p>
+            </div>
+          </div>
+        </Link>
+
+        <Link href="/admin/settings" className="rounded-3xl border border-border bg-surface elev-card p-6 block hover:bg-surface-muted/40 transition-colors">
+          <div className="flex items-start gap-3">
+            <SlidersHorizontal className="size-5 text-primary shrink-0 mt-0.5" />
+            <div>
+              <h2 className="font-display text-2xl font-semibold tracking-tight">Tournament registration settings</h2>
+              <p className="text-sm text-secondary-muted mt-2">
+                Control registration open/close dates, correction window duration, and event visibility from one place.
+              </p>
+            </div>
+          </div>
+        </Link>
       </div>
 
       <div className="mt-6 rounded-3xl border border-border bg-surface elev-card p-6">

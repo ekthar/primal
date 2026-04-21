@@ -715,7 +715,9 @@ export default function ClubDashboard() {
                   <div className="text-xs text-tertiary mt-1">
                     {canEditApplication(activeApplication)
                       ? "Editing window is live"
-                      : "View mode: registration/correction window is closed"}
+                      : activeApplication.status === "draft"
+                        ? "View only: registration is closed for this tournament"
+                        : "View only: correction window is closed"}
                   </div>
                 </div>
                 <Button variant="ghost" onClick={() => setActiveApplication(null)}>Close</Button>

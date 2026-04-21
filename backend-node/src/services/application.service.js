@@ -14,6 +14,21 @@ const fs = require('fs');
 const HOUR = 60 * 60 * 1000;
 const REQUIRED_DOCUMENT_KINDS = ['medical', 'photo_id', 'consent'];
 
+function isTournamentRegistrationOpen(tournament) {
+  if (!tournament) return false;
+  const now = Date.now();
+  const openAt = tournament.registration_open_at ? new Date(tournament.registration_open_at).getTime() : null;
+  const closeAt = tournament.registration_close_at ? new Date(tournament.registration_close_at).getTime() : null;
+  if (!openAt || !closeAt) return true;
+  return now >= openAt && now <= closeAt;
+}
+
+function assertRegistrationWindowOpen(tournament, message = 'Registration window closed') {
+  if (!isTournamentRegistrationOpen(tournament)) {
+    throw ApiError.forbidden(message);
+  }
+}
+
 // ---- Authorization helpers ---------------------------------------------------
 async function assertCanView(user, app) {
   if (user.role === 'admin' || user.role === 'reviewer') return;
@@ -30,7 +45,11 @@ async function assertCanView(user, app) {
 
 async function assertCanEdit(user, app) {
   await assertCanView(user, app);
-  if (app.status === STATUS.DRAFT) return;
+  if (app.status === STATUS.DRAFT) {
+    const tournament = await tournamentsRepo.findById(app.tournament_id);
+    assertRegistrationWindowOpen(tournament);
+    return;
+  }
   if (app.status === STATUS.NEEDS_CORRECTION) {
     // Only within correction window.
     if (app.correction_due_at && new Date(app.correction_due_at).getTime() < Date.now()) {
@@ -45,6 +64,7 @@ async function assertCanEdit(user, app) {
 async function create(user, { tournamentId, profileId, formData }, ctx = {}) {
   const tournament = await tournamentsRepo.findById(tournamentId);
   if (!tournament) throw ApiError.badRequest('Unknown tournament', { field: 'tournamentId' });
+  assertRegistrationWindowOpen(tournament);
 
   let profile;
   if (user.role === 'applicant') {
@@ -90,6 +110,10 @@ async function submit(user, id, ctx = {}) {
   const app = await appsRepo.findById(id);
   if (!app) throw ApiError.notFound();
   await assertCanView(user, app);
+  if (app.status === STATUS.DRAFT) {
+    const tournament = await tournamentsRepo.findById(app.tournament_id);
+    assertRegistrationWindowOpen(tournament);
+  }
   assertTransition(app.status, STATUS.SUBMITTED, user.role);
   const documents = await documentsRepo.listForApplication(id);
   const missing = REQUIRED_DOCUMENT_KINDS.filter((kind) => !documents.some((doc) => doc.kind === kind));

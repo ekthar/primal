@@ -117,4 +117,17 @@ describe('validators', () => {
     });
     expect(error).toBeFalsy();
   });
+
+  it('rejects tournament settings with registration close before open', () => {
+    const { error } = schemas.tournament.adminUpdate.validate({
+      registrationOpenAt: '2026-05-10T10:00:00.000Z',
+      registrationCloseAt: '2026-05-09T10:00:00.000Z',
+    });
+    expect(error).toBeTruthy();
+  });
+
+  it('accepts admin reweigh payload', () => {
+    const { error } = schemas.profile.adminReweigh.validate({ weightKg: 63.4 });
+    expect(error).toBeFalsy();
+  });
 });

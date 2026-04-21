@@ -131,6 +131,8 @@ export const api = {
 
   getMyProfile: () => request("GET", "/api/profiles/me"),
   upsertMyProfile: (body) => request("PUT", "/api/profiles/me", { body }),
+  adminReweighList: (query) => request("GET", "/api/profiles/admin/reweigh/list", { query }),
+  adminReweigh: (id, body) => request("PATCH", `/api/profiles/admin/reweigh/${id}`, { body }),
 
   createClub: (body) => request("POST", "/api/clubs", { body }),
   listClubs: (query) => request("GET", "/api/clubs", { query }),
@@ -202,6 +204,9 @@ export const api = {
   publicIndiaStates: () => request("GET", "/api/public/india/states"),
   publicIndiaDistricts: (state) => request("GET", "/api/public/india/districts", { query: { state } }),
   publicIndiaPincodeLookup: (pincode) => request("GET", `/api/public/india/pincode/${encodeURIComponent(pincode)}`),
+
+  adminTournaments: (query) => request("GET", "/api/tournaments", { query }),
+  updateTournament: (id, body) => request("PATCH", `/api/tournaments/${id}`, { body }),
 
   listCirculars: (query) => request("GET", "/api/circulars", { query }),
   createCircular: (body) => request("POST", "/api/circulars", { body }),
