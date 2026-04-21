@@ -1,18 +1,19 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/AuthContext";
 import ThemeToggle from "@/components/shared/ThemeToggle";
+import { InlineLoadingLabel } from "@/components/shared/PrimalLoader";
 import { toast } from "sonner";
 import { HERO_IMAGE } from "@/lib/mockData";
 
 const ROLES = [
-  { id: "admin", label: "Admin", sub: "Federation reviewer lead", email: "mei@tournamentos.io" },
-  { id: "reviewer", label: "Reviewer", sub: "Evaluates applicants", email: "luca@tournamentos.io" },
+  { id: "admin", label: "Admin", sub: "Operations lead", email: "mei@primalfight.io" },
+  { id: "reviewer", label: "Reviewer", sub: "Evaluates applicants", email: "luca@primalfight.io" },
   { id: "club", label: "Club", sub: "Gym/team coordinator", email: "ops@sakuragym.jp" },
   { id: "applicant", label: "Fighter", sub: "Individual applicant", email: "diego.ruiz@mail.com" },
 ];
@@ -21,7 +22,7 @@ export default function Login() {
   const { login } = useAuth();
   const router = useRouter();
   const [role, setRole] = useState("admin");
-  const [email, setEmail] = useState("mei@tournamentos.io");
+  const [email, setEmail] = useState("mei@primalfight.io");
   const [password, setPassword] = useState("demo1234");
   const [loading, setLoading] = useState(false);
 
@@ -52,8 +53,8 @@ export default function Login() {
       <div className="flex-1 flex flex-col">
         <div className="flex items-center justify-between px-6 sm:px-10 py-5">
           <Link href="/" className="flex items-center gap-2" data-testid="back-home">
-            <div className="size-8 rounded-lg bg-foreground text-background flex items-center justify-center font-display font-bold text-sm">T</div>
-            <span className="font-display font-semibold tracking-tight">TournamentOS</span>
+            <div className="size-8 rounded-lg bg-foreground text-background flex items-center justify-center font-display font-bold text-sm">P</div>
+            <span className="font-display font-semibold tracking-tight">Primal</span>
           </Link>
           <ThemeToggle compact />
         </div>
@@ -62,7 +63,9 @@ export default function Login() {
           <div className="w-full max-w-md">
             <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">Sign in</div>
             <h1 className="font-display mt-2 text-3xl sm:text-4xl font-semibold tracking-tight">Welcome back.</h1>
-            <p className="mt-2 text-sm text-secondary-muted">Seeded backend users are prefilled here so you can access the live workflow immediately.</p>
+            <p className="mt-2 text-sm text-secondary-muted">
+              Primal demo users are prefilled here so you can access the live workflow immediately.
+            </p>
 
             <div className="grid grid-cols-2 gap-2 mt-7">
               {ROLES.map((item) => (
@@ -92,7 +95,7 @@ export default function Login() {
                   onChange={(event) => setEmail(event.target.value)}
                   data-testid="login-email"
                   className="mt-1.5 h-11 bg-surface"
-                  placeholder="you@federation.org"
+                  placeholder="you@primalfight.io"
                 />
               </div>
               <div>
@@ -117,12 +120,16 @@ export default function Login() {
                 data-testid="login-submit"
                 className="w-full h-11 bg-primary hover:bg-primary-hover text-primary-foreground font-medium"
               >
-                {loading ? <Loader2 className="size-4 animate-spin" /> : <>Sign in <ArrowRight className="size-4 ml-1" /></>}
+                <InlineLoadingLabel loading={loading} loadingText="Signing in...">
+                  <>
+                    Sign in <ArrowRight className="size-4 ml-1" />
+                  </>
+                </InlineLoadingLabel>
               </Button>
             </form>
 
             <p className="mt-6 text-xs text-tertiary text-center">
-              Seed password: demo1234 · <Link href="/register" className="text-foreground hover:underline">Register instead</Link>
+              Seed password: demo1234 - <Link href="/register" className="text-foreground hover:underline">Register instead</Link>
             </p>
           </div>
         </div>

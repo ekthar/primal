@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Download, Timer, AlertTriangle, Users, Gauge, RefreshCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { InlineLoadingLabel, SectionLoader } from "@/components/shared/PrimalLoader";
 import api from "@/lib/api";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
@@ -180,7 +181,14 @@ export default function Reports() {
       </div>
 
       {loading ? (
-        <div className="mt-8 text-sm text-secondary-muted">Loading live report data...</div>
+        <div className="mt-8">
+          <SectionLoader
+            title="Loading live reports"
+            description="Assembling SLA, reviewer throughput, and participant reporting data."
+            cards={3}
+            rows={5}
+          />
+        </div>
       ) : (
         <>
           <div className="mt-6 grid sm:grid-cols-2 xl:grid-cols-5 gap-3">
@@ -239,7 +247,11 @@ export default function Reports() {
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <Button variant="outline" size="sm" disabled={downloadingAllPdfs || loadingParticipants} onClick={handleDownloadAllParticipantPdfs}>
-                    <Download className="size-4" /> {downloadingAllPdfs ? "Downloading PDFs..." : "Print/download all participant PDFs"}
+                    <InlineLoadingLabel loading={downloadingAllPdfs} loadingText="Downloading PDFs...">
+                      <>
+                        <Download className="size-4" /> Print/download all participant PDFs
+                      </>
+                    </InlineLoadingLabel>
                   </Button>
                   <Button variant="outline" size="sm" onClick={loadParticipantReport}>
                     <RefreshCcw className="size-4" /> Refresh participant report
@@ -263,7 +275,15 @@ export default function Reports() {
               </div>
 
               {loadingParticipants ? (
-                <div className="mt-5 text-sm text-secondary-muted">Loading approved participant report...</div>
+                <div className="mt-5">
+                  <SectionLoader
+                    title="Loading participant report"
+                    description="Splitting approved fighters into club and independent participant lists."
+                    cards={2}
+                    rows={4}
+                    compact
+                  />
+                </div>
               ) : (
                 <div className="mt-5 grid xl:grid-cols-2 gap-5">
                   <ParticipantTable

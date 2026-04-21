@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/context/AuthContext";
+import { InlineLoadingLabel, SectionLoader } from "@/components/shared/PrimalLoader";
 import api from "@/lib/api";
 import { toast } from "sonner";
 
@@ -264,7 +265,15 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
             </div>
 
             {loadingTournaments ? (
-              <div className="mt-5 text-sm text-secondary-muted">Loading tournament settings...</div>
+              <div className="mt-5">
+                <SectionLoader
+                  title="Loading tournament windows"
+                  description="Pulling registration, correction, and visibility settings for every event."
+                  cards={2}
+                  rows={3}
+                  compact
+                />
+              </div>
             ) : (
               <div className="mt-5 space-y-4">
                 {tournaments.map((tournament) => {
@@ -283,7 +292,11 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
                           </div>
                         </div>
                         <Button onClick={() => saveTournament(tournament.id)} disabled={savingTournamentId === tournament.id}>
-                          <Save className="size-4" /> {savingTournamentId === tournament.id ? "Saving..." : "Save"}
+                          <InlineLoadingLabel loading={savingTournamentId === tournament.id} loadingText="Saving...">
+                            <>
+                              <Save className="size-4" /> Save
+                            </>
+                          </InlineLoadingLabel>
                         </Button>
                       </div>
 
@@ -414,7 +427,15 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
             </div>
 
             {loadingClubs || loadingReweigh ? (
-              <div className="mt-5 text-sm text-secondary-muted">Loading weigh-in list...</div>
+              <div className="mt-5">
+                <SectionLoader
+                  title="Loading weigh-in board"
+                  description="Building the club-by-club participant list and current weight classes."
+                  cards={2}
+                  rows={5}
+                  compact
+                />
+              </div>
             ) : (
               <div className="mt-5 space-y-4">
                 {participantsByClub.map(([clubName, rows]) => (
@@ -457,7 +478,11 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
                                 <td className="px-4 py-3 text-sm">{draftWeight ? deriveWeightClass(participant.gender, draftWeight) : "-"}</td>
                                 <td className="px-4 py-3 text-right">
                                   <Button size="sm" onClick={() => saveReweigh(participant.id)} disabled={savingProfileId === participant.id}>
-                                    <Save className="size-3.5" /> {savingProfileId === participant.id ? "Saving..." : "Save"}
+                                    <InlineLoadingLabel loading={savingProfileId === participant.id} loadingText="Saving...">
+                                      <>
+                                        <Save className="size-3.5" /> Save
+                                      </>
+                                    </InlineLoadingLabel>
                                   </Button>
                                 </td>
                               </tr>

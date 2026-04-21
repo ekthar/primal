@@ -431,8 +431,8 @@ export default function Register() {
       <div className="sticky top-0 z-30 border-b border-border bg-background/70 backdrop-blur-xl">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <div className="size-7 rounded-lg bg-foreground text-background flex items-center justify-center font-display font-bold text-xs">T</div>
-            <span className="font-display font-semibold tracking-tight text-sm">TournamentOS</span>
+            <div className="size-7 rounded-lg bg-foreground text-background flex items-center justify-center font-display font-bold text-xs">P</div>
+            <span className="font-display font-semibold tracking-tight text-sm">Primal</span>
           </Link>
           <ThemeToggle compact />
         </div>

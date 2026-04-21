@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import StatusPill from "@/components/shared/StatusPill";
 import EmptyState from "@/components/shared/EmptyState";
+import { SectionLoader } from "@/components/shared/PrimalLoader";
 import api from "@/lib/api";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
@@ -180,7 +181,17 @@ export default function ReviewerWorkbench() {
           </div>
         </div>
         <div className="flex-1 overflow-y-auto">
-          {loadingQueue && <div className="px-4 py-3 text-sm text-secondary-muted">Loading queue...</div>}
+          {loadingQueue && (
+            <div className="p-4">
+              <SectionLoader
+                title="Loading review queue"
+                description="Fetching the next applications that need a reviewer decision."
+                cards={1}
+                rows={4}
+                compact
+              />
+            </div>
+          )}
           {queue.map((entry) => (
             <button
               key={entry.id}
@@ -207,7 +218,15 @@ export default function ReviewerWorkbench() {
 
       <section className="flex-1 overflow-y-auto">
         {!activeApplication || loadingApplication ? (
-          <div className="p-10 text-sm text-secondary-muted">Loading application details...</div>
+          <div className="p-6">
+            <SectionLoader
+              title="Loading application details"
+              description="Pulling the latest fighter profile, documents, and audit timeline."
+              cards={2}
+              rows={4}
+              compact
+            />
+          </div>
         ) : (
           <>
         <header className="sticky top-0 z-10 border-b border-border bg-background/85 backdrop-blur-xl">

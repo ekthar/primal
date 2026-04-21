@@ -1,45 +1,37 @@
-# TournamentOS Frontend (Next.js)
+# Primal Frontend
 
-This frontend is a Next.js app using the Pages Router and Tailwind-based UI components.
+This frontend is a Next.js Pages Router app for the Primal fight-operations platform.
 
 ## Requirements
 
 - Node.js 20+
-- npm or yarn
+- npm
 
 ## Environment
 
-Set backend URL with one of these variables:
-
-- `NEXT_PUBLIC_BACKEND_URL` (preferred)
-- `REACT_APP_BACKEND_URL` (legacy fallback)
-
-Example:
+Primary environment variable:
 
 ```bash
 NEXT_PUBLIC_BACKEND_URL=http://localhost:4000
 ```
 
-If unset, frontend `/api/*` and `/uploads/*` requests are proxied to `http://localhost:4000` via Next rewrites in dev/build runtime.
-
-## Install
+Legacy fallback:
 
 ```bash
-cd frontend
-npm install
+REACT_APP_BACKEND_URL=http://localhost:4000
 ```
 
-## Run Development Server
+If neither is set, frontend `/api/*` and `/uploads/*` requests are proxied to `http://localhost:4000` through Next rewrites.
+
+Copy the example file if you want a local template:
 
 ```bash
-npm run dev
+cp .env.example .env.local
 ```
 
-Open http://localhost:3000.
+## Local development
 
-## Admin-First Local Setup
-
-Start backend first so auth/public endpoints are available:
+Start the backend first:
 
 ```bash
 cd ../backend-node
@@ -49,22 +41,43 @@ npm run seed
 npm run dev
 ```
 
-Then start frontend (`cd ../frontend; npm run dev`) and sign in with the seeded admin account:
+Then start the frontend:
 
-- Email: `mei@tournamentos.io`
-- Password: `demo1234`
+```bash
+cd ../frontend
+npm install
+npm run dev
+```
 
-After admin login, you can continue with tournament and participant workflows.
+Open [http://localhost:3000](http://localhost:3000).
 
-## Build for Production
+Seeded demo sign-in:
+
+- `mei@primalfight.io`
+- `luca@primalfight.io`
+- password: `demo1234`
+
+## Production build
 
 ```bash
 npm run build
 npm run start
 ```
 
+## Netlify deployment
+
+This repo includes [netlify.toml](/C:/Users/EKTHAR/.codex/worktrees/14cc/primal/netlify.toml) configured for the frontend.
+
+Recommended Netlify settings:
+
+- Base directory: `frontend`
+- Build command: `npm run build`
+- Environment variable: `NEXT_PUBLIC_BACKEND_URL=https://your-render-service.onrender.com`
+
+If your workspace root also contains a lockfile from another project tree, prefer building from `frontend/` directly to avoid lockfile ambiguity warnings.
+
 ## Notes
 
-- Role dashboards are under `/applicant`, `/club`, and `/admin/*`.
-- Authentication tokens are stored in local storage by the frontend API client.
-- Most pages now consume live backend APIs; make sure the backend is running and seeded.
+- User-facing branding is `Primal`.
+- The landing page uses a WebGL cage-energy hero with reduced-motion fallback.
+- Shared loaders are used across auth bootstrap, route transitions, admin settings, and the review queue.

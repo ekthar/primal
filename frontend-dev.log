@@ -21,3 +21,58 @@
  GET /admin/review 200 in 1732ms
  ○ Compiling /admin/brackets ...
  ✓ Compiled /admin/brackets in 913ms (622 modules)
+ ○ Compiling /admin/review ...
+ GET /admin/review 500 in 10645ms
+ ✓ Compiled /admin/review in 3s (613 modules)
+ GET /admin/review 200 in 1138ms
+ ✓ Compiled in 1508ms (618 modules)
+ ○ Compiling /admin/review ...
+ GET /admin/review 500 in 2963ms
+ ✓ Compiled /login in 3.5s (792 modules)
+ GET /admin/review 200 in 1483ms
+ ○ Compiling /admin/overview ...
+ ✓ Compiled /admin/review in 2.7s (624 modules)
+ ✓ Compiled /_error in 440ms (786 modules)
+ GET /admin/review 500 in 2286ms
+ ○ Compiling / ...
+ ✓ Compiled / in 3.9s (1199 modules)
+ ✓ Compiled in 2.1s (988 modules)
+   ▲ Next.js 15.5.15
+   - Local:        http://localhost:3000
+   - Network:      http://100.71.43.56:3000
+
+ ✓ Starting...
+ ✓ Ready in 3s
+ ○ Compiling / ...
+ ✓ Compiled / in 5.8s (963 modules)
+ GET / 200 in 3153ms
+ ✓ Compiled in 782ms (963 modules)
+ GET / 200 in 2110ms
+ GET / 200 in 245ms
+ ✓ Compiled in 4.3s (763 modules)
+ ✓ Compiled in 878ms (763 modules)
+ ✓ Compiled in 913ms (763 modules)
+ ✓ Compiled in 519ms (188 modules)
+ ○ Compiling / ...
+ ✓ Compiled / in 636ms (965 modules)
+ GET / 200 in 1904ms
+ ○ Compiling /_error ...
+ ✓ Compiled /_error in 1408ms (1129 modules)
+ GET /favicon.svg 404 in 2544ms
+ ○ Compiling / ...
+ ✓ Compiled / in 2.3s (965 modules)
+ GET / 200 in 1987ms
+ ✓ Compiled in 1967ms (972 modules)
+ ✓ Compiled in 644ms (767 modules)
+ ✓ Compiled in 3.5s (977 modules)
+ ✓ Compiled in 581ms (770 modules)
+ ✓ Compiled in 703ms (770 modules)
+ ✓ Compiled in 602ms (770 modules)
+ ✓ Compiled in 1034ms (977 modules)
+ ✓ Compiled in 763ms (770 modules)
+ ✓ Compiled in 909ms (770 modules)
+ ✓ Compiled in 525ms (770 modules)
+ ✓ Compiled in 671ms (770 modules)
+ ✓ Compiled in 935ms (770 modules)
+ ✓ Compiled in 524ms (770 modules)
+ ✓ Compiled in 1981ms (977 modules)

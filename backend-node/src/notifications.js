@@ -19,27 +19,27 @@ function twilio() {
   return _twilio;
 }
 
-// --- Templates (minimal — copy can be externalised to a CMS later) ---
+// --- Templates (minimal - copy can be externalised to a CMS later) ---
 const TEMPLATES = {
   'application.submitted': {
-    subject: (p) => `Application received — ${p.applicantName}`,
-    text: (p) => `Hi ${p.applicantName},\n\nWe received your application for ${p.tournamentName}. We'll review it within ${p.slaHours}h.\n\n— TournamentOS`,
+    subject: (p) => `Application received - ${p.applicantName}`,
+    text: (p) => `Hi ${p.applicantName},\n\nWe received your application for ${p.tournamentName}. We'll review it within ${p.slaHours}h.\n\n- Primal`,
   },
   'application.needs_correction': {
-    subject: (p) => `Action needed on your application`,
-    text: (p) => `Hi ${p.applicantName},\n\nThe reviewer has requested a correction:\n\n${p.reason}\n\nPlease update the flagged fields and resubmit before ${p.dueAt}.\n\n— TournamentOS`,
+    subject: () => 'Action needed on your application',
+    text: (p) => `Hi ${p.applicantName},\n\nThe reviewer has requested a correction:\n\n${p.reason}\n\nPlease update the flagged fields and resubmit before ${p.dueAt}.\n\n- Primal`,
   },
   'application.approved': {
-    subject: () => `You're in. Approved for weigh-in.`,
-    text: (p) => `Congratulations ${p.applicantName} — your application for ${p.tournamentName} is approved. See you at weigh-in.\n\n— TournamentOS`,
+    subject: () => "You're in. Approved for weigh-in.",
+    text: (p) => `Congratulations ${p.applicantName} - your application for ${p.tournamentName} is approved. See you at weigh-in.\n\n- Primal`,
   },
   'application.rejected': {
-    subject: () => `Application decision`,
-    text: (p) => `Hi ${p.applicantName},\n\nUnfortunately your application for ${p.tournamentName} was not approved. Reason: ${p.reason}\n\nYou can file an appeal within ${p.appealWindowDays} days.\n\n— TournamentOS`,
+    subject: () => 'Application decision',
+    text: (p) => `Hi ${p.applicantName},\n\nUnfortunately your application for ${p.tournamentName} was not approved. Reason: ${p.reason}\n\nYou can file an appeal within ${p.appealWindowDays} days.\n\n- Primal`,
   },
   'auth.password_reset': {
     subject: () => 'Reset your password',
-    text: (p) => `Hi ${p.name || 'there'},\n\nUse the link below to reset your password:\n${p.resetUrl}\n\nIf you did not request this, you can ignore this message.\n\n— TournamentOS`,
+    text: (p) => `Hi ${p.name || 'there'},\n\nUse the link below to reset your password:\n${p.resetUrl}\n\nIf you did not request this, you can ignore this message.\n\n- Primal`,
   },
 };
 
@@ -97,7 +97,7 @@ async function sendWhatsapp({ to, template, payload }) {
 }
 
 async function sendPush() {
-  // Stub — FCM/APNs wiring left for follow-up.
+  // Stub - FCM/APNs wiring left for follow-up.
   return { status: 'skipped', error: 'push-not-configured' };
 }
 
@@ -127,7 +127,7 @@ async function dispatch({ userId, applicationId, channels = ['email'], to, templ
     }
     const result = await sender({ to: target, template, payload });
     await record({ userId, applicationId, channel, template, payload, ...result });
-    if (result.status === 'sent') break; // stop at first successful delivery per priority
+    if (result.status === 'sent') break;
   }
 }
 

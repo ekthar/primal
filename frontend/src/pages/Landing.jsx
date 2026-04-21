@@ -22,6 +22,7 @@ import {
 } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import ThemeToggle from "@/components/shared/ThemeToggle";
+import CageEnergyCanvas from "@/components/landing/CageEnergyCanvas";
 import { HERO_IMAGE, TEXTURE_IMAGE } from "@/lib/mockData";
 import { api } from "@/lib/api";
 import frame001 from "@/assets/veo-frames/001.png";
@@ -213,6 +214,7 @@ function Hero() {
         style={{ y: reduced ? 0 : imgY, scale: reduced ? 1 : imgScale, backgroundImage: `url(${frame080Src})` }}
         className="absolute inset-0 -z-30 bg-cover bg-center opacity-[0.55] dark:opacity-[0.28]"
       />
+      <CageEnergyCanvas />
       <div
         className="absolute inset-0 -z-20 opacity-[0.08] dark:opacity-[0.12] pointer-events-none"
         style={{ backgroundImage: `url(${TEXTURE_IMAGE})`, backgroundSize: "cover", backgroundPosition: "center" }}
@@ -229,7 +231,7 @@ function Hero() {
             <Reveal>
               <div className="inline-flex items-center gap-2 rounded-full border border-border bg-surface/70 backdrop-blur px-3 py-1 text-xs font-medium">
                 <span className="size-1.5 rounded-full bg-primary animate-pulse" />
-                <span>2026 season — registrations open</span>
+                <span>2026 season - registrations open</span>
               </div>
             </Reveal>
 
@@ -247,7 +249,7 @@ function Hero() {
 
             <Reveal delay={0.25}>
               <p className="mt-8 max-w-2xl text-base sm:text-xl text-secondary-muted leading-relaxed text-pretty">
-                One home for MMA and martial arts events — teams, fighters, brackets, and approvals.
+                One home for MMA and martial arts events - teams, fighters, brackets, weigh-ins, and approvals.
                 Fast onboarding for gyms, clean registration for athletes, and a public-ready tournament feed.
               </p>
             </Reveal>
@@ -394,7 +396,7 @@ function Announcements() {
             </div>
             <div className="inline-flex items-center gap-2 rounded-full border border-border bg-surface/70 backdrop-blur px-3 py-1 text-xs font-medium">
               <span className={`size-1.5 rounded-full ${status === "live" ? "bg-emerald-500" : "bg-primary"} ${status === "loading" ? "animate-pulse" : ""}`} />
-              <span>{status === "live" ? "Live from admin desk" : status === "loading" ? "Loading…" : "Demo data (API offline)"}</span>
+              <span>{status === "live" ? "Live from admin desk" : status === "loading" ? "Loading..." : "Demo data (API offline)"}</span>
             </div>
           </div>
         </Reveal>
@@ -675,7 +677,7 @@ function AdminShowcase() {
               <span className="size-2.5 rounded-full bg-red-400" />
               <span className="size-2.5 rounded-full bg-amber-400" />
               <span className="size-2.5 rounded-full bg-emerald-400" />
-              <span className="ml-3 text-[11px] font-mono text-tertiary">tournamentos / queue</span>
+              <span className="ml-3 text-[11px] font-mono text-tertiary">primal / queue</span>
             </div>
             <div className="p-4 space-y-2">
               {[
@@ -814,10 +816,10 @@ function Footer() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 grid sm:grid-cols-3 gap-8 text-sm text-tertiary">
         <div>
           <div className="flex items-center gap-2">
-            <div className="size-7 rounded-lg bg-foreground text-background flex items-center justify-center font-display font-bold text-xs">T</div>
-            <span className="font-display font-semibold tracking-tight text-foreground">TournamentOS</span>
+            <div className="size-7 rounded-lg bg-foreground text-background flex items-center justify-center font-display font-bold text-xs">P</div>
+            <span className="font-display font-semibold tracking-tight text-foreground">Primal</span>
           </div>
-          <p className="mt-3 leading-relaxed">Built for sanctioning bodies, federations, and promoters.</p>
+          <p className="mt-3 leading-relaxed">Built for sanctioning bodies, gyms, federations, and promoters.</p>
         </div>
         <div className="flex flex-col gap-2">
           <div className="font-semibold text-foreground text-xs uppercase tracking-wider">Product</div>
@@ -833,7 +835,7 @@ function Footer() {
         </div>
       </div>
       <div className="mt-10 text-center text-[11px] text-tertiary flex items-center justify-center gap-2">
-        <MonitorSmartphone className="size-3.5" /> Web now · Mobile on the way
+        <MonitorSmartphone className="size-3.5" /> Web now - Mobile on the way
       </div>
     </footer>
   );
@@ -848,13 +850,13 @@ export default function Landing() {
       <Hero />
       <Announcements />
       <Marquee items={[
-        "Primal · Fight Series",
-        "Registration · Open",
-        "Gym onboarding · Fast",
-        "Medical checks · Streamlined",
-        "Brackets · Live",
-        "Teams · Verified",
-        "Athletes · Ready",
+        "Primal - Fight Series",
+        "Registration - Open",
+        "Gym onboarding - Fast",
+        "Medical checks - Streamlined",
+        "Brackets - Live",
+        "Teams - Verified",
+        "Athletes - Ready",
       ]} />
       <Paths />
       <WorkflowScrollytell />

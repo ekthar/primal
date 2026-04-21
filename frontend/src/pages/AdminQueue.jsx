@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import EmptyState from "@/components/shared/EmptyState";
+import { SectionLoader } from "@/components/shared/PrimalLoader";
 import StatusPill from "@/components/shared/StatusPill";
 import api from "@/lib/api";
 import { toast } from "sonner";
@@ -135,7 +136,7 @@ export default function AdminQueue() {
             <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">Admin queue</div>
             <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight mt-1">Discipline-by-discipline review</h1>
             <p className="text-sm text-secondary-muted mt-1">
-              {items.length} queued application{items.length === 1 ? "" : "s"} · live from review API
+              {items.length} queued application{items.length === 1 ? "" : "s"} - live from review API
             </p>
           </div>
           <Button
@@ -181,7 +182,14 @@ export default function AdminQueue() {
 
       <div className="flex-1 overflow-auto">
         {loading ? (
-          <div className="p-10 text-sm text-secondary-muted">Loading queue...</div>
+          <div className="p-6">
+            <SectionLoader
+              title="Loading review queue"
+              description="Pulling the latest fighters, filters, and queue counts from the live review API."
+              cards={3}
+              rows={6}
+            />
+          </div>
         ) : items.length === 0 ? (
           <div className="p-10">
             <EmptyState icon={Search} title="No entries match these filters" description="Clear the search or switch the discipline and status filters." />

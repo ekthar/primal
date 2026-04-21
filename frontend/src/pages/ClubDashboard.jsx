@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import StatusPill from "@/components/shared/StatusPill";
 import EmptyState from "@/components/shared/EmptyState";
+import { SectionLoader } from "@/components/shared/PrimalLoader";
 import { DISCIPLINE_DEFINITIONS, GENDER_OPTIONS } from "@/lib/tournamentWorkflow";
 import api from "@/lib/api";
 import { toast } from "sonner";
@@ -772,7 +773,13 @@ export default function ClubDashboard() {
             </Button>
           </div>
           {loadingParticipants ? (
-            <div className="text-sm text-secondary-muted">Loading participants...</div>
+            <SectionLoader
+              title="Loading participants"
+              description="Pulling your club roster, registrations, and application links."
+              cards={2}
+              rows={4}
+              compact
+            />
           ) : participants.length === 0 ? (
             <EmptyState icon={Plus} title="No participants yet" description="Use the onboarding form to add participants under this club." />
           ) : (

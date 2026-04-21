@@ -19,6 +19,27 @@ export const BRACKET_STATUS_LABELS = {
   completed: "Completed",
 };
 
+export const GENERATION_PRESETS = [
+  {
+    id: "fair_draw",
+    label: "Fair Draw",
+    shortLabel: "Fair",
+    description: "Avoid same-club round-one collisions first, then keep seed spread reasonable.",
+  },
+  {
+    id: "seeded_championship",
+    label: "Seeded Championship",
+    shortLabel: "Seeded",
+    description: "Protect top seeds and still try to prevent same-club first-round fights.",
+  },
+  {
+    id: "open_draw",
+    label: "Open Draw",
+    shortLabel: "Open",
+    description: "Looser bracket style with light conflict control when a faster draw is acceptable.",
+  },
+];
+
 export const EXPERIENCE_LEVELS = [
   { id: "novice", label: "Novice", rank: 1 },
   { id: "intermediate", label: "Intermediate", rank: 2 },
@@ -31,13 +52,13 @@ export const GENDER_OPTIONS = [
 ];
 
 export const DISCIPLINE_DEFINITIONS = [
-  { id: "kickboxing", label: "Kickboxing", shortLabel: "KB", minAge: 14 },
-  { id: "full-contact", label: "Full Contact", shortLabel: "FC", minAge: 14 },
-  { id: "mma", label: "MMA", shortLabel: "MMA", minAge: 18 },
-  { id: "boxing", label: "Boxing", shortLabel: "BOX", minAge: 14 },
-  { id: "low-kick", label: "Low Kick", shortLabel: "LK", minAge: 14 },
-  { id: "light-contact", label: "Light Contact", shortLabel: "LC", minAge: 12 },
-  { id: "k1", label: "K1", shortLabel: "K1", minAge: 16 },
+  { id: "kickboxing", label: "Kickboxing", shortLabel: "KB", minAge: 14, ruleset: "Striking" },
+  { id: "full-contact", label: "Full Contact", shortLabel: "FC", minAge: 14, ruleset: "Full Contact" },
+  { id: "mma", label: "MMA", shortLabel: "MMA", minAge: 18, ruleset: "Mixed Martial Arts" },
+  { id: "boxing", label: "Boxing", shortLabel: "BOX", minAge: 14, ruleset: "Boxing" },
+  { id: "low-kick", label: "Low Kick", shortLabel: "LK", minAge: 14, ruleset: "Low Kick" },
+  { id: "light-contact", label: "Light Contact", shortLabel: "LC", minAge: 12, ruleset: "Light Contact" },
+  { id: "k1", label: "K1", shortLabel: "K1", minAge: 16, ruleset: "K1" },
 ];
 
 export const AGE_GROUPS = [
@@ -385,8 +406,8 @@ function calculateAge(dob, onDate = TOURNAMENT_DATE) {
   const birth = new Date(dob);
   const event = new Date(onDate);
   let age = event.getFullYear() - birth.getFullYear();
-  const m = event.getMonth() - birth.getMonth();
-  if (m < 0 || (m === 0 && event.getDate() < birth.getDate())) age -= 1;
+  const monthDelta = event.getMonth() - birth.getMonth();
+  if (monthDelta < 0 || (monthDelta === 0 && event.getDate() < birth.getDate())) age -= 1;
   return age;
 }
 
@@ -419,15 +440,9 @@ function getEntryIssues(participant, discipline, age) {
   if (age < discipline.minAge) {
     issues.push(`${discipline.label} requires fighters to be at least ${discipline.minAge}.`);
   }
-  if (participant.documentsStatus !== "complete") {
-    issues.push("Missing or incomplete documents.");
-  }
-  if (participant.waiverStatus !== "signed") {
-    issues.push("Waiver not signed.");
-  }
-  if (participant.paymentStatus !== "paid") {
-    issues.push("Payment still pending.");
-  }
+  if (participant.documentsStatus !== "complete") issues.push("Missing or incomplete documents.");
+  if (participant.waiverStatus !== "signed") issues.push("Waiver not signed.");
+  if (participant.paymentStatus !== "paid") issues.push("Payment still pending.");
   return issues;
 }
 
@@ -507,6 +522,7 @@ function buildTournamentEntries(participants) {
         participantId: participant.id,
         disciplineId,
         disciplineLabel: discipline.label,
+        rulesetLabel: discipline.ruleset,
         participantName: participant.fullName,
         club: participant.club,
         nationality: participant.nationality,
@@ -533,6 +549,12 @@ function buildTournamentEntries(participants) {
         submittedAt: `2026-04-${String(4 + index).padStart(2, "0")}T09:30:00Z`,
         updatedAt: `2026-04-${String(12 + index).padStart(2, "0")}T12:00:00Z`,
         seedScore: participant.seedScore - index,
+        readinessFlags: {
+          medicalClear: participant.documentsStatus === "complete",
+          waiverSigned: participant.waiverStatus === "signed",
+          feePaid: participant.paymentStatus === "paid",
+          weighInComplete: participant.overallApprovalStatus !== "pending",
+        },
       };
     });
   });
@@ -551,6 +573,7 @@ function buildCategoryReport(entries) {
         id: fallbackCategoryId,
         disciplineId: entry.disciplineId,
         disciplineLabel: entry.disciplineLabel,
+        rulesetLabel: entry.rulesetLabel,
         label: fallbackLabel,
         ageGroupLabel: entry.ageGroupLabel,
         genderLabel: titleCase(entry.gender),
@@ -562,6 +585,7 @@ function buildCategoryReport(entries) {
         pendingCount: 0,
         rejectedCount: 0,
         invalidCount: 0,
+        uniqueClubs: new Set(),
       });
     }
 
@@ -572,11 +596,14 @@ function buildCategoryReport(entries) {
     category.pendingCount += entry.reviewStatus === ENTRY_STATUS.PENDING ? 1 : 0;
     category.rejectedCount += entry.reviewStatus === ENTRY_STATUS.REJECTED ? 1 : 0;
     category.invalidCount += entry.invalid ? 1 : 0;
+    if (entry.club) category.uniqueClubs.add(entry.club);
   });
 
   return Array.from(grouped.values())
     .map((category) => ({
       ...category,
+      clubCount: category.uniqueClubs.size,
+      uniqueClubs: Array.from(category.uniqueClubs),
       readyForBracket: category.approvedCount >= 2 && category.invalidCount === 0,
       tooFewFighters: category.approvedCount > 0 && category.approvedCount < 4,
       status:
@@ -587,6 +614,11 @@ function buildCategoryReport(entries) {
             : category.invalidCount > 0
               ? "review"
               : "building",
+      bracketPolicy: {
+        sameClub: "avoid_if_possible",
+        categoryIntegrity: "strict",
+        minApproved: category.approvedCount >= 4 ? 4 : 2,
+      },
     }))
     .sort((a, b) => {
       if (a.disciplineLabel === b.disciplineLabel) return a.label.localeCompare(b.label);
@@ -662,32 +694,108 @@ function getRoundLabel(roundIndex, totalRounds) {
   return `Round ${roundIndex + 1}`;
 }
 
-export function generateBracket(category, options = {}) {
-  const approvedEntries = [...category.entries]
-    .filter((entry) => entry.reviewStatus === ENTRY_STATUS.APPROVED && !entry.invalid);
-
-  const size = getBracketSize(approvedEntries.length);
-  if (!size || approvedEntries.length < 2) return null;
-
-  const seedingMode = options.seeding || "seeded";
-  const ordered =
-    seedingMode === "random"
-      ? shuffle(approvedEntries)
-      : [...approvedEntries].sort((a, b) => b.seedScore - a.seedScore);
-
+function getSeededSlots(entries, size) {
+  const order = createSeedOrder(size);
+  const ordered = [...entries].sort((a, b) => b.seedScore - a.seedScore);
   const slots = Array(size).fill(null);
-  if (seedingMode === "seeded") {
-    const order = createSeedOrder(size);
-    order.forEach((seed, index) => {
-      slots[index] = ordered[seed - 1] || null;
-    });
-  } else {
-    ordered.forEach((entry, index) => {
-      slots[index] = entry;
-    });
+  order.forEach((seed, index) => {
+    slots[index] = ordered[seed - 1] || null;
+  });
+  return slots;
+}
+
+function getOpenSlots(entries, size) {
+  const shuffled = shuffle(entries);
+  const slots = Array(size).fill(null);
+  shuffled.forEach((entry, index) => {
+    slots[index] = entry;
+  });
+  return slots;
+}
+
+function buildPairings(slots) {
+  const pairs = [];
+  for (let i = 0; i < slots.length; i += 2) {
+    pairs.push([slots[i] || null, slots[i + 1] || null]);
+  }
+  return pairs;
+}
+
+function evaluateSlots(slots, presetId) {
+  const penalties = [];
+  const pairs = buildPairings(slots);
+  let total = 0;
+
+  pairs.forEach(([left, right], index) => {
+    if (!left || !right) {
+      if (!left && !right) {
+        total += 12;
+        penalties.push({ code: "double_bye", severity: "medium", points: 12, message: `Match ${index + 1} is empty because of bracket sizing.` });
+      }
+      return;
+    }
+
+    if (left.club && right.club && left.club === right.club) {
+      const points = presetId === "open_draw" ? 45 : 120;
+      total += points;
+      penalties.push({
+        code: "same_club",
+        severity: "critical",
+        points,
+        message: `${left.participantName} and ${right.participantName} are from ${left.club} in round 1.`,
+      });
+    }
+
+    const seedGap = Math.abs((left.seedScore || 0) - (right.seedScore || 0));
+    if (seedGap >= 14) {
+      const points = presetId === "seeded_championship" ? 8 : 18;
+      total += points;
+      penalties.push({
+        code: "seed_gap",
+        severity: "low",
+        points,
+        message: `Match ${index + 1} has a ${seedGap}-point seed gap.`,
+      });
+    }
+  });
+
+  return {
+    totalPenalty: total,
+    firstRoundPairs: pairs,
+    penalties,
+    summary: {
+      sameClubCollisions: penalties.filter((item) => item.code === "same_club").length,
+      largeSeedGaps: penalties.filter((item) => item.code === "seed_gap").length,
+      byes: pairs.filter(([left, right]) => !left || !right).length,
+    },
+  };
+}
+
+function optimizeFairDraw(entries, size, presetId) {
+  const seeded = getSeededSlots(entries, size);
+  let bestSlots = seeded;
+  let bestEval = evaluateSlots(bestSlots, presetId);
+
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    const candidateEntries = presetId === "seeded_championship"
+      ? [...entries].sort((a, b) => b.seedScore - a.seedScore)
+      : shuffle(entries);
+    const candidateSlots = presetId === "seeded_championship"
+      ? getSeededSlots(candidateEntries, size)
+      : getOpenSlots(candidateEntries, size);
+    const candidateEval = evaluateSlots(candidateSlots, presetId);
+    if (candidateEval.totalPenalty < bestEval.totalPenalty) {
+      bestSlots = candidateSlots;
+      bestEval = candidateEval;
+    }
+    if (bestEval.totalPenalty === 0) break;
   }
 
-  const totalRounds = Math.log2(size);
+  return { slots: bestSlots, evaluation: bestEval };
+}
+
+function buildBracketFromSlots(category, slots, presetId, evaluation, options = {}) {
+  const totalRounds = Math.log2(slots.length);
   const rounds = [];
   let currentSlots = slots.map((entry) => ({ entry, sourceMatchId: null, bye: !entry }));
 
@@ -703,28 +811,41 @@ export function generateBracket(category, options = {}) {
         slotA?.entry && !slotB?.entry ? slotA
         : !slotA?.entry && slotB?.entry ? slotB
         : null;
+      const conflict =
+        roundIndex === 0 && slotA?.entry && slotB?.entry && slotA.entry.club === slotB.entry.club
+          ? {
+              level: "critical",
+              reason: "same_club",
+              message: "Same-club collision",
+            }
+          : null;
 
       matches.push({
         id: matchId,
         round: roundIndex + 1,
-        label: `Match ${matchIndex / 2 + 1}`,
+        label: roundIndex === 0 ? `Bout ${matchIndex / 2 + 1}` : `Match ${matchIndex / 2 + 1}`,
         sides: [
           {
             name: slotA?.entry?.participantName || (slotA?.sourceMatchId ? `Winner ${slotA.sourceMatchId}` : "Bye"),
             club: slotA?.entry?.club || null,
+            nationality: slotA?.entry?.nationality || null,
             seedScore: slotA?.entry?.seedScore || null,
             participantId: slotA?.entry?.participantId || null,
             isBye: !slotA?.entry,
+            corner: "red",
           },
           {
             name: slotB?.entry?.participantName || (slotB?.sourceMatchId ? `Winner ${slotB.sourceMatchId}` : "Bye"),
             club: slotB?.entry?.club || null,
+            nationality: slotB?.entry?.nationality || null,
             seedScore: slotB?.entry?.seedScore || null,
             participantId: slotB?.entry?.participantId || null,
             isBye: !slotB?.entry,
+            corner: "blue",
           },
         ],
         status: autoWinner ? "bye" : roundIndex === 0 ? "scheduled" : "pending",
+        conflict,
       });
 
       nextSlots.push({
@@ -742,15 +863,77 @@ export function generateBracket(category, options = {}) {
     currentSlots = nextSlots;
   }
 
+  const approvedEntries = category.entries.filter((entry) => entry.reviewStatus === ENTRY_STATUS.APPROVED && !entry.invalid);
   return {
-    id: `bracket-${category.id}`,
+    id: `bracket-${category.id}-${presetId}`,
     categoryId: category.id,
     categoryLabel: category.label,
-    bracketSize: size,
+    rulesetLabel: category.rulesetLabel,
+    bracketSize: slots.length,
     entryCount: approvedEntries.length,
-    seeding: seedingMode,
+    seeding: presetId,
+    seedingLabel: GENERATION_PRESETS.find((preset) => preset.id === presetId)?.label || presetId,
     status: options.status || "draft",
     rounds,
+    generation: {
+      presetId,
+      summary: evaluation.summary,
+      penalties: evaluation.penalties,
+      score: evaluation.totalPenalty,
+    },
+    policy: {
+      sameClub: "avoid_if_possible",
+      sameCategoryOnly: true,
+      fixtureType: approvedEntries.length === 3 ? "round-robin recommended" : "single elimination",
+    },
+  };
+}
+
+function createFixtureSchedule(bracket) {
+  if (!bracket) return [];
+  const sessions = ["Morning Card", "Prime Card", "Final Block"];
+  const cages = ["Cage A", "Cage B"];
+  let boutCounter = 1;
+
+  return bracket.rounds.flatMap((round, roundIndex) =>
+    round.matches
+      .filter((match) => !match.sides.every((side) => side.isBye))
+      .map((match, matchIndex) => ({
+        id: `${bracket.id}-fixture-${roundIndex + 1}-${matchIndex + 1}`,
+        boutNumber: boutCounter++,
+        label: match.label,
+        roundLabel: round.label,
+        session: sessions[Math.min(roundIndex, sessions.length - 1)],
+        arena: cages[(roundIndex + matchIndex) % cages.length],
+        scheduledAt: `2026-09-12T${String(9 + roundIndex * 2 + matchIndex).padStart(2, "0")}:00:00`,
+        categoryLabel: bracket.categoryLabel,
+        red: match.sides[0],
+        blue: match.sides[1],
+        status: match.status === "bye" ? "auto-advance" : match.status,
+      }))
+  );
+}
+
+export function generateBracket(category, options = {}) {
+  const approvedEntries = [...category.entries].filter((entry) => entry.reviewStatus === ENTRY_STATUS.APPROVED && !entry.invalid);
+  const size = getBracketSize(approvedEntries.length);
+  if (!size || approvedEntries.length < 2) return null;
+
+  const presetId = options.seeding || "fair_draw";
+  let slots;
+  let evaluation;
+
+  if (presetId === "open_draw") {
+    slots = getOpenSlots(approvedEntries, size);
+    evaluation = evaluateSlots(slots, presetId);
+  } else {
+    ({ slots, evaluation } = optimizeFairDraw(approvedEntries, size, presetId));
+  }
+
+  const bracket = buildBracketFromSlots(category, slots, presetId, evaluation, options);
+  return {
+    ...bracket,
+    fixtures: createFixtureSchedule(bracket),
   };
 }
 
@@ -763,9 +946,11 @@ export const TOURNAMENT_ENTRIES = buildTournamentEntries(TOURNAMENT_PARTICIPANTS
 export const CATEGORY_REPORT = buildCategoryReport(TOURNAMENT_ENTRIES);
 export const TOURNAMENT_OVERVIEW = buildOverview(TOURNAMENT_ENTRIES, CATEGORY_REPORT);
 export const DISCIPLINE_SUMMARY = buildDisciplineSummary(TOURNAMENT_ENTRIES, CATEGORY_REPORT);
+
 export const DEFAULT_BRACKETS = CATEGORY_REPORT.filter((category) => category.readyForBracket).reduce((acc, category, index) => {
   const status = index === 0 ? "locked" : index === 1 ? "live" : "draft";
-  acc[category.id] = generateBracket(category, { seeding: index % 2 === 0 ? "seeded" : "random", status });
+  const preset = index === 0 ? "seeded_championship" : index === 1 ? "fair_draw" : "open_draw";
+  acc[category.id] = generateBracket(category, { seeding: preset, status });
   return acc;
 }, {});
 
@@ -811,9 +996,13 @@ export function advanceBracketWinner(bracket, roundIndex, matchIndex, sideIndex)
     }
   }
 
-  return {
+  const nextBracket = {
     ...bracket,
     status: roundIndex === rounds.length - 1 ? "completed" : bracket.status === "draft" ? "live" : bracket.status,
     rounds,
+  };
+  return {
+    ...nextBracket,
+    fixtures: createFixtureSchedule(nextBracket),
   };
 }

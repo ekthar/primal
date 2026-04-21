@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: primal-api
+    env: node
+    rootDir: backend-node
+    buildCommand: npm install
+    startCommand: npm run migrate && npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PG_SSL
+        value: "true"
+      - key: PG_SSL_REJECT_UNAUTHORIZED
+        value: "true"
+      - key: APP_BASE_URL
+        sync: false
+      - key: WEB_BASE_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: PDF_SIGNATURE_SECRET
+        sync: false

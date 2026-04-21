@@ -5,6 +5,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import StatusPill from "@/components/shared/StatusPill";
 import EmptyState from "@/components/shared/EmptyState";
+import { InlineLoadingLabel, SectionLoader } from "@/components/shared/PrimalLoader";
 import api from "@/lib/api";
 import { toast } from "sonner";
 
@@ -94,7 +95,18 @@ export default function ApplicantDashboard() {
     setActiveApplicationDetails(data?.application || null);
   }
 
-  if (loading) return <div className="max-w-6xl mx-auto px-6 py-8 text-sm text-secondary-muted">Loading application workspace...</div>;
+  if (loading) {
+    return (
+      <div className="max-w-6xl mx-auto px-6 py-8">
+        <SectionLoader
+          title="Loading application workspace"
+          description="Fetching your profile, applications, and appeal history."
+          cards={2}
+          rows={4}
+        />
+      </div>
+    );
+  }
   if (!profile) {
     return (
       <div className="p-10">
@@ -127,7 +139,11 @@ export default function ApplicantDashboard() {
                 disabled={downloadingPdf}
                 onClick={() => downloadApplicationPdf(applications[0].id)}
               >
-                <Download className="size-3.5" /> {downloadingPdf ? "Preparing PDF..." : "Application PDF"}
+                <InlineLoadingLabel loading={downloadingPdf} loadingText="Preparing PDF...">
+                  <>
+                    <Download className="size-3.5" /> Application PDF
+                  </>
+                </InlineLoadingLabel>
               </Button>
             )}
           </div>
@@ -171,7 +187,11 @@ export default function ApplicantDashboard() {
                   </div>
                   <div className="mt-4 flex justify-end">
                     <Button variant="outline" onClick={() => openApplication(application)} disabled={loadingApplicationId === application.id}>
-                      <Eye className="size-3.5" /> {loadingApplicationId === application.id ? "Opening..." : "View application"}
+                      <InlineLoadingLabel loading={loadingApplicationId === application.id} loadingText="Opening...">
+                        <>
+                          <Eye className="size-3.5" /> View application
+                        </>
+                      </InlineLoadingLabel>
                     </Button>
                   </div>
 

@@ -64,11 +64,11 @@ function Brand() {
   return (
     <div className="flex items-center gap-2">
       <div className="size-8 rounded-lg bg-foreground text-background flex items-center justify-center font-display font-bold text-sm">
-        T
+        P
       </div>
       <div className="leading-tight">
-        <div className="font-display font-semibold tracking-tight text-[15px]">TournamentOS</div>
-        <div className="text-[10px] uppercase tracking-[0.14em] text-tertiary">Martial arts · workflow</div>
+        <div className="font-display font-semibold tracking-tight text-[15px]">Primal</div>
+        <div className="text-[10px] uppercase tracking-[0.14em] text-tertiary">Fight operations</div>
       </div>
     </div>
   );

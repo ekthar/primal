@@ -2,6 +2,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, Layers3, ListChecks, TimerReset, RefreshCcw, Download, Scale, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { InlineLoadingLabel, SectionLoader } from "@/components/shared/PrimalLoader";
 import api from "@/lib/api";
 import { toast } from "sonner";
 
@@ -47,6 +48,7 @@ export default function AdminOverview() {
   }
 
   const totalApplications = useMemo(() => Object.values(counts || {}).reduce((sum, n) => sum + Number(n || 0), 0), [counts]);
+  const isBootLoading = loading && !sla && !workload.length && !Object.keys(counts || {}).length;
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-8">
@@ -63,10 +65,27 @@ export default function AdminOverview() {
           <Link href="/admin/weighin"><Button variant="outline"><Scale className="size-4" /> Weigh-in updates</Button></Link>
           <Link href="/admin/settings"><Button variant="outline"><SlidersHorizontal className="size-4" /> Tournament settings</Button></Link>
           <Button variant="outline" onClick={handleApprovedParticipantsExport}><Download className="size-4" /> Approved participants</Button>
-          <Button variant="outline" onClick={loadOverview}><RefreshCcw className="size-4" /> Refresh</Button>
+          <Button variant="outline" onClick={loadOverview}>
+            <InlineLoadingLabel loading={loading} loadingText="Refreshing...">
+              <>
+                <RefreshCcw className="size-4" /> Refresh
+              </>
+            </InlineLoadingLabel>
+          </Button>
         </div>
       </div>
 
+      {isBootLoading ? (
+        <div className="mt-8">
+          <SectionLoader
+            title="Loading command center"
+            description="Assembling queue counts, reviewer load, and SLA telemetry for Primal operations."
+            cards={5}
+            rows={5}
+          />
+        </div>
+      ) : (
+        <>
       <div className="mt-8 grid sm:grid-cols-2 xl:grid-cols-5 gap-3">
         <Kpi label="Applications" value={loading ? "-" : totalApplications} helper="All workflow states" />
         <Kpi label="Open queue" value={loading ? "-" : sla?.openTotal ?? 0} helper="Submitted + under review" tone="amber" />
@@ -193,6 +212,8 @@ export default function AdminOverview() {
           </table>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }

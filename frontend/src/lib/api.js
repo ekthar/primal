@@ -179,14 +179,14 @@ export const api = {
   exportApplicationPdf: (id) => `${BASE_URL}/api/reports/applications/${id}.pdf`,
   downloadApprovedXlsx: (query) => downloadFile("/api/reports/approved.xlsx", {
     query,
-    filename: "approved-applications.xlsx",
+    filename: "primal-approved-applications.xlsx",
   }),
   downloadApprovedParticipantsXlsx: (query) => downloadFile("/api/reports/participants.xlsx", {
     query,
-    filename: "approved-participants.xlsx",
+    filename: "primal-approved-participants.xlsx",
   }),
   downloadApplicationPdf: (id) => downloadFile(`/api/reports/applications/${id}.pdf`, {
-    filename: `application-${id}.pdf`,
+    filename: `primal-application-${id}.pdf`,
   }),
 
   verifyAudit: () => request("GET", "/api/audit/verify"),
@@ -194,7 +194,7 @@ export const api = {
   exportAuditXlsx: () => `${BASE_URL}/api/audit/export.xlsx`,
   downloadAuditXlsx: (query) => downloadFile("/api/audit/export.xlsx", {
     query,
-    filename: "audit-trail.xlsx",
+    filename: "primal-audit-trail.xlsx",
   }),
 
   publicTournaments: () => request("GET", "/api/public/tournaments"),

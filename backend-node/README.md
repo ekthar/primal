@@ -1,249 +1,105 @@
-# TournamentOS — Backend (Node/Express + PostgreSQL)
+# Primal API
 
-Production-ready REST API for tournament registration and admin review.
-Companion to the React web app at `/app/frontend`. Designed to be
-**mobile-ready** (Flutter) from day one — all endpoints are JSON, stateless JWT.
+Express + PostgreSQL backend for the Primal fight-operations platform.
 
 ## Stack
 
-- Node.js ≥ 20, Express 4
-- PostgreSQL 14+ (raw SQL migrations via `src/db/migrate.js`)
-- JWT auth (access + refresh) + optional Google OAuth
-- Notifications: Resend (email), Twilio (SMS + WhatsApp), push stub
-- Exports: `pdfkit` (PDF) + `exceljs` (Excel)
-- Validation: Joi
-- Logs: pino
+- Node.js 20+
+- Express
+- PostgreSQL
+- Joi validation
+- JWT auth
+- `pdfkit` and `exceljs` exports
+- Pino logging
 
-## Quick start
-
-```bash
-cd /app/backend-node
-cp .env.example .env                  # fill DATABASE_URL, JWT_SECRET, keys
-createdb tournamentos                 # or use a managed Postgres
-yarn install                          # or npm install
-npm run migrate                       # applies src/migrations/*.sql
-npm run seed                          # demo users, club, tournament
-npm run seed:loadtest                 # generate large approved-participant dataset (default 1500)
-npm run dev                           # starts on PORT (default 4000)
-npm test                              # runs vitest suite
-```
-
-## Neon PostgreSQL setup
-
-Use Neon PostgreSQL with SSL.
-
-1. Copy environment template:
+## Local setup
 
 ```bash
-cp .env.example .env
-```
-
-2. Fill either `DATABASE_URL` (recommended) or discrete `PG*` values.
-
-Recommended Neon `DATABASE_URL` format:
-
-```bash
-DATABASE_URL=postgresql://<user>:<password>@<endpoint>.neon.tech/<database>?sslmode=require
-PG_SSL=true
-PG_SSL_REJECT_UNAUTHORIZED=true
-```
-
-3. Run migration and seed after env is set:
-
-```bash
+cd backend-node
+npm install
 npm run migrate
 npm run seed
 npm run dev
 ```
 
-Notes:
-- SSL is auto-enabled for Neon/Azure hostnames and `sslmode=require` URLs.
-- If you run into TLS verification issues in a non-standard environment, temporarily set `PG_SSL_REJECT_UNAUTHORIZED=false`.
-
-## PDF branding options
-
-Application PDF exports support optional branding and public digital-signature QR verification:
+Run tests with:
 
 ```bash
+npm test
+```
+
+## Demo credentials
+
+- `mei@primalfight.io`
+- `luca@primalfight.io`
+- password: `demo1234`
+
+## Core environment variables
+
+```bash
+NODE_ENV=production
+PORT=4000
+DATABASE_URL=postgresql://user:password@your-neon-endpoint.neon.tech/dbname?sslmode=require
+PG_SSL=true
+PG_SSL_REJECT_UNAUTHORIZED=true
+JWT_SECRET=replace-this
+APP_BASE_URL=https://your-render-service.onrender.com
+WEB_BASE_URL=https://your-netlify-site.netlify.app
+RESEND_API_KEY=
+RESEND_FROM=Primal <no-reply@primalfight.io>
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=
+TWILIO_SMS_FROM=
+TWILIO_WHATSAPP_FROM=
 PDF_BRAND_NAME=Primal
 PDF_BRAND_PRIMARY=#0b0b0b
 PDF_BRAND_ACCENT=#ef1a1a
 PDF_LOGO_PATH=./assets/primal-logo.png
-PDF_FONT_BODY_PATH=./assets/fonts/InterTight-Regular.ttf
-PDF_FONT_BODY_BOLD_PATH=./assets/fonts/InterTight-SemiBold.ttf
-PDF_FONT_HEADING_PATH=./assets/fonts/Manrope-SemiBold.ttf
-PDF_FONT_HEADING_BOLD_PATH=./assets/fonts/Manrope-Bold.ttf
-PDF_SIGNATURE_SECRET=<strong-random-secret>
-PDF_VERIFY_BASE_URL=https://api.example.com/api/public/verify/application-signature
+PDF_SIGNATURE_SECRET=replace-this-too
+PDF_VERIFY_BASE_URL=https://your-render-service.onrender.com/api/public/verify/application-signature
+UPLOAD_DIR=./uploads
+MAX_UPLOAD_MB=10
 ```
 
-Notes:
-- `PDF_LOGO_PATH` supports PNG/JPG/JPEG.
-- `PDF_FONT_*` supports TTF/OTF files.
-- Inter Tight is used for body/details text and Manrope is used for headings when those files exist.
-- Recommended: place your logo at `backend-node/assets/primal-logo.png` so branding works without extra setup.
-- Recommended font files location: `backend-node/assets/fonts/`.
-- If `PDF_LOGO_PATH` is empty or invalid, exports use a generated initials logo block.
-- If font files are missing or invalid, exports safely fall back to built-in Helvetica fonts.
-- QR verification endpoint is public and validates tamper-evidence using signed digest data.
+## Neon checklist
 
-Health check: `GET /api/health`.
+- Use a Neon `DATABASE_URL` with `sslmode=require`
+- Keep `PG_SSL=true`
+- Keep `PG_SSL_REJECT_UNAUTHORIZED=true` in production
+- Run `npm run migrate` before first traffic
+- Run `npm run seed` only for demo or staging environments
 
-## Architecture
+## Render deployment
 
-```
-src/
- ├─ config.js            env-driven config object
- ├─ db.js                pg pool + transaction helper
- ├─ logger.js            pino
- ├─ apiError.js          ApiError class + helpers
- ├─ middleware.js        auth, validate, error, async helper
- ├─ statusMachine.js     6-status FSM + transition guards
- ├─ security.js          bcrypt + JWT
- ├─ validators.js        Joi schemas per domain
- ├─ notifications.js     email/sms/whatsapp/push dispatcher
- ├─ audit.js             tamper-evident append-only audit log
- ├─ repositories.js      SQL data access (thin)
- ├─ services/            business logic per domain
- │   ├─ auth.service.js
- │   ├─ profile.service.js
- │   ├─ club.service.js
- │   ├─ application.service.js
- │   ├─ review.service.js
- │   ├─ queue.service.js
- │   ├─ appeal.service.js
- │   └─ export.service.js
- ├─ routes/              Express routers per domain
- │   ├─ auth.routes.js
- │   ├─ profile.routes.js
- │   ├─ club.routes.js
- │   ├─ application.routes.js
- │   ├─ review.routes.js
- │   ├─ queue.routes.js
- │   ├─ appeal.routes.js
- │   ├─ report.routes.js
- │   ├─ audit.routes.js
- │   └─ public.routes.js
- ├─ db/
- │   ├─ migrate.js
- │   └─ seed.js
- └─ migrations/
-     └─ 001_init.sql
-tests/
- ├─ smoke.test.js
- ├─ status-transitions.test.js
- └─ validators.test.js
-```
+This repo includes [render.yaml](/C:/Users/EKTHAR/.codex/worktrees/14cc/primal/backend-node/render.yaml) as a starting blueprint.
 
-## API surface (high-level)
+Recommended Render setup:
 
-### Auth
-- `POST /api/auth/register` — email + password
-- `POST /api/auth/login`
-- `POST /api/auth/google` — idToken
-- `POST /api/auth/forgot-password`
-- `POST /api/auth/reset-password`
-- `GET  /api/auth/me`
-- `POST /api/auth/logout`
+- Service type: `Web Service`
+- Root directory: `backend-node`
+- Build command: `npm install`
+- Start command: `npm run migrate && npm start`
+- Health check path: `/api/health`
 
-### Profile (reusable across tournaments)
-- `GET  /api/profiles/me`
-- `PUT  /api/profiles/me`
-- `GET  /api/profiles/:id`
+## Deployment architecture
 
-### Clubs
-- `POST /api/clubs`
-- `GET  /api/clubs`
-- `PATCH /api/clubs/:id`
-- `POST /api/clubs/:id/approve`   (admin only)
-- `GET  /api/clubs/:id/participants`
-- `POST /api/clubs/:id/participants`
+- Frontend: Netlify
+- API: Render
+- Database: Neon PostgreSQL
 
-### Applications (individual + via club)
-- `POST /api/applications`
-- `GET  /api/applications`
-- `GET  /api/applications/:id`
-- `PATCH /api/applications/:id`   (draft or during correction window)
-- `POST /api/applications/:id/submit`
+## Production-readiness notes
 
-### Review (admin + reviewer)
-- `POST /api/reviews/:id/assign`
-- `POST /api/reviews/:id/start`
-- `POST /api/reviews/:id/decision`  (approve / reject / request_correction)
-- `POST /api/reviews/bulk/decision`
-- `POST /api/reviews/:id/reopen`    (admin only)
+- Configure CORS using `WEB_BASE_URL`
+- Move uploads from local disk to S3/R2/object storage before high-volume production
+- Rotate `JWT_SECRET` and `PDF_SIGNATURE_SECRET` per environment
+- Monitor `/api/health` and centralize logs from Render
+- Keep older internal identifiers only where renaming would create migration risk
 
-### Queue & SLA
-- `GET  /api/queue`
-- `GET  /api/queue/sla`
-- `GET  /api/queue/workload`
+## API highlights
 
-### Appeals
-- `POST /api/appeals`
-- `GET  /api/appeals/open`
-- `POST /api/appeals/:id/decision`  (admin — grants reopen)
-
-### Reports & Exports
-- `GET /api/reports/summary`
-- `GET /api/reports/approved.xlsx`
-- `GET /api/reports/participants`      (admin)
-- `GET /api/reports/participants.xlsx` (admin)
-- `GET /api/reports/applications/:id.pdf`
-
-### Audit (admin)
-- `GET /api/audit/entity/:type/:id`
-- `GET /api/audit/verify`
-- `GET /api/audit/export.xlsx`
-
-### Public
-- `GET /api/public/tournaments`
-- `GET /api/public/clubs`
-- `GET /api/public/participants`  (approved only)
-
-## Workflow (status machine)
-
-```
-draft ─submit──► submitted ─start──► under_review ─approve──► APPROVED
-                                 │                 │
-                                 │                 ├─reject──► REJECTED
-                                 │                 │
-                                 │                 └─request_correction──► needs_correction
-                                 │                                              │
-                                 └─request_correction/reject/approve──► ...     │
-                                                                                │
-                         needs_correction ─resubmit──► submitted ◄──────────────┘
-
-Admin overrides:
-  REJECTED ─admin reopen──► under_review
-  APPROVED ─admin reopen──► under_review   (e.g. after granted appeal)
-```
-
-Guards in `src/statusMachine.js` enforce both the transition and the actor role.
-
-## Notifications
-
-Priority order: **email → push → whatsapp → sms**. Configure any subset;
-missing channels quietly log as `skipped`. Resend for email, Twilio for SMS
-and WhatsApp. Templates live in `src/notifications.js`.
-
-## Audit log
-
-Every state-changing action appends a row to `audit_log` with a hash chain:
-`hash = sha256(prev_hash || canonical(payload))`. The `audit_immutable_guard`
-trigger blocks UPDATE/DELETE at the DB level. Verify integrity with
-`GET /api/audit/verify` or `node -e "require('./src/audit').verifyChain().then(console.log)"`.
-
-## Deployment notes
-
-- **Frontend** (Netlify / Vercel): build the React app; set
-  `REACT_APP_BACKEND_URL` to your API origin.
-- **API** (Render / Fly / Railway / Bare VM): run `npm run migrate && npm start`.
-  Provision a managed PostgreSQL (Supabase, Neon, RDS).
-- Put `UPLOAD_DIR` on persistent storage or swap the static `/uploads` handler
-  for S3/R2 when you're ready.
-- Rotate `JWT_SECRET` per environment.
-
-## What's next
-
-See `SKILLS.md` for a task-by-task continuation plan (Flutter API client,
-file storage, payments, custom form engine, i18n).
+- Authentication and session refresh
+- Profiles, clubs, tournament applications
+- Review queue, SLA, appeals, audit export
+- Tournament window management
+- Admin weigh-in updates with recalculated weight class
+- Public tournament, club, participant, and circular endpoints

@@ -2,7 +2,7 @@
 // Seed a demo tenant: admin + reviewer + club manager + sample tournament + clubs.
 // Safe to re-run: uses ON CONFLICT DO NOTHING.
 
-const { pool, query, transaction } = require('../db');
+const { pool, transaction } = require('../db');
 const { hashPassword } = require('../security');
 const { logger } = require('../logger');
 
@@ -13,8 +13,8 @@ async function run() {
     await c.query(
       `INSERT INTO users (id, email, password_hash, role, name, email_verified)
        VALUES
-         ('00000000-0000-0000-0000-000000000001','mei@tournamentos.io',$1,'admin','Mei Tanaka',TRUE),
-         ('00000000-0000-0000-0000-000000000002','luca@tournamentos.io',$1,'reviewer','Luca Moretti',TRUE),
+         ('00000000-0000-0000-0000-000000000001','mei@primalfight.io',$1,'admin','Mei Tanaka',TRUE),
+         ('00000000-0000-0000-0000-000000000002','luca@primalfight.io',$1,'reviewer','Luca Moretti',TRUE),
          ('00000000-0000-0000-0000-000000000003','ops@sakuragym.jp',$1,'club','Sakura Ops',TRUE),
          ('00000000-0000-0000-0000-000000000004','diego.ruiz@mail.com',$1,'applicant','Diego Ruiz',TRUE)
        ON CONFLICT (email) DO NOTHING;`,
@@ -26,7 +26,7 @@ async function run() {
        VALUES
          ('10000000-0000-0000-0000-000000000001','Sakura Gym','sakura-gym','Tokyo','JP','active','00000000-0000-0000-0000-000000000003'),
          ('10000000-0000-0000-0000-000000000002','Apex Combat Club','apex-combat','Montreal','CA','active',NULL),
-         ('10000000-0000-0000-0000-000000000003','Legion MMA','legion-mma','São Paulo','BR','active',NULL)
+         ('10000000-0000-0000-0000-000000000003','Legion MMA','legion-mma','Sao Paulo','BR','active',NULL)
        ON CONFLICT (slug) DO NOTHING;`
     );
 
@@ -44,12 +44,12 @@ async function run() {
 
     await c.query(
       `INSERT INTO profiles (id, user_id, club_id, first_name, last_name, discipline, weight_kg, weight_class)
-       VALUES ('30000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000004','10000000-0000-0000-0000-000000000003','Diego','Ruiz','MMA — Full Contact',77.2,'Welterweight')
+       VALUES ('30000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000004','10000000-0000-0000-0000-000000000003','Diego','Ruiz','MMA - Full Contact',77.2,'Welterweight')
        ON CONFLICT (user_id) DO NOTHING;`
     );
   });
 
-  logger.info('Seed complete. Demo credentials: any-email / demo1234');
+  logger.info('Seed complete. Demo credentials: seeded users / demo1234');
 }
 
 run()

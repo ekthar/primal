@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import "@/index.css";
 import "@/App.css";
@@ -6,10 +6,12 @@ import { ThemeProvider } from "@/context/ThemeContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { Toaster } from "@/components/ui/sonner";
 import AppShell from "@/components/layout/AppShell";
+import { FullPageLoader } from "@/components/shared/PrimalLoader";
 
 function RouteFrame({ Component, pageProps }) {
   const router = useRouter();
   const { user, ready } = useAuth();
+  const [routeLoading, setRouteLoading] = useState(false);
 
   const isProtected =
     router.pathname === "/applicant" ||
@@ -17,13 +19,37 @@ function RouteFrame({ Component, pageProps }) {
     router.pathname.startsWith("/admin");
 
   useEffect(() => {
+    const handleStart = () => setRouteLoading(true);
+    const handleDone = () => setRouteLoading(false);
+
+    router.events.on("routeChangeStart", handleStart);
+    router.events.on("routeChangeComplete", handleDone);
+    router.events.on("routeChangeError", handleDone);
+
+    return () => {
+      router.events.off("routeChangeStart", handleStart);
+      router.events.off("routeChangeComplete", handleDone);
+      router.events.off("routeChangeError", handleDone);
+    };
+  }, [router.events]);
+
+  useEffect(() => {
     if (ready && isProtected && !user) {
       router.replace("/login");
     }
   }, [isProtected, ready, router, user]);
 
-  if (!ready) return null;
-  if (isProtected && !user) return null;
+  if (!ready) {
+    return <FullPageLoader message="Preparing your fight desk..." />;
+  }
+
+  if (isProtected && !user) {
+    return <FullPageLoader message="Routing you to secure sign-in..." />;
+  }
+
+  if (routeLoading) {
+    return <FullPageLoader message="Loading the next fight desk..." />;
+  }
 
   const page = <Component {...pageProps} />;
   return isProtected ? <AppShell>{page}</AppShell> : page;
