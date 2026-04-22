@@ -8,13 +8,7 @@ const { pool, transaction } = require('../db');
 const { hashPassword } = require('../security');
 const { logger } = require('../logger');
 
-async function run() {
-  const defaultPassword = process.env.SEED_PASSWORD || '105002';
-  const adminEmail = (process.env.ADMIN_EMAIL || 'mei@primalfight.io').toLowerCase();
-  const adminPassword = process.env.ADMIN_PASSWORD || defaultPassword;
-  const adminName = process.env.ADMIN_NAME || 'EKTHAR';
-  const pw = await hashPassword(defaultPassword);
-  const adminPw = await hashPassword(adminPassword);
+
 
   await transaction(async (c) => {
     await c.query(

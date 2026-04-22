@@ -42,7 +42,7 @@ npm test
 
 ## Render deployment
 
-This repo includes [render.yaml](/C:/Users/EKTHAR/.codex/worktrees/14cc/primal/backend-node/render.yaml) as a starting blueprint.
+This repo includes [render.yaml](render.yaml) as a starting blueprint.
 
 Recommended Render setup:
 

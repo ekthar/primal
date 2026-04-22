@@ -50,11 +50,11 @@ Seeded demo sign-in:
 
 ## Deployment
 
-- Netlify config lives in [netlify.toml](/C:/Users/EKTHAR/.codex/worktrees/14cc/primal/netlify.toml)
-- Render blueprint lives in [render.yaml](/C:/Users/EKTHAR/.codex/worktrees/14cc/primal/backend-node/render.yaml)
+- Netlify config lives in [netlify.toml](netlify.toml)
+- Render blueprint lives in [render.yaml](backend-node/render.yaml)
 - Detailed setup lives in:
-  - [frontend/README.md](/C:/Users/EKTHAR/.codex/worktrees/14cc/primal/frontend/README.md)
-  - [backend-node/README.md](/C:/Users/EKTHAR/.codex/worktrees/14cc/primal/backend-node/README.md)
+  - [frontend/README.md](frontend/README.md)
+  - [backend-node/README.md](backend-node/README.md)
 
 ## Notes
 

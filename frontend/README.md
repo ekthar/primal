@@ -66,7 +66,7 @@ npm run start
 
 ## Netlify deployment
 
-This repo includes [netlify.toml](/C:/Users/EKTHAR/.codex/worktrees/14cc/primal/netlify.toml) configured for the frontend.
+This repo includes [netlify.toml](../netlify.toml) configured for the frontend.
 
 Recommended Netlify settings:
 
