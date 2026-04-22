@@ -36,6 +36,7 @@ const frame020Src = frame020?.src || frame020;
 const frame050Src = frame050?.src || frame050;
 const frame080Src = frame080?.src || frame080;
 const frame100Src = frame100?.src || frame100;
+const HERO_VIDEO_SRC = "/animate (1).mp4";
 const toImgSrc = (img) => (img?.src || img);
 
 // ---------- primitives ---------------------------------------------------------
@@ -203,6 +204,7 @@ function Nav() {
 
 function Hero() {
   const ref = useRef(null);
+  const [videoFailed, setVideoFailed] = useState(false);
   const reduced = useReducedMotion();
   const { allowCinematicMotion } = useMotionProfile();
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
@@ -212,23 +214,39 @@ function Hero() {
   const overlay = useTransform(scrollYProgress, [0, 1], [0.35, 0.75]);
 
   return (
-    <section ref={ref} className="relative min-h-[92vh] overflow-hidden flex items-center pt-16 sm:pt-20 short-screen-tight">
-      <motion.div
-        style={{ y: !allowCinematicMotion || reduced ? 0 : imgY, scale: !allowCinematicMotion || reduced ? 1 : imgScale, backgroundImage: `url(${frame080Src})` }}
-        className="absolute inset-0 -z-30 bg-cover bg-center opacity-[0.55] dark:opacity-[0.28]"
-      />
+    <section ref={ref} className="relative min-h-screen overflow-hidden flex items-center pt-16 sm:pt-20 short-screen-tight">
       <CageEnergyCanvas />
+      {!videoFailed ? (
+        <motion.video
+          style={{ y: !allowCinematicMotion || reduced ? 0 : imgY, scale: !allowCinematicMotion || reduced ? 1 : imgScale }}
+          className="absolute inset-0 -z-20 h-full w-full object-cover opacity-[0.72] dark:opacity-[0.58]"
+          autoPlay
+          loop
+          muted
+          playsInline
+          preload="metadata"
+          poster={frame080Src}
+          onError={() => setVideoFailed(true)}
+        >
+          <source src={HERO_VIDEO_SRC} type="video/mp4" />
+        </motion.video>
+      ) : (
+        <motion.div
+          style={{ y: !allowCinematicMotion || reduced ? 0 : imgY, scale: !allowCinematicMotion || reduced ? 1 : imgScale, backgroundImage: `url(${frame080Src})` }}
+          className="absolute inset-0 -z-20 bg-cover bg-center opacity-[0.6] dark:opacity-[0.45]"
+        />
+      )}
       <div
-        className="absolute inset-0 -z-20 opacity-[0.08] dark:opacity-[0.12] pointer-events-none"
+        className="absolute inset-0 -z-10 opacity-[0.08] dark:opacity-[0.12] pointer-events-none"
         style={{ backgroundImage: `url(${TEXTURE_IMAGE})`, backgroundSize: "cover", backgroundPosition: "center" }}
         aria-hidden
       />
       <motion.div
         style={{ opacity: reduced ? 0.5 : overlay }}
-        className="absolute inset-0 -z-10 bg-gradient-to-b from-background/15 via-background/75 to-background"
+        className="absolute inset-0 z-0 bg-gradient-to-b from-background/10 via-background/65 to-background"
       />
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
+      <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
         <div className="grid lg:grid-cols-[1.2fr_0.8fr] gap-8 lg:gap-12 items-center">
           <motion.div style={{ y: !allowCinematicMotion || reduced ? 0 : textY }}>
             <Reveal>
