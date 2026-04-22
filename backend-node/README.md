@@ -28,38 +28,9 @@ Run tests with:
 npm test
 ```
 
-## Demo credentials
-
-- `mei@primalfight.io`
-- `luca@primalfight.io`
-- password: `demo1234`
-
 ## Core environment variables
 
-```bash
-NODE_ENV=production
-PORT=4000
-DATABASE_URL=postgresql://user:password@your-neon-endpoint.neon.tech/dbname?sslmode=require
-PG_SSL=true
-PG_SSL_REJECT_UNAUTHORIZED=true
-JWT_SECRET=replace-this
-APP_BASE_URL=https://your-render-service.onrender.com
-WEB_BASE_URL=https://your-netlify-site.netlify.app
-RESEND_API_KEY=
-RESEND_FROM=Primal <no-reply@primalfight.io>
-TWILIO_ACCOUNT_SID=
-TWILIO_AUTH_TOKEN=
-TWILIO_SMS_FROM=
-TWILIO_WHATSAPP_FROM=
-PDF_BRAND_NAME=Primal
-PDF_BRAND_PRIMARY=#0b0b0b
-PDF_BRAND_ACCENT=#ef1a1a
-PDF_LOGO_PATH=./assets/primal-logo.png
-PDF_SIGNATURE_SECRET=replace-this-too
-PDF_VERIFY_BASE_URL=https://your-render-service.onrender.com/api/public/verify/application-signature
-UPLOAD_DIR=./uploads
-MAX_UPLOAD_MB=10
-```
+
 
 ## Neon checklist
 
