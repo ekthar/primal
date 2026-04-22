@@ -4,6 +4,7 @@ const { ALL_STATUSES } = require('./statusMachine');
 const uuid = Joi.string().uuid();
 const email = Joi.string().email().lowercase().trim();
 const password = Joi.string().min(8).max(200);
+const loginPassword = Joi.string().min(1).max(200);
 const INDIA = 'India';
 const INDIA_PIN_REGEX = /^[1-9][0-9]{5}$/;
 
@@ -27,7 +28,7 @@ const schemas = {
     }),
     login: Joi.object({
       email: email.required(),
-      password: password.required(),
+      password: loginPassword.required(),
     }),
     google: Joi.object({
       idToken: Joi.string().required(),
@@ -96,7 +97,26 @@ const schemas = {
       limit: Joi.number().integer().min(1).max(500).default(200),
       offset: Joi.number().integer().min(0).default(0),
     }),
+    adminCreate: Joi.object({
+      name: Joi.string().min(3).max(160).required(),
+      slug: Joi.string().pattern(/^[a-z0-9-]+$/).min(2).max(80).required(),
+      season: Joi.string().max(80).allow(null, ''),
+      registrationOpenAt: Joi.date().iso().allow(null),
+      registrationCloseAt: Joi.date().iso().allow(null),
+      correctionWindowHours: Joi.number().integer().min(1).max(720).allow(null),
+      startsOn: Joi.date().iso().allow(null),
+      endsOn: Joi.date().iso().allow(null),
+      isPublic: Joi.boolean().default(true),
+    }).custom((value, helpers) => {
+      if (value.registrationOpenAt && value.registrationCloseAt && new Date(value.registrationOpenAt) > new Date(value.registrationCloseAt)) {
+        return helpers.error('any.invalid');
+      }
+      return value;
+    }, 'registration window validation'),
     adminUpdate: Joi.object({
+      name: Joi.string().min(3).max(160),
+      slug: Joi.string().pattern(/^[a-z0-9-]+$/).min(2).max(80),
+      season: Joi.string().max(80).allow(null, ''),
       registrationOpenAt: Joi.date().iso().allow(null),
       registrationCloseAt: Joi.date().iso().allow(null),
       correctionWindowHours: Joi.number().integer().min(1).max(720).allow(null),
@@ -111,6 +131,26 @@ const schemas = {
       }
       return value;
     }, 'registration window validation'),
+    adminDelete: Joi.object({}),
+  },
+
+  bracket: {
+    overview: Joi.object({
+      tournamentId: uuid,
+    }),
+    generate: Joi.object({
+      tournamentId: uuid.allow(null),
+      categoryId: Joi.string().min(3).max(240).required(),
+      seeding: Joi.string().valid('fair_draw', 'seeded_championship', 'open_draw').required(),
+    }),
+    advance: Joi.object({
+      roundIndex: Joi.number().integer().min(0).required(),
+      matchIndex: Joi.number().integer().min(0).required(),
+      sideIndex: Joi.number().integer().valid(0, 1).required(),
+    }),
+    update: Joi.object({
+      status: Joi.string().valid('draft', 'locked', 'live', 'completed').required(),
+    }),
   },
 
   club: {

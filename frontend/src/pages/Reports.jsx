@@ -3,7 +3,7 @@ import { Download, Timer, AlertTriangle, Users, Gauge, RefreshCcw } from "lucide
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { InlineLoadingLabel, SectionLoader } from "@/components/shared/PrimalLoader";
-import { PageSectionHeader, ResponsivePageShell, ResponsiveTable } from "@/components/shared/ResponsivePrimitives";
+import { PageSectionHeader, ResponsivePageShell } from "@/components/shared/ResponsivePrimitives";
 import api from "@/lib/api";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
@@ -225,7 +225,7 @@ export default function Reports() {
               ))}
               {!workload.length && <div className="py-4 text-sm text-secondary-muted">No reviewer data found.</div>}
             </div>
-            <ResponsiveTable className="hidden md:block">
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
                   <tr className="text-[10px] uppercase tracking-wider text-tertiary font-semibold border-b border-border">
@@ -247,7 +247,7 @@ export default function Reports() {
                 </tbody>
               </table>
               {!workload.length && <div className="py-4 text-sm text-secondary-muted">No reviewer data found.</div>}
-            </ResponsiveTable>
+            </div>
           </div>
 
           {isAdmin && (
@@ -297,7 +297,7 @@ export default function Reports() {
                   />
                 </div>
               ) : (
-                <div className="mt-5 grid xl:grid-cols-2 gap-5">
+                <div className="mt-5 grid gap-5 2xl:grid-cols-2">
                   <ParticipantTable
                     title="Club-wise participants"
                     rows={filteredClubParticipants}
@@ -338,7 +338,7 @@ function filterParticipantRows(rows, query) {
 
 function ParticipantTable({ title, rows, showClub, onDownloadApplication }) {
   return (
-    <div className="rounded-2xl border border-border bg-background/50 overflow-hidden">
+    <div className="min-w-0 rounded-2xl border border-border bg-background/50 overflow-hidden">
       <div className="px-4 py-3 border-b border-border font-medium text-sm">{title}</div>
       <div className="space-y-3 p-4 md:hidden">
         {rows.map((row) => (
@@ -360,17 +360,17 @@ function ParticipantTable({ title, rows, showClub, onDownloadApplication }) {
           </article>
         ))}
       </div>
-      <ResponsiveTable className="hidden md:block">
-        <table className="w-full text-left">
+      <div className="hidden md:block overflow-x-auto">
+        <table className="min-w-[920px] w-full text-left">
           <thead>
             <tr className="text-[10px] uppercase tracking-wider text-tertiary font-semibold border-b border-border">
-              <th className="px-4 py-3">Name</th>
-              <th className="px-4 py-3">DOB</th>
-              <th className="px-4 py-3">Age today</th>
-              <th className="px-4 py-3">Sex</th>
-              <th className="px-4 py-3">Discipline</th>
-              {showClub && <th className="px-4 py-3">Club</th>}
-              <th className="px-4 py-3 text-right">Print form</th>
+              <th className="px-4 py-3 min-w-[220px]">Name</th>
+              <th className="px-4 py-3 whitespace-nowrap">DOB</th>
+              <th className="px-4 py-3 whitespace-nowrap">Age today</th>
+              <th className="px-4 py-3 whitespace-nowrap">Sex</th>
+              <th className="px-4 py-3 whitespace-nowrap">Discipline</th>
+              {showClub && <th className="px-4 py-3 min-w-[180px]">Club</th>}
+              <th className="px-4 py-3 text-right whitespace-nowrap">Print form</th>
             </tr>
           </thead>
           <tbody>
@@ -380,12 +380,12 @@ function ParticipantTable({ title, rows, showClub, onDownloadApplication }) {
                   <div className="font-medium">{row.participantName}</div>
                   <div className="text-[11px] text-tertiary mt-1">{row.tournamentName}</div>
                 </td>
-                <td className="px-4 py-3 text-sm">{row.dateOfBirth || "-"}</td>
-                <td className="px-4 py-3 text-sm">{row.ageToday ?? "-"}</td>
-                <td className="px-4 py-3 text-sm capitalize">{row.sex || "-"}</td>
-                <td className="px-4 py-3 text-sm">{row.discipline || "-"}</td>
+                <td className="px-4 py-3 text-sm whitespace-nowrap">{row.dateOfBirth || "-"}</td>
+                <td className="px-4 py-3 text-sm whitespace-nowrap">{row.ageToday ?? "-"}</td>
+                <td className="px-4 py-3 text-sm capitalize whitespace-nowrap">{row.sex || "-"}</td>
+                <td className="px-4 py-3 text-sm whitespace-nowrap">{row.discipline || "-"}</td>
                 {showClub && <td className="px-4 py-3 text-sm">{row.clubName || "-"}</td>}
-                <td className="px-4 py-3 text-right">
+                <td className="px-4 py-3 text-right whitespace-nowrap">
                   <Button variant="outline" size="sm" onClick={() => onDownloadApplication(row.applicationId)}>
                     <Download className="size-3.5" /> PDF
                   </Button>
@@ -394,7 +394,7 @@ function ParticipantTable({ title, rows, showClub, onDownloadApplication }) {
             ))}
           </tbody>
         </table>
-      </ResponsiveTable>
+      </div>
       {!rows.length && <div className="px-4 py-4 text-sm text-secondary-muted">No rows found.</div>}
     </div>
   );

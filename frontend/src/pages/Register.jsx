@@ -40,7 +40,7 @@ export default function Register() {
   const [form, setForm] = useState({
     fullName: "",
     email: "",
-    password: "demo1234",
+    password: "",
     gender: "",
     dob: "",
     phone: "",
@@ -70,7 +70,9 @@ export default function Register() {
       if (ignore) return;
       const items = data?.tournaments || [];
       setTournaments(items);
-      if (items.length > 0) setTournamentId((current) => current || items[0].id);
+      const firstOpenTournament = items.find((item) => item.registrationOpen);
+      if (firstOpenTournament) setTournamentId((current) => current || firstOpenTournament.id);
+      else if (items.length > 0) setTournamentId((current) => current || items[0].id);
       setTournamentsLoading(false);
     }
     loadTournaments();
@@ -185,6 +187,11 @@ export default function Register() {
 
   const entryPreview = useMemo(() => createPreviewEntries(form), [form]);
   const validEntries = entryPreview.filter((entry) => entry.valid);
+  const openTournaments = useMemo(
+    () => tournaments.filter((tournament) => tournament.registrationOpen),
+    [tournaments]
+  );
+  const applicantRegistrationClosed = !isClubTrack && !tournamentsLoading && openTournaments.length === 0;
 
   const setField = (key, value) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -280,6 +287,10 @@ export default function Register() {
   };
 
   const next = () => {
+    if (applicantRegistrationClosed) {
+      toast.error("No season is currently open for new participant registration");
+      return;
+    }
     if (!validateStep()) {
       toast.error("Please complete the highlighted fields");
       return;
@@ -290,6 +301,10 @@ export default function Register() {
   const prev = () => setStep((current) => Math.max(1, current - 1));
 
   const submit = async () => {
+    if (applicantRegistrationClosed) {
+      toast.error("No season is currently open for new participant registration");
+      return;
+    }
     if (!validateStep()) {
       toast.error("Review the registration before submitting");
       return;
@@ -301,7 +316,7 @@ export default function Register() {
     let selectedTournamentId = tournamentId;
     if (!isClubTrack && !selectedTournamentId) {
       const { data } = await api.publicTournaments();
-      const fallbackTournamentId = data?.tournaments?.[0]?.id;
+      const fallbackTournamentId = data?.tournaments?.find((item) => item.registrationOpen)?.id;
       if (fallbackTournamentId) {
         selectedTournamentId = fallbackTournamentId;
         setTournamentId(fallbackTournamentId);
@@ -455,6 +470,11 @@ export default function Register() {
                 ? "Register the club, establish the manager account, and unlock club-scoped participant workflows."
                 : "Create an account, save your reusable profile, upload required documents, and submit directly into the review queue."}
             </p>
+            {applicantRegistrationClosed ? (
+              <div className="mt-4 inline-flex rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+                New participant signup is closed until an admin opens a season registration window.
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -628,19 +648,19 @@ export default function Register() {
                       </div>
                     </Field>
                     <Field label="Tournament" error={errors.tournament}>
-                      <Select value={tournamentId} onValueChange={setTournamentId} disabled={tournamentsLoading || tournaments.length === 0}>
+                      <Select value={tournamentId} onValueChange={setTournamentId} disabled={tournamentsLoading || openTournaments.length === 0}>
                         <SelectTrigger className="h-11 bg-surface">
-                          <SelectValue placeholder={tournamentsLoading ? "Loading tournaments..." : "Select tournament"} />
+                          <SelectValue placeholder={tournamentsLoading ? "Loading tournaments..." : "Select open tournament"} />
                         </SelectTrigger>
                         <SelectContent>
-                          {tournaments.map((tournament) => (
+                          {openTournaments.map((tournament) => (
                             <SelectItem key={tournament.id} value={tournament.id}>{tournament.name}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </Field>
-                    {!tournamentsLoading && tournaments.length === 0 && (
-                      <p className="text-[11px] text-amber-600 dark:text-amber-400">No public tournaments found right now. You can continue to review details, but submission needs an active tournament.</p>
+                    {!tournamentsLoading && openTournaments.length === 0 && (
+                      <p className="text-[11px] text-amber-600 dark:text-amber-400">No season is currently open. Existing participants can sign in later and apply once registration opens.</p>
                     )}
                     <div className="grid md:grid-cols-2 gap-3">
                       {DISCIPLINE_DEFINITIONS.map((discipline) => {
@@ -730,11 +750,11 @@ export default function Register() {
                 <ArrowLeft className="size-4 mr-1" /> Back
               </Button>
               {step < STEPS.length ? (
-                <Button type="button" onClick={next} className="bg-foreground text-background hover:bg-foreground/90">
+                <Button type="button" onClick={next} className="bg-foreground text-background hover:bg-foreground/90" disabled={applicantRegistrationClosed}>
                   Continue <ArrowRight className="size-4 ml-1" />
                 </Button>
               ) : (
-                <Button type="button" onClick={submit} disabled={loading} className="bg-primary hover:bg-primary-hover text-primary-foreground">
+                <Button type="button" onClick={submit} disabled={loading || applicantRegistrationClosed} className="bg-primary hover:bg-primary-hover text-primary-foreground">
                   {loading ? "Submitting..." : "Submit"}
                 </Button>
               )}

@@ -10,21 +10,13 @@ const { dispatch: notify } = require('../notifications');
 const { createHash } = require('crypto');
 const path = require('path');
 const fs = require('fs');
+const tournamentService = require('./tournament.service');
 
 const HOUR = 60 * 60 * 1000;
 const REQUIRED_DOCUMENT_KINDS = ['medical', 'photo_id', 'consent'];
 
-function isTournamentRegistrationOpen(tournament) {
-  if (!tournament) return false;
-  const now = Date.now();
-  const openAt = tournament.registration_open_at ? new Date(tournament.registration_open_at).getTime() : null;
-  const closeAt = tournament.registration_close_at ? new Date(tournament.registration_close_at).getTime() : null;
-  if (!openAt || !closeAt) return true;
-  return now >= openAt && now <= closeAt;
-}
-
 function assertRegistrationWindowOpen(tournament, message = 'Registration window closed') {
-  if (!isTournamentRegistrationOpen(tournament)) {
+  if (!tournamentService.getRegistrationState(tournament).registrationOpen) {
     throw ApiError.forbidden(message);
   }
 }

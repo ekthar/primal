@@ -5,6 +5,7 @@ const { config } = require('../config');
 const { write: auditWrite } = require('../audit');
 const { dispatch: notify } = require('../notifications');
 const { createHash } = require('crypto');
+const tournamentService = require('./tournament.service');
 
 function passwordHashFingerprint(passwordHash) {
   return createHash('sha256').update(String(passwordHash || '')).digest('hex').slice(0, 24);
@@ -61,6 +62,12 @@ async function issuePasswordResetForUser(user, ctx = {}, { sendNotification = tr
 }
 
 async function register({ email, password, name, role, locale }, ctx = {}) {
+  if (role === 'applicant') {
+    const hasOpenSeason = await tournamentService.hasOpenPublicRegistration();
+    if (!hasOpenSeason) {
+      throw ApiError.forbidden('No season is currently open for new participant registration');
+    }
+  }
   const existing = await usersRepo.findByEmail(email);
   if (existing) throw ApiError.conflict('Email already registered', { field: 'email' });
   const passwordHash = await hashPassword(password);

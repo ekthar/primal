@@ -2,23 +2,30 @@
 // Seed a demo tenant: admin + reviewer + club manager + sample tournament + clubs.
 // Safe to re-run: uses ON CONFLICT DO NOTHING.
 
+require('dotenv').config();
+
 const { pool, transaction } = require('../db');
 const { hashPassword } = require('../security');
 const { logger } = require('../logger');
 
 async function run() {
-  const pw = await hashPassword('demo1234');
+  const defaultPassword = process.env.SEED_PASSWORD || '105002';
+  const adminEmail = (process.env.ADMIN_EMAIL || 'mei@primalfight.io').toLowerCase();
+  const adminPassword = process.env.ADMIN_PASSWORD || defaultPassword;
+  const adminName = process.env.ADMIN_NAME || 'EKTHAR';
+  const pw = await hashPassword(defaultPassword);
+  const adminPw = await hashPassword(adminPassword);
 
   await transaction(async (c) => {
     await c.query(
       `INSERT INTO users (id, email, password_hash, role, name, email_verified)
        VALUES
-         ('00000000-0000-0000-0000-000000000001','mei@primalfight.io',$1,'admin','Mei Tanaka',TRUE),
-         ('00000000-0000-0000-0000-000000000002','luca@primalfight.io',$1,'reviewer','Luca Moretti',TRUE),
-         ('00000000-0000-0000-0000-000000000003','ops@sakuragym.jp',$1,'club','Sakura Ops',TRUE),
-         ('00000000-0000-0000-0000-000000000004','diego.ruiz@mail.com',$1,'applicant','Diego Ruiz',TRUE)
+         ('00000000-0000-0000-0000-000000000001',$1,$2,'admin',$3,TRUE),
+         ('00000000-0000-0000-0000-000000000002','luca@primalfight.io',$4,'reviewer','Luca Moretti',TRUE),
+         ('00000000-0000-0000-0000-000000000003','ops@sakuragym.jp',$4,'club','Sakura Ops',TRUE),
+         ('00000000-0000-0000-0000-000000000004','diego.ruiz@mail.com',$4,'applicant','Diego Ruiz',TRUE)
        ON CONFLICT (email) DO NOTHING;`,
-      [pw]
+      [adminEmail, adminPw, adminName, pw]
     );
 
     await c.query(
@@ -49,7 +56,7 @@ async function run() {
     );
   });
 
-  logger.info('Seed complete. Demo credentials: seeded users / demo1234');
+  logger.info(`Seed complete. Admin user: ${adminEmail}`);
 }
 
 run()

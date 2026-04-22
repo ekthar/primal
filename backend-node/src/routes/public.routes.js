@@ -3,6 +3,7 @@ const { ah, validate } = require('../middleware');
 const { applications, tournaments, clubs } = require('../repositories');
 const clubsService = require('../services/club.service');
 const circularsService = require('../services/circular.service');
+const tournamentService = require('../services/tournament.service');
 const { schemas } = require('../validators');
 const { verifySignatureForApplication } = require('../pdfSignature');
 const { config } = require('../config');
@@ -20,7 +21,7 @@ router.get('/participants', ah(async (req, res) => {
 }));
 
 router.get('/tournaments', ah(async (_req, res) => {
-  res.json({ tournaments: await tournaments.listPublic() });
+  res.json({ tournaments: await tournamentService.listPublic() });
 }));
 
 router.get('/clubs', ah(async (req, res) => {

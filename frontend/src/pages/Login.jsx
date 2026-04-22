@@ -12,23 +12,22 @@ import { toast } from "sonner";
 import { HERO_IMAGE } from "@/lib/mockData";
 
 const ROLES = [
-  { id: "admin", label: "Admin", sub: "Operations lead", email: "mei@primalfight.io" },
-  { id: "reviewer", label: "Reviewer", sub: "Evaluates applicants", email: "luca@primalfight.io" },
-  { id: "club", label: "Club", sub: "Gym/team coordinator", email: "ops@sakuragym.jp" },
-  { id: "applicant", label: "Fighter", sub: "Individual applicant", email: "diego.ruiz@mail.com" },
+  { id: "admin", label: "Admin", sub: "Operations lead" },
+  { id: "reviewer", label: "Reviewer", sub: "Evaluates applicants" },
+  { id: "club", label: "Club", sub: "Gym/team coordinator" },
+  { id: "applicant", label: "Fighter", sub: "Individual applicant" },
 ];
 
 export default function Login() {
   const { login } = useAuth();
   const router = useRouter();
   const [role, setRole] = useState("admin");
-  const [email, setEmail] = useState("mei@primalfight.io");
-  const [password, setPassword] = useState("demo1234");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   const pickRole = (item) => {
     setRole(item.id);
-    setEmail(item.email);
   };
 
   const handleSubmit = async (event) => {
@@ -64,7 +63,7 @@ export default function Login() {
             <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">Sign in</div>
             <h1 className="font-display mt-2 text-3xl sm:text-4xl font-semibold tracking-tight">Welcome back.</h1>
             <p className="mt-2 text-sm text-secondary-muted">
-              Primal demo users are prefilled here so you can access the live workflow immediately.
+              Choose your account type, then sign in with your own email and password.
             </p>
 
             <div className="grid grid-cols-2 gap-2 mt-7">
@@ -95,7 +94,7 @@ export default function Login() {
                   onChange={(event) => setEmail(event.target.value)}
                   data-testid="login-email"
                   className="mt-1.5 h-11 bg-surface"
-                  placeholder="you@primalfight.io"
+                  placeholder={role === "admin" ? "admin@yourorg.com" : role === "reviewer" ? "reviewer@yourorg.com" : role === "club" ? "club@yourorg.com" : "fighter@example.com"}
                 />
               </div>
               <div>
@@ -106,7 +105,7 @@ export default function Login() {
                   onChange={(event) => setPassword(event.target.value)}
                   data-testid="login-password"
                   className="mt-1.5 h-11 bg-surface"
-                  placeholder="demo1234"
+                  placeholder="Enter your password"
                 />
                 <div className="mt-2 text-right">
                   <Link href="/forgot-password" className="text-xs text-secondary-muted hover:text-foreground hover:underline">
@@ -129,7 +128,7 @@ export default function Login() {
             </form>
 
             <p className="mt-6 text-xs text-tertiary text-center">
-              Seed password: demo1234 - <Link href="/register" className="text-foreground hover:underline">Register instead</Link>
+              <Link href="/register" className="text-foreground hover:underline">Register instead</Link>
             </p>
           </div>
         </div>

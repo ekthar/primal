@@ -176,6 +176,15 @@ const profiles = {
 const tournaments = {
   listPublic: async () => (await query(`SELECT * FROM tournaments WHERE is_public = TRUE AND ${ACTIVE} ORDER BY starts_on DESC`)).rows,
   findById: async (id) => (await query(`SELECT * FROM tournaments WHERE id=$1 AND ${ACTIVE}`, [id])).rows[0],
+  createAdmin: async ({ slug, name, season = null, startsOn = null, endsOn = null, registrationOpenAt = null, registrationCloseAt = null, correctionWindowHours = null, isPublic = true }) => {
+    const { rows } = await query(
+      `INSERT INTO tournaments (slug, name, season, starts_on, ends_on, registration_open_at, registration_close_at, correction_window_hours, is_public)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       RETURNING *`,
+      [slug, name, season, startsOn, endsOn, registrationOpenAt, registrationCloseAt, correctionWindowHours, isPublic]
+    );
+    return rows[0];
+  },
   listAdmin: async ({ q, limit = 200, offset = 0 } = {}) => {
     const where = [`${ACTIVE}`];
     const args = [];
@@ -190,6 +199,9 @@ const tournaments = {
   },
   updateAdmin: async (id, patch) => {
     const map = {
+      name: 'name',
+      slug: 'slug',
+      season: 'season',
       registrationOpenAt: 'registration_open_at',
       registrationCloseAt: 'registration_close_at',
       correctionWindowHours: 'correction_window_hours',
@@ -209,6 +221,7 @@ const tournaments = {
     const sql = `UPDATE tournaments SET ${fields.join(', ')}, updated_at = NOW() WHERE id = $${args.length} RETURNING *`;
     return (await query(sql, args)).rows[0];
   },
+  softDelete: async (id) => (await query(`UPDATE tournaments SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1 AND deleted_at IS NULL RETURNING *`, [id])).rows[0],
 };
 
 // --------- applications ---------

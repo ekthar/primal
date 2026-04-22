@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarRange, RefreshCcw, Save, Scale, Settings2 } from "lucide-react";
+import { CalendarRange, Plus, RefreshCcw, Save, Scale, Settings2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -69,12 +69,32 @@ function formatDisplayDate(value) {
   return date.toLocaleString();
 }
 
+function toIsoDateTime(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString();
+}
+
 export default function AdminSettings({ initialTab = "tournaments" }) {
   const { user } = useAuth();
   const [loadingTournaments, setLoadingTournaments] = useState(true);
   const [savingTournamentId, setSavingTournamentId] = useState(null);
   const [tournaments, setTournaments] = useState([]);
   const [tournamentDrafts, setTournamentDrafts] = useState({});
+  const [creatingTournament, setCreatingTournament] = useState(false);
+  const [archivingTournamentId, setArchivingTournamentId] = useState(null);
+  const [newTournament, setNewTournament] = useState({
+    name: "",
+    slug: "",
+    season: "",
+    registrationOpenAt: "",
+    registrationCloseAt: "",
+    correctionWindowHours: "72",
+    startsOn: "",
+    endsOn: "",
+    isPublic: "true",
+  });
 
   const [loadingClubs, setLoadingClubs] = useState(true);
   const [loadingReweigh, setLoadingReweigh] = useState(true);
@@ -111,6 +131,9 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
         rows.map((tournament) => [
           tournament.id,
           {
+            name: tournament.name || "",
+            slug: tournament.slug || "",
+            season: tournament.season || "",
             registrationOpenAt: formatDateTimeInput(tournament.registration_open_at),
             registrationCloseAt: formatDateTimeInput(tournament.registration_close_at),
             correctionWindowHours: tournament.correction_window_hours ? String(tournament.correction_window_hours) : "",
@@ -164,11 +187,14 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
     const draft = tournamentDrafts[tournamentId];
     if (!draft) return;
     const body = {
-      registrationOpenAt: draft.registrationOpenAt || null,
-      registrationCloseAt: draft.registrationCloseAt || null,
+      name: draft.name?.trim() || undefined,
+      slug: draft.slug?.trim() || undefined,
+      season: draft.season?.trim() || null,
+      registrationOpenAt: toIsoDateTime(draft.registrationOpenAt),
+      registrationCloseAt: toIsoDateTime(draft.registrationCloseAt),
       correctionWindowHours: draft.correctionWindowHours ? Number(draft.correctionWindowHours) : null,
-      startsOn: draft.startsOn || null,
-      endsOn: draft.endsOn || null,
+      startsOn: toIsoDateTime(draft.startsOn),
+      endsOn: toIsoDateTime(draft.endsOn),
       isPublic: draft.isPublic === "true",
     };
 
@@ -185,6 +211,9 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
     setTournamentDrafts((current) => ({
       ...current,
       [tournamentId]: {
+        name: updated.name || "",
+        slug: updated.slug || "",
+        season: updated.season || "",
         registrationOpenAt: formatDateTimeInput(updated.registration_open_at),
         registrationCloseAt: formatDateTimeInput(updated.registration_close_at),
         correctionWindowHours: updated.correction_window_hours ? String(updated.correction_window_hours) : "",
@@ -194,6 +223,77 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
       },
     }));
     toast.success("Tournament settings updated");
+  }
+
+  async function createTournament() {
+    if (!newTournament.name.trim() || !newTournament.slug.trim()) {
+      toast.error("Season name and slug are required");
+      return;
+    }
+
+    setCreatingTournament(true);
+    const { data, error } = await api.createTournament({
+      name: newTournament.name.trim(),
+      slug: newTournament.slug.trim(),
+      season: newTournament.season.trim() || null,
+      registrationOpenAt: toIsoDateTime(newTournament.registrationOpenAt),
+      registrationCloseAt: toIsoDateTime(newTournament.registrationCloseAt),
+      correctionWindowHours: newTournament.correctionWindowHours ? Number(newTournament.correctionWindowHours) : null,
+      startsOn: toIsoDateTime(newTournament.startsOn),
+      endsOn: toIsoDateTime(newTournament.endsOn),
+      isPublic: newTournament.isPublic === "true",
+    });
+    setCreatingTournament(false);
+    if (error) {
+      toast.error(error.message || "Failed to create tournament");
+      return;
+    }
+
+    const created = data?.tournament;
+    setTournaments((current) => [created, ...current]);
+    setTournamentDrafts((current) => ({
+      ...current,
+      [created.id]: {
+        name: created.name || "",
+        slug: created.slug || "",
+        season: created.season || "",
+        registrationOpenAt: formatDateTimeInput(created.registration_open_at),
+        registrationCloseAt: formatDateTimeInput(created.registration_close_at),
+        correctionWindowHours: created.correction_window_hours ? String(created.correction_window_hours) : "",
+        startsOn: formatDateTimeInput(created.starts_on),
+        endsOn: formatDateTimeInput(created.ends_on),
+        isPublic: created.is_public ? "true" : "false",
+      },
+    }));
+    setNewTournament({
+      name: "",
+      slug: "",
+      season: "",
+      registrationOpenAt: "",
+      registrationCloseAt: "",
+      correctionWindowHours: "72",
+      startsOn: "",
+      endsOn: "",
+      isPublic: "true",
+    });
+    toast.success("New season created");
+  }
+
+  async function archiveTournament(tournamentId) {
+    setArchivingTournamentId(tournamentId);
+    const { error } = await api.deleteTournament(tournamentId);
+    setArchivingTournamentId(null);
+    if (error) {
+      toast.error(error.message || "Failed to archive tournament");
+      return;
+    }
+    setTournaments((current) => current.filter((row) => row.id !== tournamentId));
+    setTournamentDrafts((current) => {
+      const next = { ...current };
+      delete next[tournamentId];
+      return next;
+    });
+    toast.success("Tournament archived");
   }
 
   async function saveReweigh(profileId) {
@@ -275,6 +375,107 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
               </div>
             ) : (
               <div className="mt-5 space-y-4">
+                <article className="rounded-2xl border border-border bg-background/50 p-5">
+                  <div className="flex items-start justify-between gap-4 flex-wrap">
+                    <div>
+                      <div className="font-display text-xl font-semibold tracking-tight">Create a new season</div>
+                      <div className="mt-2 text-sm text-secondary-muted">
+                        Add a new tournament window here instead of relying on the seeded 2026 event.
+                      </div>
+                    </div>
+                    <Button onClick={createTournament} disabled={creatingTournament}>
+                      <InlineLoadingLabel loading={creatingTournament} loadingText="Creating...">
+                        <>
+                          <Plus className="size-4" /> Create season
+                        </>
+                      </InlineLoadingLabel>
+                    </Button>
+                  </div>
+
+                  <div className="mt-4 grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                    <Field label="Season name">
+                      <Input
+                        className="h-10 bg-surface"
+                        value={newTournament.name}
+                        onChange={(event) => setNewTournament((current) => ({ ...current, name: event.target.value }))}
+                        placeholder="Season 2027 Championship"
+                      />
+                    </Field>
+                    <Field label="Slug">
+                      <Input
+                        className="h-10 bg-surface"
+                        value={newTournament.slug}
+                        onChange={(event) => setNewTournament((current) => ({ ...current, slug: event.target.value.toLowerCase().replace(/[^a-z0-9-]+/g, "-") }))}
+                        placeholder="season-2027"
+                      />
+                    </Field>
+                    <Field label="Season label">
+                      <Input
+                        className="h-10 bg-surface"
+                        value={newTournament.season}
+                        onChange={(event) => setNewTournament((current) => ({ ...current, season: event.target.value }))}
+                        placeholder="season-2027"
+                      />
+                    </Field>
+                    <Field label="Registration opens">
+                      <Input
+                        type="datetime-local"
+                        className="h-10 bg-surface"
+                        value={newTournament.registrationOpenAt}
+                        onChange={(event) => setNewTournament((current) => ({ ...current, registrationOpenAt: event.target.value }))}
+                      />
+                    </Field>
+                    <Field label="Registration closes">
+                      <Input
+                        type="datetime-local"
+                        className="h-10 bg-surface"
+                        value={newTournament.registrationCloseAt}
+                        onChange={(event) => setNewTournament((current) => ({ ...current, registrationCloseAt: event.target.value }))}
+                      />
+                    </Field>
+                    <Field label="Correction window (hours)">
+                      <Input
+                        type="number"
+                        min="1"
+                        max="720"
+                        className="h-10 bg-surface"
+                        value={newTournament.correctionWindowHours}
+                        onChange={(event) => setNewTournament((current) => ({ ...current, correctionWindowHours: event.target.value }))}
+                      />
+                    </Field>
+                    <Field label="Tournament starts">
+                      <Input
+                        type="datetime-local"
+                        className="h-10 bg-surface"
+                        value={newTournament.startsOn}
+                        onChange={(event) => setNewTournament((current) => ({ ...current, startsOn: event.target.value }))}
+                      />
+                    </Field>
+                    <Field label="Tournament ends">
+                      <Input
+                        type="datetime-local"
+                        className="h-10 bg-surface"
+                        value={newTournament.endsOn}
+                        onChange={(event) => setNewTournament((current) => ({ ...current, endsOn: event.target.value }))}
+                      />
+                    </Field>
+                    <Field label="Public visibility">
+                      <Select
+                        value={newTournament.isPublic}
+                        onValueChange={(value) => setNewTournament((current) => ({ ...current, isPublic: value }))}
+                      >
+                        <SelectTrigger className="h-10 bg-surface">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="true">Public</SelectItem>
+                          <SelectItem value="false">Private</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                  </div>
+                </article>
+
                 {tournaments.map((tournament) => {
                   const draft = tournamentDrafts[tournament.id] || {};
                   return (
@@ -290,16 +491,55 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
                             Correction window: {tournament.correction_window_hours || "Not set"} hour(s)
                           </div>
                         </div>
-                        <Button onClick={() => saveTournament(tournament.id)} disabled={savingTournamentId === tournament.id}>
-                          <InlineLoadingLabel loading={savingTournamentId === tournament.id} loadingText="Saving...">
-                            <>
-                              <Save className="size-4" /> Save
-                            </>
-                          </InlineLoadingLabel>
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button variant="outline" onClick={() => archiveTournament(tournament.id)} disabled={archivingTournamentId === tournament.id}>
+                            <InlineLoadingLabel loading={archivingTournamentId === tournament.id} loadingText="Archiving...">
+                              <>
+                                <Trash2 className="size-4" /> Archive
+                              </>
+                            </InlineLoadingLabel>
+                          </Button>
+                          <Button onClick={() => saveTournament(tournament.id)} disabled={savingTournamentId === tournament.id}>
+                            <InlineLoadingLabel loading={savingTournamentId === tournament.id} loadingText="Saving...">
+                              <>
+                                <Save className="size-4" /> Save
+                              </>
+                            </InlineLoadingLabel>
+                          </Button>
+                        </div>
                       </div>
 
                       <div className="mt-4 grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                        <Field label="Season name">
+                          <Input
+                            className="h-10 bg-surface"
+                            value={draft.name || ""}
+                            onChange={(event) => setTournamentDrafts((current) => ({
+                              ...current,
+                              [tournament.id]: { ...current[tournament.id], name: event.target.value },
+                            }))}
+                          />
+                        </Field>
+                        <Field label="Slug">
+                          <Input
+                            className="h-10 bg-surface"
+                            value={draft.slug || ""}
+                            onChange={(event) => setTournamentDrafts((current) => ({
+                              ...current,
+                              [tournament.id]: { ...current[tournament.id], slug: event.target.value.toLowerCase().replace(/[^a-z0-9-]+/g, "-") },
+                            }))}
+                          />
+                        </Field>
+                        <Field label="Season label">
+                          <Input
+                            className="h-10 bg-surface"
+                            value={draft.season || ""}
+                            onChange={(event) => setTournamentDrafts((current) => ({
+                              ...current,
+                              [tournament.id]: { ...current[tournament.id], season: event.target.value },
+                            }))}
+                          />
+                        </Field>
                         <Field label="Registration opens">
                           <Input
                             type="datetime-local"

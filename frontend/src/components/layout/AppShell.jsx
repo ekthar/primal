@@ -16,6 +16,7 @@ import {
   ChevronDown,
   Menu,
   Trophy,
+  ArrowLeft,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import ThemeToggle from "@/components/shared/ThemeToggle";
@@ -71,6 +72,13 @@ const NAV = {
   ],
 };
 
+const HOME_BY_ROLE = {
+  admin: "/admin/overview",
+  reviewer: "/admin/queue",
+  club: "/club",
+  applicant: "/applicant",
+};
+
 function Brand({ compact = false }) {
   return (
     <div className="flex items-center gap-2">
@@ -102,11 +110,11 @@ function RoleSwitcher() {
               {user.avatar}
             </AvatarFallback>
           </Avatar>
-          <div className="hidden xl:block flex-1 text-left min-w-0">
+          <div className="flex-1 text-left min-w-0">
             <div className="text-sm font-medium truncate">{user.name}</div>
             <div className="text-[11px] text-tertiary capitalize truncate">{user.role}</div>
           </div>
-          <ChevronDown className="hidden xl:block size-4 text-tertiary" />
+          <ChevronDown className="size-4 text-tertiary" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" side="top" className="w-60">
@@ -154,26 +162,23 @@ function DesktopSidebar() {
   const { user } = useAuth();
   const nav = NAV[user?.role] || [];
   return (
-    <aside className="hidden md:flex md:w-[84px] xl:w-64 shrink-0 flex-col border-r border-border bg-surface/40 backdrop-blur-xl">
-      <div className="px-4 xl:px-5 py-5 border-b border-border flex justify-center xl:justify-start">
+    <aside className="hidden md:sticky md:top-0 md:flex md:h-screen md:self-start md:w-72 shrink-0 flex-col border-r border-border bg-surface/40 backdrop-blur-xl">
+      <div className="px-5 py-5 border-b border-border flex justify-start">
         <Brand />
       </div>
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        <div className="hidden xl:block px-2 pb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-tertiary">
+        <div className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-tertiary">
           Workspace
         </div>
         {nav.map((n) => (
-          <NavLink key={n.to} item={n} compact />
+          <NavLink key={n.to} item={n} />
         ))}
       </nav>
       <div className="p-3 border-t border-border space-y-2">
         <RoleSwitcher />
-        <div className="hidden xl:flex items-center justify-between px-1 pt-1">
+        <div className="flex items-center justify-between px-1 pt-1">
           <span className="text-[10px] uppercase tracking-wider text-tertiary">Theme</span>
           <ThemeToggle />
-        </div>
-        <div className="flex xl:hidden justify-center pt-1">
-          <ThemeToggle compact />
         </div>
       </div>
     </aside>
@@ -215,11 +220,57 @@ function MobileNavSheet({ nav }) {
   );
 }
 
-function MobileTopbar({ nav }) {
+function BackButton({ fallbackRoute, compact = false }) {
+  const router = useRouter();
+
+  const handleBack = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+      return;
+    }
+    router.push(fallbackRoute || "/");
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleBack}
+      className={`inline-flex items-center justify-center rounded-xl border border-border bg-surface hover:bg-surface-muted focus-ring ${compact ? "size-10" : "h-10 px-3 gap-2 text-sm font-medium"}`}
+    >
+      <ArrowLeft className="size-4" />
+      {!compact ? <span>Back</span> : <span className="sr-only">Back</span>}
+    </button>
+  );
+}
+
+function DesktopTopbar({ nav }) {
   const { user } = useAuth();
+  const router = useRouter();
+  const current = nav.find((item) => isActivePath(router.pathname, item.to));
+  const fallbackRoute = HOME_BY_ROLE[user?.role] || "/";
+
+  return (
+    <div className="hidden md:flex items-center justify-between gap-4 border-b border-border bg-background/80 px-6 py-4 backdrop-blur-xl">
+      <div className="flex items-center gap-3 min-w-0">
+        <BackButton fallbackRoute={fallbackRoute} />
+        <div className="min-w-0">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-tertiary">Workspace</div>
+          <div className="truncate text-sm font-medium text-foreground">{current?.label || "Control panel"}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MobileTopbar({ nav }) {
+  const router = useRouter();
+  const { user } = useAuth();
+  const current = nav.find((item) => isActivePath(router.pathname, item.to));
+  const fallbackRoute = HOME_BY_ROLE[user?.role] || "/";
   return (
     <div data-testid="mobile-topbar" className="md:hidden sticky top-0 z-30 flex items-center justify-between gap-3 px-4 h-14 border-b border-border bg-background/85 backdrop-blur-xl">
       <div className="flex items-center gap-3 min-w-0">
+        <BackButton fallbackRoute={fallbackRoute} compact />
         <MobileNavSheet nav={nav} />
         <Brand compact />
       </div>
@@ -266,10 +317,11 @@ export default function AppShell({ children }) {
   const nav = NAV[user?.role] || [];
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex min-h-screen items-start bg-background">
       <DesktopSidebar />
       <main className="flex-1 flex min-w-0 flex-col">
         <MobileTopbar nav={nav} />
+        <DesktopTopbar nav={nav} />
         <div className="flex-1 min-w-0 app-shell-safe-bottom md:pb-0">{children}</div>
         <MobileBottomNav nav={nav} />
       </main>

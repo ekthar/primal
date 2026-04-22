@@ -1,3 +1,4 @@
+import { motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -9,27 +10,59 @@ export function Spinner({ className = "" }) {
 export function FullPageLoader({ title = "Primal", message = "Preparing your fight desk..." }) {
   return (
     <div className="min-h-screen bg-background text-foreground flex items-center justify-center px-6">
-      <div className="w-full max-w-md rounded-[28px] border border-border bg-surface/90 backdrop-blur-xl p-8 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
+      <div className="relative w-full max-w-sm overflow-hidden rounded-[28px] border border-border bg-surface/92 p-7 shadow-[0_20px_60px_rgba(0,0,0,0.12)]">
+        <div
+          className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent"
+          aria-hidden
+        />
         <div className="flex items-center gap-3">
-          <div className="size-12 rounded-2xl bg-foreground text-background flex items-center justify-center font-display font-bold text-lg">
+          <div className="size-11 rounded-2xl bg-foreground text-background flex items-center justify-center font-display font-bold text-base">
             P
           </div>
           <div>
-            <div className="font-display text-2xl font-semibold tracking-tight">{title}</div>
+            <div className="font-display text-xl font-semibold tracking-tight">{title}</div>
             <div className="text-[11px] uppercase tracking-[0.18em] text-tertiary">Fight operations platform</div>
           </div>
         </div>
-        <div className="mt-8 flex items-center gap-3 text-sm text-secondary-muted">
-          <Spinner className="size-5" />
+        <div className="mt-7 flex items-center gap-3 text-sm text-secondary-muted">
+          <span className="inline-flex size-2 rounded-full bg-primary animate-pulse" aria-hidden />
           <span>{message}</span>
         </div>
-        <div className="mt-6 grid grid-cols-3 gap-3">
-          <Skeleton className="h-16 rounded-2xl bg-primary/8" />
-          <Skeleton className="h-16 rounded-2xl bg-primary/8" />
-          <Skeleton className="h-16 rounded-2xl bg-primary/8" />
+        <div className="mt-6 h-1.5 overflow-hidden rounded-full bg-surface-muted">
+          <motion.div
+            className="h-full w-1/3 rounded-full bg-primary"
+            animate={{ x: ["-110%", "320%"] }}
+            transition={{ duration: 1.2, ease: "easeInOut", repeat: Infinity }}
+          />
+        </div>
+        <div className="mt-5 grid grid-cols-3 gap-3">
+          <Skeleton className="h-12 rounded-2xl bg-primary/8" />
+          <Skeleton className="h-12 rounded-2xl bg-primary/8" />
+          <Skeleton className="h-12 rounded-2xl bg-primary/8" />
         </div>
       </div>
     </div>
+  );
+}
+
+export function RouteProgressBar({ active }) {
+  return (
+    <motion.div
+      initial={false}
+      animate={{ opacity: active ? 1 : 0 }}
+      transition={{ duration: 0.18 }}
+      className="pointer-events-none fixed inset-x-0 top-0 z-[120]"
+      aria-hidden
+    >
+      <div className="h-0.5 w-full bg-transparent">
+        <motion.div
+          className="h-full origin-left bg-gradient-to-r from-primary via-foreground to-primary"
+          animate={active ? { x: ["-35%", "115%"] } : { x: "-120%" }}
+          transition={active ? { duration: 1.05, ease: "easeInOut", repeat: Infinity } : { duration: 0.2 }}
+          style={{ width: "38%" }}
+        />
+      </div>
+    </motion.div>
   );
 }
 

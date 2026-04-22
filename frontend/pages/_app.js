@@ -6,7 +6,7 @@ import { ThemeProvider } from "@/context/ThemeContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { Toaster } from "@/components/ui/sonner";
 import AppShell from "@/components/layout/AppShell";
-import { FullPageLoader } from "@/components/shared/PrimalLoader";
+import { FullPageLoader, RouteProgressBar } from "@/components/shared/PrimalLoader";
 
 function RouteFrame({ Component, pageProps }) {
   const router = useRouter();
@@ -47,12 +47,23 @@ function RouteFrame({ Component, pageProps }) {
     return <FullPageLoader message="Routing you to secure sign-in..." />;
   }
 
+  const page = <Component {...pageProps} />;
+
   if (routeLoading) {
-    return <FullPageLoader message="Loading the next fight desk..." />;
+    return (
+      <>
+        <RouteProgressBar active />
+        {isProtected ? <AppShell>{page}</AppShell> : page}
+      </>
+    );
   }
 
-  const page = <Component {...pageProps} />;
-  return isProtected ? <AppShell>{page}</AppShell> : page;
+  return (
+    <>
+      <RouteProgressBar active={false} />
+      {isProtected ? <AppShell>{page}</AppShell> : page}
+    </>
+  );
 }
 
 export default function App({ Component, pageProps }) {

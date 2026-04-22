@@ -206,7 +206,16 @@ export const api = {
   publicIndiaPincodeLookup: (pincode) => request("GET", `/api/public/india/pincode/${encodeURIComponent(pincode)}`),
 
   adminTournaments: (query) => request("GET", "/api/tournaments", { query }),
+  createTournament: (body) => request("POST", "/api/tournaments", { body }),
   updateTournament: (id, body) => request("PATCH", `/api/tournaments/${id}`, { body }),
+  deleteTournament: (id) => request("DELETE", `/api/tournaments/${id}`),
+  bracketOverview: (query) => request("GET", "/api/brackets", { query }),
+  generateBracket: (body) => request("POST", "/api/brackets/generate", { body }),
+  updateBracket: (id, body) => request("PATCH", `/api/brackets/${id}`, { body }),
+  advanceBracketWinner: (id, body) => request("POST", `/api/brackets/${id}/advance`, { body }),
+  downloadBracketPdf: (id) => downloadFile(`/api/brackets/${id}.pdf`, {
+    filename: `primal-bracket-${id}.pdf`,
+  }),
 
   listCirculars: (query) => request("GET", "/api/circulars", { query }),
   createCircular: (body) => request("POST", "/api/circulars", { body }),

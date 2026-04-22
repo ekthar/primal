@@ -14,13 +14,13 @@
 
     /* Text */
     --foreground: 0 0% 4%;
-    --text-secondary: 240 4% 42%;
-    --text-tertiary: 240 5% 60%;
+    --text-secondary: 240 4% 34%;
+    --text-tertiary: 240 4% 47%;
 
     /* Borders */
-    --border: 240 6% 90%;
-    --border-strong: 240 5% 82%;
-    --input: 240 6% 90%;
+    --border: 240 6% 84%;
+    --border-strong: 240 5% 74%;
+    --input: 240 6% 84%;
     --ring: 358 75% 59%;
 
     /* Accent — crimson */
@@ -33,35 +33,35 @@
     --card-foreground: 0 0% 4%;
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 4%;
-    --secondary: 240 5% 96%;
+    --secondary: 240 5% 94%;
     --secondary-foreground: 0 0% 9%;
     --muted: 240 5% 96%;
-    --muted-foreground: 240 4% 42%;
+    --muted-foreground: 240 4% 34%;
     --accent: 240 5% 96%;
     --accent-foreground: 0 0% 9%;
     --destructive: 358 75% 59%;
     --destructive-foreground: 0 0% 100%;
 
     /* Glass */
-    --glass-bg: 0 0% 100% / 0.72;
-    --glass-border: 0 0% 100% / 0.6;
+    --glass-bg: 0 0% 100% / 0.82;
+    --glass-border: 240 6% 78% / 0.9;
 
     --radius: 0.625rem;
   }
 
   .dark {
     --background: 240 5% 4%;
-    --surface: 240 6% 7%;
-    --surface-muted: 240 5% 11%;
-    --surface-sunk: 240 5% 9%;
+    --surface: 240 6% 8%;
+    --surface-muted: 240 5% 12%;
+    --surface-sunk: 240 5% 10%;
 
     --foreground: 0 0% 98%;
-    --text-secondary: 240 5% 65%;
-    --text-tertiary: 240 5% 45%;
+    --text-secondary: 240 5% 76%;
+    --text-tertiary: 240 5% 61%;
 
-    --border: 240 5% 16%;
-    --border-strong: 240 5% 22%;
-    --input: 240 5% 16%;
+    --border: 240 5% 22%;
+    --border-strong: 240 5% 30%;
+    --input: 240 5% 22%;
     --ring: 358 80% 65%;
 
     --primary: 358 80% 65%;
@@ -72,17 +72,17 @@
     --card-foreground: 0 0% 98%;
     --popover: 240 6% 7%;
     --popover-foreground: 0 0% 98%;
-    --secondary: 240 5% 11%;
+    --secondary: 240 5% 13%;
     --secondary-foreground: 0 0% 98%;
     --muted: 240 5% 11%;
-    --muted-foreground: 240 5% 65%;
-    --accent: 240 5% 14%;
+    --muted-foreground: 240 5% 76%;
+    --accent: 240 5% 16%;
     --accent-foreground: 0 0% 98%;
     --destructive: 358 80% 65%;
     --destructive-foreground: 0 0% 100%;
 
-    --glass-bg: 240 6% 7% / 0.72;
-    --glass-border: 0 0% 100% / 0.08;
+    --glass-bg: 240 6% 8% / 0.84;
+    --glass-border: 0 0% 100% / 0.12;
   }
 }
 

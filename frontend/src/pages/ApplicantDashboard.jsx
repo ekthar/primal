@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Download, Eye, FileCheck2, Gavel, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -34,10 +34,14 @@ export default function ApplicantDashboard() {
   const [activeApplication, setActiveApplication] = useState(null);
   const [activeApplicationDetails, setActiveApplicationDetails] = useState(null);
   const [loadingApplicationId, setLoadingApplicationId] = useState(null);
+  const [publicTournaments, setPublicTournaments] = useState([]);
+  const [startingSeasonId, setStartingSeasonId] = useState(null);
+  const [draftUploads, setDraftUploads] = useState({});
+  const [submittingDraftId, setSubmittingDraftId] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([api.getMyProfile(), api.listApplications(), api.myAppeals()]).then(([profileRes, appRes, appealRes]) => {
+    Promise.all([api.getMyProfile(), api.listApplications(), api.myAppeals(), api.publicTournaments()]).then(([profileRes, appRes, appealRes, tournamentRes]) => {
       if (!profileRes.error) setProfile(profileRes.data.profile);
       if (!appRes.error) setApplications(appRes.data.items || []);
       if (!appealRes.error) {
@@ -47,6 +51,7 @@ export default function ApplicantDashboard() {
         }
         setAppealsByApplication(index);
       }
+      if (!tournamentRes.error) setPublicTournaments(tournamentRes.data.tournaments || []);
       setLoading(false);
     });
   }, []);
@@ -96,6 +101,95 @@ export default function ApplicantDashboard() {
     setActiveApplicationDetails(data?.application || null);
   }
 
+  async function startSeasonApplication(tournament) {
+    if (!profile?.id) {
+      toast.error("Complete your profile before applying for a new season");
+      return;
+    }
+
+    setStartingSeasonId(tournament.id);
+    const { data, error } = await api.createApplication({
+      tournamentId: tournament.id,
+      formData: {
+        selectedDisciplines: profile.metadata?.selectedDisciplines || [],
+        experienceLevel: profile.metadata?.experienceLevel || null,
+        notes: "",
+      },
+    });
+    setStartingSeasonId(null);
+
+    if (error) {
+      toast.error(error.message || "Failed to start season application");
+      return;
+    }
+
+    const nextApplication = data?.application;
+    if (nextApplication) {
+      setApplications((current) => [nextApplication, ...current]);
+      toast.success(`Draft created for ${tournament.name}`);
+    }
+  }
+
+  function setDraftFile(applicationId, kind, file) {
+    setDraftUploads((current) => ({
+      ...current,
+      [applicationId]: {
+        ...(current[applicationId] || {}),
+        [kind]: file || null,
+      },
+    }));
+  }
+
+  async function uploadAndSubmitDraft(application) {
+    const files = draftUploads[application.id] || {};
+    const requiredKinds = ["medical", "photo_id", "consent"];
+    const missing = requiredKinds.filter((kind) => !files[kind]);
+    if (missing.length) {
+      toast.error("Upload medical certificate, photo ID, and signed consent before submitting");
+      return;
+    }
+
+    setSubmittingDraftId(application.id);
+    for (const kind of requiredKinds) {
+      const { error } = await api.uploadApplicationDocument(application.id, {
+        file: files[kind],
+        kind,
+        label: files[kind].name,
+      });
+      if (error) {
+        setSubmittingDraftId(null);
+        toast.error(error.message || `Failed to upload ${kind}`);
+        return;
+      }
+    }
+
+    const { data, error } = await api.submitApplication(application.id);
+    setSubmittingDraftId(null);
+    if (error) {
+      toast.error(error.message || "Failed to submit application");
+      return;
+    }
+
+    const submittedApplication = data?.application;
+    if (submittedApplication) {
+      setApplications((current) => current.map((item) => (item.id === application.id ? submittedApplication : item)));
+    }
+    setDraftUploads((current) => ({ ...current, [application.id]: {} }));
+    toast.success("Season application submitted");
+  }
+
+  const approvedCount = applications.filter((application) => application.status === "approved").length;
+  const pendingCount = applications.filter((application) => ["submitted", "under_review", "needs_correction"].includes(application.status)).length;
+  const address = profile?.metadata?.address || null;
+  const openSeasonTournaments = useMemo(
+    () => publicTournaments.filter((tournament) => tournament.registrationOpen),
+    [publicTournaments]
+  );
+  const applicationsByTournament = useMemo(
+    () => Object.fromEntries(applications.map((application) => [application.tournament_id, application])),
+    [applications]
+  );
+
   if (loading) {
     return (
       <ResponsivePageShell className="max-w-6xl">
@@ -115,10 +209,6 @@ export default function ApplicantDashboard() {
       </div>
     );
   }
-
-  const approvedCount = applications.filter((application) => application.status === "approved").length;
-  const pendingCount = applications.filter((application) => ["submitted", "under_review", "needs_correction"].includes(application.status)).length;
-  const address = profile.metadata?.address || null;
 
   return (
     <ResponsivePageShell className="max-w-6xl">
@@ -166,6 +256,53 @@ export default function ApplicantDashboard() {
         <div className="space-y-5">
           <div className="rounded-3xl border border-border bg-surface elev-card p-6">
             <div>
+              <h2 className="font-display text-2xl font-semibold tracking-tight">Open seasons</h2>
+              <p className="text-sm text-secondary-muted mt-1">Existing participants can start a new season application here as soon as registration opens.</p>
+            </div>
+            <div className="mt-5 space-y-4">
+              {openSeasonTournaments.map((tournament) => {
+                const existingApplication = applicationsByTournament[tournament.id];
+                return (
+                  <article key={tournament.id} className="rounded-2xl border border-border bg-background/60 p-4">
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div>
+                        <div className="font-display text-xl font-semibold tracking-tight">{tournament.name}</div>
+                        <div className="text-sm text-secondary-muted mt-1">
+                          Registration closes {tournament.registration_close_at ? new Date(tournament.registration_close_at).toLocaleString() : "when admin ends the season"}
+                        </div>
+                      </div>
+                      {existingApplication ? <StatusPill status={existingApplication.status} /> : null}
+                    </div>
+                    <div className="mt-4 flex justify-end">
+                      {existingApplication ? (
+                        <Button variant="outline" onClick={() => openApplication(existingApplication)} disabled={loadingApplicationId === existingApplication.id}>
+                          <InlineLoadingLabel loading={loadingApplicationId === existingApplication.id} loadingText="Opening...">
+                            <>
+                              <Eye className="size-3.5" /> Open application
+                            </>
+                          </InlineLoadingLabel>
+                        </Button>
+                      ) : (
+                        <Button onClick={() => startSeasonApplication(tournament)} disabled={startingSeasonId === tournament.id}>
+                          <InlineLoadingLabel loading={startingSeasonId === tournament.id} loadingText="Starting...">
+                            Start season application
+                          </InlineLoadingLabel>
+                        </Button>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
+              {!openSeasonTournaments.length && (
+                <div className="rounded-2xl border border-dashed border-border bg-background/60 p-4 text-sm text-secondary-muted">
+                  No season is open right now. You can still sign in, review your saved profile, and wait for the next registration window.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-border bg-surface elev-card p-6">
+            <div>
               <h2 className="font-display text-2xl font-semibold tracking-tight">Tournament submissions</h2>
               <p className="text-sm text-secondary-muted mt-1">Every submission remains viewable from your dashboard, even after registration closes.</p>
             </div>
@@ -195,6 +332,38 @@ export default function ApplicantDashboard() {
                       </InlineLoadingLabel>
                     </Button>
                   </div>
+
+                  {application.status === "draft" ? (
+                    <div className="mt-4 rounded-xl border border-border bg-surface p-4">
+                      <div className="font-medium text-sm">Finish this season application</div>
+                      <p className="mt-2 text-sm text-secondary-muted">
+                        Upload the required documents here, then submit while the season registration window is still open.
+                      </p>
+                      <div className="mt-4 grid sm:grid-cols-3 gap-3">
+                        {[
+                          ["medical", "Medical certificate"],
+                          ["photo_id", "Photo ID"],
+                          ["consent", "Signed consent"],
+                        ].map(([kind, label]) => (
+                          <div key={kind}>
+                            <div className="text-[10px] uppercase tracking-wider text-tertiary font-semibold">{label}</div>
+                            <input
+                              type="file"
+                              onChange={(event) => setDraftFile(application.id, kind, event.target.files?.[0] || null)}
+                              className="mt-2 block w-full text-sm"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-4 flex justify-end">
+                        <Button onClick={() => uploadAndSubmitDraft(application)} disabled={submittingDraftId === application.id}>
+                          <InlineLoadingLabel loading={submittingDraftId === application.id} loadingText="Submitting...">
+                            Submit this season application
+                          </InlineLoadingLabel>
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
 
                   {(["rejected", "needs_correction"].includes(application.status)) && (
                     <div className="mt-4 rounded-xl border border-border bg-surface p-4">

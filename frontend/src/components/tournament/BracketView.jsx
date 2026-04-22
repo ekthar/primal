@@ -1,5 +1,5 @@
-import { AlertTriangle, Clock3, Shield, Swords } from "lucide-react";
-import { BRACKET_STATUS_LABELS } from "@/lib/tournamentWorkflow";
+import { AlertTriangle, Clock3, Shield, Swords, Trophy } from "lucide-react";
+import { BRACKET_STATUS_LABELS } from "@/lib/brackets";
 
 const STATUS_TONES = {
   draft: "bg-zinc-950/70 text-zinc-200 border-zinc-800",
@@ -115,6 +115,9 @@ function FixtureTable({ fixtures }) {
 
 export default function BracketView({ bracket, onAdvanceWinner }) {
   if (!bracket) return null;
+  const finalRound = bracket.rounds?.[bracket.rounds.length - 1];
+  const finalMatch = finalRound?.matches?.[0];
+  const champion = finalMatch?.winnerIndex !== undefined ? finalMatch.sides?.[finalMatch.winnerIndex] : null;
 
   return (
     <div className="rounded-[28px] overflow-hidden border border-zinc-800 bg-[radial-gradient(circle_at_top,rgba(220,38,38,0.16),transparent_35%),linear-gradient(180deg,#0a0a0a_0%,#111111_100%)] p-5 sm:p-6 text-white shadow-[0_20px_90px_rgba(0,0,0,0.45)]">
@@ -242,6 +245,21 @@ export default function BracketView({ bracket, onAdvanceWinner }) {
           ))}
         </div>
       </div>
+
+      {champion ? (
+        <div className="mt-6 rounded-3xl border border-emerald-800/60 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.24),transparent_55%),linear-gradient(180deg,rgba(6,78,59,0.78),rgba(4,47,46,0.96))] p-5 text-white">
+          <div className="text-[10px] uppercase tracking-[0.18em] text-emerald-200 font-semibold">Champion</div>
+          <div className="mt-2 flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <div className="font-display text-2xl font-semibold tracking-tight">{champion.name}</div>
+              <div className="mt-1 text-sm text-emerald-100/80">{champion.club || "Independent"}</div>
+            </div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300/30 bg-white/10 px-3 py-1.5 text-xs uppercase tracking-[0.18em] text-emerald-100">
+              <Trophy className="size-4" /> Winner advanced
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="mt-6">
         <FixtureTable fixtures={bracket.fixtures || []} />

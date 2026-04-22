@@ -8,6 +8,7 @@ const {
   applications: appsRepo,
   documents: docsRepo,
   statusEvents: eventsRepo,
+  tournaments: tournamentsRepo,
 } = require('../repositories');
 const { assertCanView } = require('./application.service');
 const { query } = require('../db');
@@ -15,6 +16,7 @@ const { write: auditWrite } = require('../audit');
 const { config } = require('../config');
 const { buildSignatureForApplication } = require('../pdfSignature');
 const { approvedParticipantReport } = require('./report.service');
+const bracketService = require('./bracket.service');
 
 function formatDateTime(value) {
   if (!value) return '—';
@@ -658,4 +660,199 @@ async function auditToExcel(res, actor, { since, until } = {}) {
     entityType: 'audit', entityId: 'bulk', payload: { since, until, count: rows.length }, requestIp: ctx.ip });
 }
 
-module.exports = { approvedToExcel, approvedParticipantsToExcel, applicationToPdf, auditToExcel };
+function getBracketSlotHeight(totalRounds) {
+  return totalRounds <= 2 ? 120 : totalRounds === 3 ? 96 : 82;
+}
+
+function drawBracketSlot(doc, x, y, width, height, side, palette, fonts) {
+  doc.save();
+  doc.roundedRect(x, y, width, height, 10).fill('#ffffff');
+  doc.roundedRect(x, y, width, height, 10).strokeColor('#111111').lineWidth(1.5).stroke();
+  doc.restore();
+  if (!side) return;
+
+  doc.fillColor(side.corner === 'blue' ? '#0f6ab6' : '#b91c1c')
+    .font(fonts.headingBold)
+    .fontSize(7.5)
+    .text((side.corner || 'slot').toUpperCase(), x + 8, y + 6, { width: width - 16 });
+  doc.fillColor('#111827')
+    .font(fonts.headingBold)
+    .fontSize(9)
+    .text(side.name || 'TBD', x + 8, y + 18, { width: width - 16, ellipsis: true });
+  doc.fillColor('#4b5563')
+    .font(fonts.body)
+    .fontSize(7.5)
+    .text(side.club || 'Independent', x + 8, y + 33, { width: width - 16, ellipsis: true });
+}
+
+function drawBracketMatch(doc, x, y, slotWidth, slotHeight, matchGap, match, palette, fonts) {
+  const topY = y;
+  const bottomY = y + slotHeight + matchGap;
+  drawBracketSlot(doc, x, topY, slotWidth, slotHeight, match.sides[0], palette, fonts);
+  drawBracketSlot(doc, x, bottomY, slotWidth, slotHeight, match.sides[1], palette, fonts);
+
+  const connectorX = x + slotWidth;
+  const midX = connectorX + 18;
+  const topMidY = topY + slotHeight / 2;
+  const bottomMidY = bottomY + slotHeight / 2;
+  const centerY = (topMidY + bottomMidY) / 2;
+
+  doc.save();
+  doc.lineWidth(1.5).strokeColor('#111111');
+  doc.moveTo(connectorX, topMidY).lineTo(midX, topMidY).stroke();
+  doc.moveTo(connectorX, bottomMidY).lineTo(midX, bottomMidY).stroke();
+  doc.moveTo(midX, topMidY).lineTo(midX, bottomMidY).stroke();
+  doc.moveTo(midX, centerY).lineTo(midX + 14, centerY).stroke();
+  doc.restore();
+
+  return { centerY };
+}
+
+function drawBracketRound(doc, x, startY, round, roundIndex, totalRounds, palette, fonts) {
+  const slotWidth = 112;
+  const slotHeight = getBracketSlotHeight(totalRounds);
+  const matchGap = 16;
+  const roundBlockHeight = slotHeight * 2 + matchGap;
+  const roundSpacing = Math.max(30, (slotHeight + matchGap) * Math.pow(2, roundIndex));
+  const centers = [];
+
+  doc.fillColor(palette.text)
+    .font(fonts.headingBold)
+    .fontSize(10)
+    .text(round.label, x, startY - 22, { width: slotWidth + 40, align: 'center' });
+
+  round.matches.forEach((match, index) => {
+    const y = startY + index * (roundBlockHeight + roundSpacing);
+    const result = drawBracketMatch(doc, x, y, slotWidth, slotHeight, matchGap, match, palette, fonts);
+    centers.push(result.centerY);
+  });
+
+  return centers;
+}
+
+function drawChampionCard(doc, x, y, champion, palette, fonts) {
+  const width = 148;
+  const height = 92;
+  doc.save();
+  doc.roundedRect(x, y, width, height, 14).fill('#fef3c7');
+  doc.roundedRect(x, y, width, height, 14).strokeColor('#b45309').lineWidth(1.5).stroke();
+  doc.restore();
+  doc.fillColor('#b45309').font(fonts.headingBold).fontSize(10).text('Champion', x + 12, y + 12);
+  doc.fillColor('#111827').font(fonts.headingBold).fontSize(13).text(champion?.name || 'TBD', x + 12, y + 32, {
+    width: width - 24,
+    ellipsis: true,
+  });
+  doc.fillColor('#6b7280').font(fonts.body).fontSize(9).text(champion?.club || 'Independent', x + 12, y + 52, {
+    width: width - 24,
+    ellipsis: true,
+  });
+}
+
+async function bracketToPdf(res, bracketId, actor, ctx = {}) {
+  if (!actor || actor.role !== 'admin') {
+    res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Admin access required' } });
+    return;
+  }
+
+  const bracket = await bracketService.findStoredBracketById(bracketId);
+  if (!bracket) {
+    res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Bracket not found' } });
+    return;
+  }
+  const tournament = await tournamentsRepo.findById(bracket.tournamentId);
+
+  const brandName = config.pdf?.brandName || 'Primal';
+  const palette = {
+    primary: normalizeHexColor(config.pdf?.brandPrimary, '#0b0b0b'),
+    accent: normalizeHexColor(config.pdf?.brandAccent, '#ef1a1a'),
+    text: '#111111',
+    textMuted: '#5b6470',
+    line: '#dbe1ea',
+    surface: '#f8fafc',
+  };
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="bracket-${bracket.id}.pdf"`);
+  const doc = new PDFDocument({
+    size: 'A4',
+    layout: 'landscape',
+    margin: 28,
+    info: {
+      Title: `${bracket.categoryLabel} bracket`,
+      Author: brandName,
+      Subject: 'Tournament bracket export',
+    },
+  });
+  doc.pipe(res);
+  const fonts = resolvePdfFonts(doc);
+
+  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  doc.save();
+  doc.rect(0, 0, doc.page.width, doc.page.height).fill('#fffaf5');
+  doc.fillOpacity(0.7).fillColor('#fee2e2').circle(doc.page.width - 120, 90, 180).fill();
+  doc.fillOpacity(0.7).fillColor('#dbeafe').circle(110, doc.page.height - 80, 140).fill();
+  doc.fillOpacity(0.62).fillColor('#fef3c7').circle(doc.page.width / 2 + 120, doc.page.height / 2 + 100, 120).fill();
+  doc.restore();
+  doc.save();
+  doc.roundedRect(doc.page.margins.left, doc.page.margins.top, pageWidth, 72, 16).fill('#ffffff');
+  doc.roundedRect(doc.page.margins.left, doc.page.margins.top, pageWidth, 72, 16).strokeColor('#111111').lineWidth(1.5).stroke();
+  doc.restore();
+
+  drawLogoMark(doc, {
+    x: doc.page.margins.left + 16,
+    y: doc.page.margins.top + 14,
+    size: 40,
+    logoPath: config.pdf?.logoPath,
+    brandName,
+    accent: palette.primary,
+    fonts,
+  });
+  doc.fillColor(palette.text)
+    .font(fonts.headingBold)
+    .fontSize(20)
+    .text(tournament?.name || 'Tournament', doc.page.margins.left + 68, doc.page.margins.top + 15);
+  doc.fillColor('#b91c1c')
+    .font(fonts.headingBold)
+    .fontSize(13)
+    .text(bracket.categoryLabel, doc.page.margins.left + 68, doc.page.margins.top + 40, { width: pageWidth - 220 });
+  doc.fillColor(palette.textMuted)
+    .font(fonts.body)
+    .fontSize(9)
+    .text(`Status: ${statusLabel(bracket.status)}   |   Draw: ${bracket.seedingLabel || bracket.seeding}   |   Exported: ${formatDateOnly(new Date())}`, doc.page.margins.left + 68, doc.page.margins.top + 58);
+
+  const rounds = bracket.rounds || [];
+  const startX = doc.page.margins.left + 22;
+  const startY = doc.page.margins.top + 120;
+  const roundWidth = 145;
+  rounds.forEach((round, roundIndex) => {
+    drawBracketRound(doc, startX + roundIndex * roundWidth, startY + roundIndex * 28, round, roundIndex, rounds.length, palette, fonts);
+  });
+
+  const finalMatch = rounds[rounds.length - 1]?.matches?.[0];
+  const champion = finalMatch?.winnerIndex !== undefined ? finalMatch.sides?.[finalMatch.winnerIndex] : null;
+  if (finalMatch) {
+    const slotHeight = getBracketSlotHeight(rounds.length);
+    const championX = startX + rounds.length * roundWidth + 18;
+    const championY = startY + (slotHeight / 2) + 18;
+    const connectorStartX = startX + (rounds.length - 1) * roundWidth + 126;
+    const connectorY = championY + 46;
+    doc.save();
+    doc.lineWidth(1.5).strokeColor('#111111');
+    doc.moveTo(connectorStartX, connectorY).lineTo(championX - 12, connectorY).stroke();
+    doc.restore();
+    drawChampionCard(doc, championX, championY, champion, palette, fonts);
+  }
+
+  doc.end();
+  await auditWrite({
+    actorUserId: actor?.id,
+    actorRole: actor?.role,
+    action: 'export.bracket_pdf',
+    entityType: 'bracket',
+    entityId: bracketId,
+    payload: { tournamentId: bracket.tournamentId, categoryId: bracket.categoryId },
+    requestIp: ctx.ip,
+  });
+}
+
+module.exports = { approvedToExcel, approvedParticipantsToExcel, applicationToPdf, auditToExcel, bracketToPdf };

@@ -2,6 +2,8 @@ const { profiles: profilesRepo, clubs: clubsRepo } = require('../repositories');
 const { ApiError } = require('../apiError');
 const { write: auditWrite } = require('../audit');
 const { validateIndiaAddress } = require('../indiaLocations');
+const { query } = require('../db');
+const bracketService = require('./bracket.service');
 
 const WEIGHT_CLASSES = {
   male: [
@@ -98,6 +100,15 @@ async function adminReweigh(actor, profileId, { weightKg }, ctx = {}) {
     },
     requestIp: ctx.ip,
   });
+  const { rows } = await query(
+    `SELECT DISTINCT tournament_id
+     FROM applications
+     WHERE profile_id = $1
+       AND deleted_at IS NULL
+       AND status = 'approved'`,
+    [profileId]
+  );
+  await Promise.all(rows.map((row) => bracketService.refreshSuggestedForTournament(row.tournament_id, { actorUserId: actor.id })));
   return updated;
 }
 

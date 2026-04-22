@@ -6,6 +6,7 @@ const { ApiError } = require('../apiError');
 const { config } = require('../config');
 const { write: auditWrite } = require('../audit');
 const { dispatch: notify } = require('../notifications');
+const bracketService = require('./bracket.service');
 
 const HOUR = 60 * 60 * 1000;
 
@@ -67,6 +68,7 @@ async function decide(actor, applicationId, { action, reason, fields }, ctx = {}
   await auditWrite({ actorUserId: actor.id, actorRole: actor.role, action: `review.${action}`,
     entityType: 'application', entityId: applicationId, payload: { reason, fields }, requestIp: ctx.ip });
 
+  await bracketService.refreshSuggestedForTournament(app.tournament_id, { actorUserId: actor.id });
   await notifyDecision(updated, toStatus, reason);
   return updated;
 }
@@ -101,6 +103,7 @@ async function reopen(actor, applicationId, { reason }, ctx = {}) {
     reason: `Reopened: ${reason}`, actorUserId: actor.id, actorRole: actor.role });
   await auditWrite({ actorUserId: actor.id, actorRole: actor.role, action: 'application.reopen',
     entityType: 'application', entityId: applicationId, payload: { reason }, requestIp: ctx.ip });
+  await bracketService.refreshSuggestedForTournament(app.tournament_id, { actorUserId: actor.id });
   return updated;
 }
 

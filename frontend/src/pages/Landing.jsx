@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -18,7 +18,6 @@ import {
   useScroll,
   useTransform,
   useReducedMotion,
-  AnimatePresence,
 } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import ThemeToggle from "@/components/shared/ThemeToggle";
@@ -36,7 +35,6 @@ const frame020Src = frame020?.src || frame020;
 const frame050Src = frame050?.src || frame050;
 const frame080Src = frame080?.src || frame080;
 const frame100Src = frame100?.src || frame100;
-const HERO_VIDEO_SRC = "/animate (1).mp4";
 const toImgSrc = (img) => (img?.src || img);
 
 // ---------- primitives ---------------------------------------------------------
@@ -163,7 +161,7 @@ function InfiniteTileColumn({ images, duration = 18, className = "" }) {
 
 // ---------- sections -----------------------------------------------------------
 
-function Nav() {
+function Nav({ registrationOpen }) {
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
@@ -191,20 +189,25 @@ function Nav() {
         <div className="flex items-center gap-2 shrink-0">
           <ThemeToggle compact />
           <Link href="/login"><Button variant="ghost" size="sm" className="hidden sm:inline-flex" data-testid="nav-login">Sign in</Button></Link>
-          <Link href="/register">
-            <Button size="sm" className="bg-foreground text-background hover:bg-foreground/90 rounded-full px-4" data-testid="nav-register">
-              Register
+          {registrationOpen ? (
+            <Link href="/register">
+              <Button size="sm" className="bg-foreground text-background hover:bg-foreground/90 rounded-full px-4" data-testid="nav-register">
+                Register
+              </Button>
+            </Link>
+          ) : (
+            <Button size="sm" disabled className="rounded-full px-4 opacity-70" data-testid="nav-register-disabled">
+              Opens soon
             </Button>
-          </Link>
+          )}
         </div>
       </div>
     </header>
   );
 }
 
-function Hero() {
+function Hero({ registrationOpen, nextTournamentLabel }) {
   const ref = useRef(null);
-  const [videoFailed, setVideoFailed] = useState(false);
   const reduced = useReducedMotion();
   const { allowCinematicMotion } = useMotionProfile();
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
@@ -214,45 +217,33 @@ function Hero() {
   const overlay = useTransform(scrollYProgress, [0, 1], [0.35, 0.75]);
 
   return (
-    <section ref={ref} className="relative min-h-screen overflow-hidden flex items-center pt-16 sm:pt-20 short-screen-tight">
+    <section ref={ref} className="relative isolate min-h-screen overflow-hidden flex items-center pt-16 sm:pt-20 short-screen-tight">
       <CageEnergyCanvas />
-      {!videoFailed ? (
-        <motion.video
-          style={{ y: !allowCinematicMotion || reduced ? 0 : imgY, scale: !allowCinematicMotion || reduced ? 1 : imgScale }}
-          className="absolute inset-0 -z-20 h-full w-full object-cover opacity-[0.72] dark:opacity-[0.58]"
-          autoPlay
-          loop
-          muted
-          playsInline
-          preload="metadata"
-          poster={frame080Src}
-          onError={() => setVideoFailed(true)}
-        >
-          <source src={HERO_VIDEO_SRC} type="video/mp4" />
-        </motion.video>
-      ) : (
-        <motion.div
-          style={{ y: !allowCinematicMotion || reduced ? 0 : imgY, scale: !allowCinematicMotion || reduced ? 1 : imgScale, backgroundImage: `url(${frame080Src})` }}
-          className="absolute inset-0 -z-20 bg-cover bg-center opacity-[0.6] dark:opacity-[0.45]"
-        />
-      )}
+      <motion.div
+        style={{ y: !allowCinematicMotion || reduced ? 0 : imgY, scale: !allowCinematicMotion || reduced ? 1 : imgScale, backgroundImage: `url(${HERO_IMAGE})` }}
+        className="absolute inset-0 z-0 bg-cover bg-center opacity-[0.9] dark:opacity-[0.82]"
+      />
       <div
-        className="absolute inset-0 -z-10 opacity-[0.08] dark:opacity-[0.12] pointer-events-none"
+        className="absolute inset-0 z-[2] opacity-[0.08] dark:opacity-[0.12] pointer-events-none"
         style={{ backgroundImage: `url(${TEXTURE_IMAGE})`, backgroundSize: "cover", backgroundPosition: "center" }}
         aria-hidden
       />
       <motion.div
         style={{ opacity: reduced ? 0.5 : overlay }}
-        className="absolute inset-0 z-0 bg-gradient-to-b from-background/10 via-background/65 to-background"
+        className="absolute inset-0 z-[3] bg-[linear-gradient(180deg,rgba(255,255,255,0.54)_0%,rgba(255,255,255,0.28)_34%,rgba(255,255,255,0.66)_100%)] dark:bg-[linear-gradient(180deg,rgba(10,10,10,0.28)_0%,rgba(10,10,10,0.2)_34%,rgba(10,10,10,0.7)_100%)]"
+      />
+      <div
+        className="absolute inset-0 z-[4] pointer-events-none bg-[radial-gradient(circle_at_72%_38%,rgba(225,29,72,0.18),transparent_26%),radial-gradient(circle_at_18%_14%,rgba(255,255,255,0.78),transparent_26%)] dark:bg-[radial-gradient(circle_at_72%_38%,rgba(225,29,72,0.26),transparent_26%),radial-gradient(circle_at_18%_14%,rgba(255,255,255,0.08),transparent_26%)]"
+        aria-hidden
       />
 
-      <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-        <div className="grid lg:grid-cols-[1.2fr_0.8fr] gap-8 lg:gap-12 items-center">
+      <div className="relative z-[10] max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
+        <div className="grid lg:grid-cols-[1.12fr_0.88fr] gap-8 lg:gap-12 items-center">
           <motion.div style={{ y: !allowCinematicMotion || reduced ? 0 : textY }}>
             <Reveal>
               <div className="inline-flex items-center gap-2 rounded-full border border-border bg-surface/70 backdrop-blur px-3 py-1 text-xs font-medium">
                 <span className="size-1.5 rounded-full bg-primary animate-pulse" />
-                <span>2026 season - registrations open</span>
+                <span>{registrationOpen ? `${nextTournamentLabel} - registrations open` : `${nextTournamentLabel} - registrations open soon`}</span>
               </div>
             </Reveal>
 
@@ -295,12 +286,18 @@ function Hero() {
 
             <Reveal delay={0.4}>
               <div className="mt-8 sm:mt-10 flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-3 max-w-md sm:max-w-none">
-                <Link href="/register">
-                  <Button size="lg" className="w-full sm:w-auto bg-primary hover:bg-primary-hover text-primary-foreground h-12 px-6 rounded-full" data-testid="hero-cta-register">
-                    Register to compete
-                    <ArrowRight className="size-4 ml-1" />
+                {registrationOpen ? (
+                  <Link href="/register">
+                    <Button size="lg" className="w-full sm:w-auto bg-primary hover:bg-primary-hover text-primary-foreground h-12 px-6 rounded-full" data-testid="hero-cta-register">
+                      Register to compete
+                      <ArrowRight className="size-4 ml-1" />
+                    </Button>
+                  </Link>
+                ) : (
+                  <Button size="lg" disabled className="w-full sm:w-auto h-12 px-6 rounded-full opacity-75" data-testid="hero-cta-register-disabled">
+                    Registration not open yet
                   </Button>
-                </Link>
+                )}
                 <Link href="/register?track=club">
                   <Button size="lg" variant="outline" className="w-full sm:w-auto h-12 px-6 rounded-full bg-surface/60 backdrop-blur border-border" data-testid="hero-cta-club">
                     Register a gym <ArrowUpRight className="size-4 ml-1" />
@@ -315,23 +312,7 @@ function Hero() {
             </Reveal>
           </motion.div>
 
-          <Reveal delay={0.2} className="hidden xl:block">
-            <div className="relative">
-              <div className="grid grid-cols-2 gap-4">
-                <InfiniteTileColumn
-                  images={[frame050, frame020, frame080, frame001, frame100]}
-                  duration={20}
-                  className="h-[520px]"
-                />
-                <InfiniteTileColumn
-                  images={[frame080, frame100, frame001, frame020, frame050]}
-                  duration={24}
-                  className="h-[520px] translate-y-8"
-                />
-              </div>
-              <div className="pointer-events-none absolute -inset-8 bg-primary/10 blur-3xl -z-10 rounded-full" aria-hidden />
-            </div>
-          </Reveal>
+          <div className="hidden lg:block min-h-[420px]" aria-hidden />
         </div>
       </div>
 
@@ -791,7 +772,7 @@ function Testimonial() {
   );
 }
 
-function CTA() {
+function CTA({ registrationOpen }) {
   return (
     <section className="py-28 sm:py-36">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -807,11 +788,17 @@ function CTA() {
                 Your fighters are ready. Your platform should be too.
               </h2>
               <div className="mt-10 flex flex-wrap gap-3">
-                <Link href="/register">
-                  <Button size="lg" className="bg-primary hover:bg-primary-hover text-primary-foreground h-12 px-6 rounded-full" data-testid="cta-apply">
-                    Apply Now <ArrowRight className="size-4 ml-1" />
+                {registrationOpen ? (
+                  <Link href="/register">
+                    <Button size="lg" className="bg-primary hover:bg-primary-hover text-primary-foreground h-12 px-6 rounded-full" data-testid="cta-apply">
+                      Apply Now <ArrowRight className="size-4 ml-1" />
+                    </Button>
+                  </Link>
+                ) : (
+                  <Button size="lg" disabled className="h-12 px-6 rounded-full opacity-75" data-testid="cta-apply-disabled">
+                    Registration not open yet
                   </Button>
-                </Link>
+                )}
                 <Link href="/register?track=club">
                   <Button size="lg" variant="outline" className="h-12 px-6 rounded-full bg-transparent border-background/30 text-background hover:bg-background/10 hover:text-background" data-testid="cta-club">
                     Club Onboarding
@@ -865,10 +852,33 @@ function Footer() {
 // ---------- page ---------------------------------------------------------------
 
 export default function Landing() {
+  const [tournaments, setTournaments] = useState([]);
+
+  useEffect(() => {
+    let ignore = false;
+    (async () => {
+      const { data } = await api.publicTournaments();
+      if (ignore) return;
+      setTournaments(data?.tournaments || []);
+    })();
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  const registrationOpen = useMemo(
+    () => tournaments.some((tournament) => tournament.registrationOpen),
+    [tournaments]
+  );
+  const nextTournamentLabel = useMemo(
+    () => tournaments[0]?.name || "Season 2026 Championship",
+    [tournaments]
+  );
+
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <Nav />
-      <Hero />
+      <Nav registrationOpen={registrationOpen} />
+      <Hero registrationOpen={registrationOpen} nextTournamentLabel={nextTournamentLabel} />
       <Announcements />
       <Marquee items={[
         "Primal - Fight Series",
@@ -884,7 +894,7 @@ export default function Landing() {
       <AdminShowcase />
       <Stats />
       <Testimonial />
-      <CTA />
+      <CTA registrationOpen={registrationOpen} />
       <Footer />
     </div>
   );
