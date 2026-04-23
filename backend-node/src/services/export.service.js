@@ -670,12 +670,18 @@ function drawBracketSlot(doc, x, y, width, height, side, palette, fonts) {
   doc.roundedRect(x, y, width, height, 10).fill('#ffffff');
   doc.roundedRect(x, y, width, height, 10).strokeColor('#111111').lineWidth(1.5).stroke();
   doc.restore();
-  if (!side) return;
+  if (!side || side.placeholder === 'tbd') return;
 
   doc.fillColor(side.corner === 'blue' ? '#0f6ab6' : '#b91c1c')
     .font(fonts.headingBold)
     .fontSize(7.5)
     .text((side.corner || 'slot').toUpperCase(), x + 8, y + 6, { width: width - 16 });
+  if (side.seedScore) {
+    doc.fillColor('#6b7280')
+      .font(fonts.bodyBold)
+      .fontSize(7.5)
+      .text(`#${side.seedScore}`, x + width - 28, y + 6, { width: 20, align: 'right' });
+  }
   doc.fillColor('#111827')
     .font(fonts.headingBold)
     .fontSize(9)
@@ -940,9 +946,9 @@ async function divisionBracketToPdf(res, divisionId, actor, ctx = {}) {
   });
 
   const finalMatch = rounds[rounds.length - 1]?.matches?.[0];
-  const champion = finalMatch?.winnerIndex !== undefined ? finalMatch.sides?.[finalMatch.winnerIndex] : (payload.champion ? {
-    name: payload.champion.participantName,
-    club: payload.champion.clubName,
+  const champion = finalMatch?.winnerIndex !== undefined ? finalMatch.sides?.[finalMatch.winnerIndex] : (bracket.champion || payload.champion ? {
+    name: bracket.champion?.name || payload.champion?.participantName,
+    club: bracket.champion?.club || payload.champion?.clubName,
   } : null);
 
   if (finalMatch || champion) {

@@ -182,7 +182,7 @@ export default function AdminBrackets() {
   }
 
   const readyDivisions = useMemo(
-    () => divisions.filter((division) => Number(division.fighterCount || 0) >= 2),
+    () => divisions.filter((division) => Number(division.fighterCount || 0) >= 1),
     [divisions]
   );
 
@@ -204,7 +204,7 @@ export default function AdminBrackets() {
 
             <div className="mt-6 grid sm:grid-cols-3 gap-3">
               <HeroMetric label="Total divisions" value={divisions.length} helper="All persisted tournament buckets" />
-              <HeroMetric label="Ready divisions" value={readyDivisions.length} helper="At least two approved fighters" />
+                <HeroMetric label="Ready divisions" value={readyDivisions.length} helper="At least one approved fighter" />
               <HeroMetric
                 label="Generated matches"
                 value={divisions.reduce((sum, division) => sum + Number(division.matchCount || 0), 0)}
@@ -254,9 +254,9 @@ export default function AdminBrackets() {
                   variant="outline"
                   className="border-zinc-700 bg-zinc-950/50 text-zinc-100 hover:bg-zinc-900"
                   onClick={handleGenerate}
-                  disabled={generating || !selectedDivision || Number(selectedDivision.fighterCount || 0) < 2}
+                  disabled={generating || !selectedDivision || Number(selectedDivision.fighterCount || 0) < 1}
                 >
-                  <Shuffle className="size-4" /> {generating ? "Generating..." : selectedDivision?.matchCount ? "Regenerate bracket" : "Generate bracket"}
+                  <Shuffle className="size-4" /> {generating ? "Generating..." : Number(selectedDivision?.fighterCount || 0) === 1 ? "Declare winner" : selectedDivision?.matchCount ? "Regenerate bracket" : "Generate bracket"}
                 </Button>
                 <Button
                   variant="outline"
@@ -299,24 +299,37 @@ export default function AdminBrackets() {
 
             <div className="mt-5 space-y-3">
               {divisions.map((division) => (
-                <button
+                <div
                   key={division.id}
-                  type="button"
-                  onClick={() => handleDivisionSelect(division.id)}
-                  className={`w-full rounded-2xl border p-4 text-left transition-all ${
+                  className={`w-full rounded-2xl border p-4 transition-all ${
                     selectedDivisionId === division.id ? "border-foreground bg-surface-muted" : "border-border bg-background/60 hover:bg-surface-muted/40"
                   }`}
                 >
-                  <div className="font-medium">{division.label}</div>
-                  <div className="text-sm text-secondary-muted mt-1">
-                    {division.fighterCount} fighters · {division.matchCount || 0} matches · {division.disciplineLabel}
+                  <button
+                    type="button"
+                    onClick={() => handleDivisionSelect(division.id)}
+                    className="w-full text-left"
+                  >
+                    <div className="font-medium">{division.label}</div>
+                    <div className="text-sm text-secondary-muted mt-1">
+                      {division.fighterCount} fighters · {division.matchCount || 0} matches · {division.disciplineLabel}
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2 text-[11px] uppercase tracking-wider text-tertiary">
+                      <span>{Number(division.fighterCount || 0) >= 1 ? "Active" : "Building"}</span>
+                      {division.conflictCount ? <span>{division.conflictCount} conflict</span> : null}
+                      {division.championName ? <span>Champion: {division.championName}</span> : null}
+                    </div>
+                  </button>
+                  <div className="mt-3 flex justify-end">
+                    <Button
+                      variant="outline"
+                      className="h-8 border-border bg-background/60 px-3 text-xs"
+                      onClick={() => api.downloadDivisionBracketPdf(division.id)}
+                    >
+                      <Download className="size-3.5" /> Download bracket
+                    </Button>
                   </div>
-                  <div className="mt-2 flex flex-wrap gap-2 text-[11px] uppercase tracking-wider text-tertiary">
-                    <span>{Number(division.fighterCount || 0) >= 2 ? "Ready" : "Building"}</span>
-                    {division.conflictCount ? <span>{division.conflictCount} conflict</span> : null}
-                    {division.championName ? <span>Champion: {division.championName}</span> : null}
-                  </div>
-                </button>
+                </div>
               ))}
 
               {!divisions.length ? (

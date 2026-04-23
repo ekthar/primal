@@ -164,7 +164,7 @@ async function uploadDocument(user, applicationId, { kind, label, expiresOn, fil
   });
   await auditWrite({ actorUserId: user.id, actorRole: user.role, action: 'document.upload',
     entityType: 'application', entityId: applicationId, payload: { documentId: doc.id, kind }, requestIp: ctx.ip });
-  return { ...doc, url: `${config.appBaseUrl}/uploads/${doc.storage_key}` };
+  return { ...doc, url: `/uploads/${doc.storage_key}` };
 }
 
 async function listDocuments(user, applicationId) {
@@ -174,7 +174,7 @@ async function listDocuments(user, applicationId) {
   const documents = await documentsRepo.listForApplication(applicationId);
   return documents.map((doc) => ({
     ...doc,
-    url: `${config.appBaseUrl}/uploads/${doc.storage_key}`,
+    url: `/uploads/${doc.storage_key}`,
   }));
 }
 
@@ -188,7 +188,7 @@ async function getById(user, id) {
   ]);
   return {
     ...app,
-    documents: documents.map((doc) => ({ ...doc, url: `${config.appBaseUrl}/uploads/${doc.storage_key}` })),
+    documents: documents.map((doc) => ({ ...doc, url: `/uploads/${doc.storage_key}` })),
     statusEvents: events,
   };
 }

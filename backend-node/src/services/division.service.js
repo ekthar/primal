@@ -346,8 +346,30 @@ async function listForTournament(actor, tournamentId) {
         COUNT(DISTINCT de.id) FILTER (WHERE de.deleted_at IS NULL AND de.status = 'approved')::int AS fighter_count,
         COUNT(DISTINCT m.id) FILTER (WHERE m.deleted_at IS NULL)::int AS match_count,
         COUNT(DISTINCT m.id) FILTER (WHERE m.deleted_at IS NULL AND m.conflict IS NOT NULL)::int AS conflict_count,
-        champion.participant_name AS champion_name,
-        champion.club_name AS champion_club_name
+        COALESCE(
+          champion.participant_name,
+          (
+            SELECT sole.participant_name
+            FROM division_entries sole
+            WHERE sole.division_id = d.id
+              AND sole.deleted_at IS NULL
+              AND sole.status = 'approved'
+            ORDER BY sole.participant_name ASC
+            LIMIT 1
+          )
+        ) AS champion_name,
+        COALESCE(
+          champion.club_name,
+          (
+            SELECT sole.club_name
+            FROM division_entries sole
+            WHERE sole.division_id = d.id
+              AND sole.deleted_at IS NULL
+              AND sole.status = 'approved'
+            ORDER BY sole.participant_name ASC
+            LIMIT 1
+          )
+        ) AS champion_club_name
       FROM divisions d
       JOIN disciplines discipline ON discipline.id = d.discipline_id
       LEFT JOIN division_entries de ON de.division_id = d.id

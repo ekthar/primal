@@ -23,6 +23,8 @@ function SeverityBadge({ conflict }) {
 }
 
 function SideCard({ side, winner, onAdvance }) {
+  const isTbd = side.placeholder === "tbd";
+
   return (
     <div
       className={`rounded-xl border px-3 py-3 ${side.isBye ? "border-dashed border-zinc-700 bg-zinc-900/40 text-zinc-500" : CORNER_STYLES[side.corner] || "border-zinc-700 bg-zinc-900/40"} ${
@@ -32,18 +34,22 @@ function SideCard({ side, winner, onAdvance }) {
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="text-[10px] uppercase tracking-wider text-zinc-500">{side.corner} corner</div>
-          <div className="mt-1 text-sm font-semibold text-zinc-100">{side.name}</div>
+          <div className="mt-1 text-sm font-semibold text-zinc-100">{isTbd ? "TBD" : side.name}</div>
         </div>
-        {!side.isBye && side.seedScore ? (
+        {!side.isBye && !isTbd && side.seedScore ? (
           <div className="rounded-full border border-zinc-700 px-2 py-1 text-[10px] uppercase tracking-wider text-zinc-300">
             Seed {side.seedScore}
           </div>
         ) : null}
       </div>
       <div className="mt-2 text-[11px] text-zinc-400">
-        {side.isBye ? "Automatic advance" : `${side.club || "Independent"}${side.nationality ? ` · ${side.nationality}` : ""}`}
+        {isTbd
+          ? "Awaiting previous result"
+          : side.isBye
+            ? "Automatic advance"
+            : `${side.club || "Independent"}${side.nationality ? ` · ${side.nationality}` : ""}`}
       </div>
-      {onAdvance && !side.isBye ? (
+      {onAdvance && !side.isBye && !isTbd ? (
         <button
           type="button"
           onClick={onAdvance}
@@ -117,7 +123,7 @@ export default function BracketView({ bracket, onAdvanceWinner }) {
   if (!bracket) return null;
   const finalRound = bracket.rounds?.[bracket.rounds.length - 1];
   const finalMatch = finalRound?.matches?.[0];
-  const champion = finalMatch?.winnerIndex !== undefined ? finalMatch.sides?.[finalMatch.winnerIndex] : null;
+  const champion = finalMatch?.winnerIndex !== undefined ? finalMatch.sides?.[finalMatch.winnerIndex] : bracket.champion;
 
   return (
     <div className="rounded-[28px] overflow-hidden border border-zinc-800 bg-[radial-gradient(circle_at_top,rgba(220,38,38,0.16),transparent_35%),linear-gradient(180deg,#0a0a0a_0%,#111111_100%)] p-5 sm:p-6 text-white shadow-[0_20px_90px_rgba(0,0,0,0.45)]">
@@ -172,79 +178,87 @@ export default function BracketView({ bracket, onAdvanceWinner }) {
         <div className="mt-4 text-sm text-emerald-300">No round-one conflict warnings in the generated draw.</div>
       )}
 
-      <div className="mt-6 md:hidden space-y-4">
-        {bracket.rounds.map((round) => (
-          <section key={round.id} className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
-            <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500 font-semibold">{round.label}</div>
-            <div className="mt-1 text-xs text-zinc-400">{round.matches.length} fight card slot{round.matches.length > 1 ? "s" : ""}</div>
-            <div className="mt-4 space-y-3">
-              {round.matches.map((match) => (
-                <article key={match.id} className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
-                  <div className="flex items-center justify-between gap-3 text-[10px] uppercase tracking-[0.16em] text-zinc-500 font-semibold">
-                    <span>{match.label}</span>
-                    <span>{match.status}</span>
-                  </div>
-                  {match.sides.map((side, sideIndex) => (
-                    <div key={`${match.id}-${side.name}-${side.corner}`} className="mt-3">
-                      <SideCard
-                        side={side}
-                        winner={match.winnerIndex === sideIndex}
-                        onAdvance={
-                          onAdvanceWinner && !side.isBye && match.status !== "completed"
-                            ? () => onAdvanceWinner(match.id, side.entryId)
-                            : null
-                        }
-                      />
-                    </div>
+      {bracket.rounds?.length ? (
+        <>
+          <div className="mt-6 md:hidden space-y-4">
+            {bracket.rounds.map((round) => (
+              <section key={round.id} className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
+                <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500 font-semibold">{round.label}</div>
+                <div className="mt-1 text-xs text-zinc-400">{round.matches.length} fight card slot{round.matches.length > 1 ? "s" : ""}</div>
+                <div className="mt-4 space-y-3">
+                  {round.matches.map((match) => (
+                    <article key={match.id} className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
+                      <div className="flex items-center justify-between gap-3 text-[10px] uppercase tracking-[0.16em] text-zinc-500 font-semibold">
+                        <span>{match.label}</span>
+                        <span>{match.status}</span>
+                      </div>
+                      {match.sides.map((side, sideIndex) => (
+                        <div key={`${match.id}-${side.entryId || side.corner}-${sideIndex}`} className="mt-3">
+                          <SideCard
+                            side={side}
+                            winner={match.winnerIndex === sideIndex}
+                            onAdvance={
+                              onAdvanceWinner && !side.isBye && !side.placeholder && match.status !== "completed"
+                                ? () => onAdvanceWinner(match.id, side.entryId)
+                                : null
+                            }
+                          />
+                        </div>
+                      ))}
+                    </article>
                   ))}
-                </article>
+                </div>
+              </section>
+            ))}
+          </div>
+
+          <div className="mt-6 hidden md:block overflow-x-auto">
+            <div className="inline-flex min-w-full gap-5 pb-2">
+              {bracket.rounds.map((round) => (
+                <section key={round.id} className="min-w-[320px] flex-1">
+                  <div className="mb-3">
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500 font-semibold">{round.label}</div>
+                    <div className="text-xs text-zinc-400 mt-1">{round.matches.length} fight card slot{round.matches.length > 1 ? "s" : ""}</div>
+                  </div>
+                  <div className="space-y-4">
+                    {round.matches.map((match) => (
+                      <article key={match.id} className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
+                        <div className="flex items-center justify-between gap-3 text-[10px] uppercase tracking-[0.16em] text-zinc-500 font-semibold">
+                          <span>{match.label}</span>
+                          <span>{match.status}</span>
+                        </div>
+                        {match.conflict ? (
+                          <div className="mt-3">
+                            <SeverityBadge conflict={match.conflict} />
+                          </div>
+                        ) : null}
+                        <div className="mt-3 space-y-3">
+                          {match.sides.map((side, sideIndex) => (
+                            <SideCard
+                              key={`${match.id}-${side.entryId || side.corner}-${sideIndex}`}
+                              side={side}
+                              winner={match.winnerIndex === sideIndex}
+                              onAdvance={
+                                onAdvanceWinner && !side.isBye && !side.placeholder && match.status !== "completed"
+                                  ? () => onAdvanceWinner(match.id, side.entryId)
+                                  : null
+                              }
+                            />
+                          ))}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </section>
               ))}
             </div>
-          </section>
-        ))}
-      </div>
-
-      <div className="mt-6 hidden md:block overflow-x-auto">
-        <div className="inline-flex min-w-full gap-5 pb-2">
-          {bracket.rounds.map((round) => (
-            <section key={round.id} className="min-w-[320px] flex-1">
-              <div className="mb-3">
-                <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500 font-semibold">{round.label}</div>
-                <div className="text-xs text-zinc-400 mt-1">{round.matches.length} fight card slot{round.matches.length > 1 ? "s" : ""}</div>
-              </div>
-              <div className="space-y-4">
-                {round.matches.map((match) => (
-                  <article key={match.id} className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
-                    <div className="flex items-center justify-between gap-3 text-[10px] uppercase tracking-[0.16em] text-zinc-500 font-semibold">
-                      <span>{match.label}</span>
-                      <span>{match.status}</span>
-                    </div>
-                    {match.conflict ? (
-                      <div className="mt-3">
-                        <SeverityBadge conflict={match.conflict} />
-                      </div>
-                    ) : null}
-                    <div className="mt-3 space-y-3">
-                      {match.sides.map((side, sideIndex) => (
-                        <SideCard
-                          key={`${match.id}-${side.name}-${side.corner}`}
-                          side={side}
-                          winner={match.winnerIndex === sideIndex}
-                          onAdvance={
-                            onAdvanceWinner && !side.isBye && match.status !== "completed"
-                              ? () => onAdvanceWinner(match.id, side.entryId)
-                              : null
-                          }
-                        />
-                      ))}
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-          ))}
+          </div>
+        </>
+      ) : (
+        <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950/80 p-5 text-sm text-zinc-300">
+          This division has a single eligible fighter, so no elimination rounds were created.
         </div>
-      </div>
+      )}
 
       {champion ? (
         <div className="mt-6 rounded-3xl border border-emerald-800/60 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.24),transparent_55%),linear-gradient(180deg,rgba(6,78,59,0.78),rgba(4,47,46,0.96))] p-5 text-white">

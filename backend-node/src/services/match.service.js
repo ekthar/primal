@@ -113,17 +113,19 @@ function summarizeConflicts(matches) {
   };
 }
 
-function mapEntrySide(entry, corner) {
+function mapEntrySide(entry, corner, options = {}) {
+  const placeholder = options.placeholder || null;
   if (!entry) {
     return {
-      name: 'Bye',
+      name: placeholder === 'tbd' ? '' : 'Bye',
       club: null,
       nationality: null,
       seedScore: null,
       participantId: null,
       applicationId: null,
       entryId: null,
-      isBye: true,
+      isBye: placeholder !== 'tbd',
+      placeholder,
       corner,
     };
   }
@@ -137,6 +139,7 @@ function mapEntrySide(entry, corner) {
     applicationId: entry.applicationId || null,
     entryId: entry.id,
     isBye: false,
+    placeholder: null,
     corner,
   };
 }
@@ -568,7 +571,7 @@ function deriveChampion(entries, matches) {
 function transformDivisionBracket(division, entries, matches) {
   const roundsMap = new Map();
   const champion = deriveChampion(entries, matches);
-  const bracketSize = matches.length ? 2 ** Math.max(...matches.map((match) => match.roundNumber)) : entries.length;
+  const bracketSize = matches.length ? 2 ** Math.max(...matches.map((match) => match.roundNumber)) : Math.max(entries.length, 1);
   const diagnostics = summarizeConflicts(matches);
 
   matches.forEach((match) => {
@@ -581,7 +584,10 @@ function transformDivisionBracket(division, entries, matches) {
     }
 
     const round = roundsMap.get(match.roundNumber);
-    const sides = [mapEntrySide(match.entry1, 'red'), mapEntrySide(match.entry2, 'blue')];
+    const sides = [
+      mapEntrySide(match.entry1, 'red', { placeholder: match.roundNumber === 1 ? 'bye' : 'tbd' }),
+      mapEntrySide(match.entry2, 'blue', { placeholder: match.roundNumber === 1 ? 'bye' : 'tbd' }),
+    ];
     const winnerIndex = match.winnerEntryId
       ? sides.findIndex((side) => side.entryId === match.winnerEntryId)
       : undefined;
@@ -615,6 +621,13 @@ function transformDivisionBracket(division, entries, matches) {
     statusLabel: BRACKET_STATUS_LABELS[status] || titleCase(status),
     rounds,
     generation: diagnostics,
+    champion: champion
+      ? {
+          name: champion.participantName,
+          club: champion.clubName || null,
+          entryId: champion.id,
+        }
+      : null,
     policy: {
       sameClub: 'avoid_if_possible',
       sameCategoryOnly: true,
