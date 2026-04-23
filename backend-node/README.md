@@ -30,7 +30,18 @@ npm test
 
 ## Core environment variables
 
-
+- `NODE_ENV`
+- `PORT`
+- `APP_BASE_URL`
+- `WEB_BASE_URL`
+- `DATABASE_URL`
+- `PG_SSL`
+- `PG_SSL_REJECT_UNAUTHORIZED`
+- `JWT_SECRET`
+- `PDF_SIGNATURE_SECRET`
+- `UPLOAD_DIR`
+- `UPLOAD_STORAGE_PROVIDER`
+- `MAX_UPLOAD_MB`
 
 ## Neon checklist
 
@@ -40,30 +51,49 @@ npm test
 - Run `npm run migrate` before first traffic
 - Run `npm run seed` only for demo or staging environments
 
-## Render deployment
+## Northflank deployment
 
-This repo includes [render.yaml](render.yaml) as a starting blueprint.
+Recommended setup:
 
-Recommended Render setup:
-
-- Service type: `Web Service`
-- Root directory: `backend-node`
-- Build command: `npm install`
-- Start command: `npm run migrate && npm start`
+- Service type: `Combined service`
+- Repository root: this repository
+- Build type: `Dockerfile`
+- Build context: `backend-node`
+- Dockerfile path: `backend-node/Dockerfile`
+- Public port: `4000` over `HTTP`
 - Health check path: `/api/health`
+
+Runtime variables to configure in Northflank:
+
+- `NODE_ENV=production`
+- `PORT=4000`
+- `APP_BASE_URL=https://<your-northflank-domain>`
+- `WEB_BASE_URL=https://<your-frontend-domain>`
+- `DATABASE_URL=<your-postgres-url>`
+- `PG_SSL=true`
+- `PG_SSL_REJECT_UNAUTHORIZED=true`
+- `JWT_SECRET=<secret>`
+- `PDF_SIGNATURE_SECRET=<secret>`
+
+Notes for Northflank:
+
+- The Docker image runs `npm run migrate && npm start` on container start.
+- Northflank can auto-detect the exposed port from the Dockerfile, but confirm that port `4000` is publicly exposed.
+- If you keep `UPLOAD_STORAGE_PROVIDER=local`, attach a persistent volume and set `UPLOAD_DIR` to that mounted path. Without a volume, uploaded files are ephemeral.
+- If you continue using Neon PostgreSQL, keep `sslmode=require` in `DATABASE_URL`.
 
 ## Deployment architecture
 
 - Frontend: Netlify
-- API: Render
+- API: Northflank
 - Database: Neon PostgreSQL
 
 ## Production-readiness notes
 
 - Configure CORS using `WEB_BASE_URL`
-- Move uploads from local disk to S3/R2/object storage before high-volume production
+- Use a persistent volume or object storage for uploads in production
 - Rotate `JWT_SECRET` and `PDF_SIGNATURE_SECRET` per environment
-- Monitor `/api/health` and centralize logs from Render
+- Monitor `/api/health` and centralize logs from Northflank
 - Keep older internal identifiers only where renaming would create migration risk
 
 ## API highlights

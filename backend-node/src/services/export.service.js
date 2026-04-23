@@ -1,7 +1,6 @@
 // PDF + Excel export helpers. Streamed to response.
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
-const QRCode = require('qrcode');
 const path = require('path');
 const fs = require('fs');
 const {
@@ -14,7 +13,6 @@ const { assertCanView } = require('./application.service');
 const { query } = require('../db');
 const { write: auditWrite } = require('../audit');
 const { config } = require('../config');
-const { buildSignatureForApplication } = require('../pdfSignature');
 const { approvedParticipantReport } = require('./report.service');
 const bracketService = require('./bracket.service');
 const matchService = require('./match.service');
@@ -103,6 +101,14 @@ function registerFontIfPresent(doc, fontName, fontPath) {
   } catch (_err) {
     return false;
   }
+}
+
+function collectAppliedDisciplines(app) {
+  const selectedDisciplines = Array.isArray(app.form_data?.selectedDisciplines)
+    ? app.form_data.selectedDisciplines
+    : [];
+  const rawValues = [...selectedDisciplines, app.discipline].filter(Boolean).map((value) => String(value).trim());
+  return [...new Set(rawValues)];
 }
 
 async function loadRenderableDocumentImages(documents) {
@@ -522,17 +528,6 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
     cardBorder: '#e8edf3',
   };
 
-  const signature = buildSignatureForApplication(app);
-  let qrBuffer = null;
-  try {
-    qrBuffer = await QRCode.toBuffer(signature.url, {
-      errorCorrectionLevel: 'M',
-      margin: 1,
-      width: 96,
-      color: { dark: palette.accent, light: '#00000000' },
-    });
-  } catch (_err) { qrBuffer = null; }
-
   const [documents, statusEvents] = await Promise.all([
     docsRepo.listForApplication(app.id),
     eventsRepo.listForApplication(app.id),
@@ -540,6 +535,7 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
 
   const renderableImages = await loadRenderableDocumentImages(documents);
   const primaryImage = renderableImages.find((d) => d.kind === 'photo_id') || renderableImages[0] || null;
+  const appliedDisciplines = collectAppliedDisciplines(app);
   const address = app.metadata && typeof app.metadata === 'object' ? app.metadata.address : null;
 
   res.setHeader('Content-Type', 'application/pdf');
@@ -598,7 +594,7 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
   const pillX = PX + CW - 130;
   statusPill(doc, app.status, pillX, PY + 14, fonts);
   doc.fillColor('#94a3b8').font(fonts.body).fontSize(7)
-    .text(`sig ${signature.sig.slice(0, 18)}…`, pillX, PY + 40, { width: 130, align: 'right' });
+    .text('Participant registration export', pillX - 30, PY + 40, { width: 160, align: 'right' });
 
   // Divider below header
   doc.y = PY + HEADER_H + 10;
@@ -621,6 +617,14 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
       .text(chip.value, cx + 10, chipY + 20, { width: CHIP_W - 20, ellipsis: true });
   });
   doc.y = chipY + CHIP_H + 10;
+
+  const disciplinesY = doc.y;
+  const disciplinesH = 58;
+  gridCard(doc, PX, disciplinesY, CW, disciplinesH, { fill: '#ffffff', stroke: palette.cardBorder, radius: GRID.radius.lg, accentColor: palette.accent });
+  microLabel(doc, 'Applied Disciplines', PX + 14, disciplinesY + 10, CW - 28, palette, fonts);
+  doc.fillColor(palette.text).font(fonts.headingBold).fontSize(12)
+    .text(appliedDisciplines.length ? appliedDisciplines.join(' / ') : 'Open', PX + 14, disciplinesY + 24, { width: CW - 28, ellipsis: true });
+  doc.y = disciplinesY + disciplinesH + 10;
 
   // ── ROW 2: Identity card (left 7 cols) + Photo/Verify panel (right 5 cols) ──
   const ROW2_Y = doc.y;
@@ -657,7 +661,7 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
     kvRow(doc, row[0], row[1], PX + 18, ry + 6, LEFT_W - 36, palette, fonts, 82);
   });
 
-  // RIGHT: photo + verification stacked
+  // RIGHT: photo + digital approval stacked
   const PHOTO_CARD_H = 160;
   gridCard(doc, RIGHT_X, ROW2_Y, RIGHT_W, PHOTO_CARD_H, { fill: '#ffffff', stroke: palette.cardBorder, radius: GRID.radius.lg });
 
@@ -686,7 +690,7 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
 
   microLabel(doc, 'Photo ID', PHOTO_X, PHOTO_Y + PHOTO_H + 5, PHOTO_W, palette, fonts);
 
-  // Verify block to the right of photo
+  // Approval block to the right of photo
   const VX = PHOTO_X + PHOTO_W + 10;
   const VW = RIGHT_W - PHOTO_W - 34;
   doc.fillColor(palette.text).font(fonts.headingBold).fontSize(8.5)
@@ -698,24 +702,19 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
   doc.fillColor(palette.text).font(fonts.body).fontSize(8)
     .text(formatDateTime(app.decided_at), VX, PHOTO_Y + 44, { width: VW });
 
-  if (qrBuffer) {
-    const QR_SIZE = 52;
-    doc.image(qrBuffer, VX, PHOTO_Y + 60, { fit: [QR_SIZE, QR_SIZE] });
-    doc.fillColor(palette.accent).font(fonts.body).fontSize(6.5)
-      .text('Scan to verify', VX, PHOTO_Y + 60 + QR_SIZE + 3, { width: QR_SIZE, align: 'center' });
-  }
+  doc.save();
+  doc.circle(VX + 12, PHOTO_Y + 78, 11).fill('#16a34a');
+  doc.lineWidth(2).lineCap('round').strokeColor('#ffffff');
+  doc.moveTo(VX + 7, PHOTO_Y + 78).lineTo(VX + 11, PHOTO_Y + 82).lineTo(VX + 18, PHOTO_Y + 73).stroke();
+  doc.restore();
+  doc.fillColor('#166534').font(fonts.bodyBold).fontSize(8.5)
+    .text('Digitally verified', VX + 28, PHOTO_Y + 70, { width: VW - 28, ellipsis: true });
+  doc.fillColor('#334155').font('Times-Italic').fontSize(12)
+    .text('digitally signed', VX + 28, PHOTO_Y + 83, { width: VW - 28, ellipsis: true });
+  doc.fillColor(palette.textMuted).font(fonts.body).fontSize(7.2)
+    .text('Verified copy of the submitted participant record', VX, PHOTO_Y + 104, { width: VW, align: 'left' });
 
-  // Verification digest card below photo block
-  const DIGEST_Y = ROW2_Y + PHOTO_CARD_H + 6;
-  const DIGEST_H = 54;
-  gridCard(doc, RIGHT_X, DIGEST_Y, RIGHT_W, DIGEST_H, { fill: palette.surface, stroke: palette.cardBorder, radius: GRID.radius.md });
-  microLabel(doc, 'Digital Signature', RIGHT_X + 10, DIGEST_Y + 8, RIGHT_W - 20, palette, fonts);
-  doc.fillColor(palette.textMuted).font(fonts.body).fontSize(7)
-    .text(`${signature.dig.slice(0, 32)}…`, RIGHT_X + 10, DIGEST_Y + 20, { width: RIGHT_W - 20 });
-  doc.fillColor(palette.accent).font(fonts.body).fontSize(6.8)
-    .text(signature.url, RIGHT_X + 10, DIGEST_Y + 34, { width: RIGHT_W - 20, ellipsis: true });
-
-  doc.y = Math.max(ROW2_Y + ID_CARD_H, DIGEST_Y + DIGEST_H) + 12;
+  doc.y = Math.max(ROW2_Y + ID_CARD_H, ROW2_Y + PHOTO_CARD_H) + 12;
 
   // ── ROW 3: Competition Declaration (full width 3-col grid) ────────────────
   ensureSpace(doc, 20);
@@ -729,7 +728,7 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
     ['Review Due',      formatDateTime(app.review_due_at)],
     ['Decided',         formatDateTime(app.decided_at)],
     ['Correction Due',  formatDateTime(app.correction_due_at)],
-    ['Disciplines',     Array.isArray(app.form_data?.selectedDisciplines) ? app.form_data.selectedDisciplines.join(', ') : '—'],
+    ['Disciplines',     appliedDisciplines.length ? appliedDisciplines.join(', ') : 'Open'],
     ['Rejection Reason', asText(app.rejection_reason)],
     ['Reopen Reason',   asText(app.reopen_reason)],
     ['Notes',           asText(app.form_data?.notes)],
@@ -1182,3 +1181,4 @@ async function divisionBracketToPdf(res, divisionId, actor, ctx = {}) {
 }
 
 module.exports = { approvedToExcel, approvedParticipantsToExcel, applicationToPdf, auditToExcel, bracketToPdf, divisionBracketToPdf };
+
