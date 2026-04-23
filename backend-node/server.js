@@ -23,6 +23,8 @@ const publicRoutes = require('./src/routes/public.routes');
 const circularRoutes = require('./src/routes/circular.routes');
 const tournamentRoutes = require('./src/routes/tournament.routes');
 const bracketRoutes = require('./src/routes/bracket.routes');
+const divisionRoutes = require('./src/routes/division.routes');
+const matchRoutes = require('./src/routes/match.routes');
 
 const app = express();
 
@@ -60,6 +62,8 @@ app.use('/api/audit', auditRoutes);
 app.use('/api/circulars', circularRoutes);
 app.use('/api/tournaments', tournamentRoutes);
 app.use('/api/brackets', bracketRoutes);
+app.use('/api/divisions', divisionRoutes);
+app.use('/api/matches', matchRoutes);
 app.use('/api/public', publicRoutes);
 
 app.use(notFound);

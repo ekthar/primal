@@ -51,7 +51,6 @@ const { logger } = require('../logger');
   });
 
   logger.info(`Seed complete. Admin user: ${adminEmail}`);
-}
 
 run()
   .catch((err) => { logger.error({ err }, 'Seed failed'); process.exit(1); })

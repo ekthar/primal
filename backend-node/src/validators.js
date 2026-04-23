@@ -153,6 +153,28 @@ const schemas = {
     }),
   },
 
+  division: {
+    list: Joi.object({}),
+    sync: Joi.object({}),
+    generateBracket: Joi.object({
+      force: Joi.boolean().default(false),
+    }),
+    manualSeeds: Joi.object({
+      seeds: Joi.array().items(
+        Joi.object({
+          entryId: uuid.required(),
+          seed: Joi.number().integer().min(1).required(),
+        })
+      ).required(),
+    }),
+  },
+
+  match: {
+    result: Joi.object({
+      winnerEntryId: uuid.required(),
+    }),
+  },
+
   club: {
     create: Joi.object({
       name: Joi.string().min(2).max(120).required(),

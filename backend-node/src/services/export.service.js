@@ -17,6 +17,7 @@ const { config } = require('../config');
 const { buildSignatureForApplication } = require('../pdfSignature');
 const { approvedParticipantReport } = require('./report.service');
 const bracketService = require('./bracket.service');
+const matchService = require('./match.service');
 
 function formatDateTime(value) {
   if (!value) return '—';
@@ -855,4 +856,120 @@ async function bracketToPdf(res, bracketId, actor, ctx = {}) {
   });
 }
 
-module.exports = { approvedToExcel, approvedParticipantsToExcel, applicationToPdf, auditToExcel, bracketToPdf };
+async function divisionBracketToPdf(res, divisionId, actor, ctx = {}) {
+  if (!actor || actor.role !== 'admin') {
+    res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Admin access required' } });
+    return;
+  }
+
+  const payload = await matchService.getDivisionBracketExport(actor, divisionId);
+  if (!payload?.division) {
+    res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Division not found' } });
+    return;
+  }
+
+  const { division, bracket } = payload;
+  const brandName = config.pdf?.brandName || 'Primal';
+  const palette = {
+    primary: normalizeHexColor(config.pdf?.brandPrimary, '#0b0b0b'),
+    accent: normalizeHexColor(config.pdf?.brandAccent, '#ef1a1a'),
+    text: '#111111',
+    textMuted: '#5b6470',
+    line: '#dbe1ea',
+    surface: '#f8fafc',
+  };
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="division-${division.id}-bracket.pdf"`);
+  const doc = new PDFDocument({
+    size: 'A4',
+    layout: 'landscape',
+    margin: 28,
+    info: {
+      Title: `${division.label} bracket`,
+      Author: brandName,
+      Subject: 'Division bracket export',
+    },
+  });
+  doc.pipe(res);
+  const fonts = resolvePdfFonts(doc);
+  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+
+  doc.save();
+  doc.rect(0, 0, doc.page.width, doc.page.height).fill('#fff8fb');
+  doc.fillOpacity(0.68).fillColor('#ffd6e7').circle(doc.page.width - 160, 96, 180).fill();
+  doc.fillOpacity(0.68).fillColor('#cde8ff').circle(110, doc.page.height - 90, 150).fill();
+  doc.fillOpacity(0.64).fillColor('#fde68a').circle(doc.page.width / 2 + 110, doc.page.height / 2 + 90, 120).fill();
+  doc.fillOpacity(0.3).fillColor('#fecaca').circle(doc.page.width / 2 - 150, 120, 90).fill();
+  doc.restore();
+
+  doc.save();
+  doc.roundedRect(doc.page.margins.left, doc.page.margins.top, pageWidth, 76, 16).fill('#ffffff');
+  doc.roundedRect(doc.page.margins.left, doc.page.margins.top, pageWidth, 76, 16).strokeColor('#111111').lineWidth(1.5).stroke();
+  doc.restore();
+
+  drawLogoMark(doc, {
+    x: doc.page.margins.left + 16,
+    y: doc.page.margins.top + 16,
+    size: 40,
+    logoPath: config.pdf?.logoPath,
+    brandName,
+    accent: palette.primary,
+    fonts,
+  });
+
+  doc.fillColor(palette.text)
+    .font(fonts.headingBold)
+    .fontSize(20)
+    .text(division.tournamentName || 'Tournament', doc.page.margins.left + 68, doc.page.margins.top + 15);
+  doc.fillColor('#b91c1c')
+    .font(fonts.headingBold)
+    .fontSize(13)
+    .text(division.label, doc.page.margins.left + 68, doc.page.margins.top + 42, { width: pageWidth - 220 });
+  doc.fillColor(palette.textMuted)
+    .font(fonts.body)
+    .fontSize(9)
+    .text(`Status: ${bracket.statusLabel || statusLabel(bracket.status)}   |   Draw: ${bracket.seedingLabel}   |   Exported: ${formatDateOnly(new Date())}`, doc.page.margins.left + 68, doc.page.margins.top + 60);
+
+  const rounds = bracket.rounds || [];
+  const startX = doc.page.margins.left + 22;
+  const startY = doc.page.margins.top + 120;
+  const roundWidth = 145;
+  rounds.forEach((round, roundIndex) => {
+    drawBracketRound(doc, startX + roundIndex * roundWidth, startY + roundIndex * 28, round, roundIndex, rounds.length || 1, palette, fonts);
+  });
+
+  const finalMatch = rounds[rounds.length - 1]?.matches?.[0];
+  const champion = finalMatch?.winnerIndex !== undefined ? finalMatch.sides?.[finalMatch.winnerIndex] : (payload.champion ? {
+    name: payload.champion.participantName,
+    club: payload.champion.clubName,
+  } : null);
+
+  if (finalMatch || champion) {
+    const slotHeight = getBracketSlotHeight(Math.max(rounds.length, 1));
+    const championX = startX + Math.max(rounds.length, 1) * roundWidth + 18;
+    const championY = startY + (slotHeight / 2) + 18;
+    const connectorStartX = startX + Math.max(rounds.length - 1, 0) * roundWidth + 126;
+    const connectorY = championY + 46;
+    if (rounds.length) {
+      doc.save();
+      doc.lineWidth(1.5).strokeColor('#111111');
+      doc.moveTo(connectorStartX, connectorY).lineTo(championX - 12, connectorY).stroke();
+      doc.restore();
+    }
+    drawChampionCard(doc, championX, championY, champion, palette, fonts);
+  }
+
+  doc.end();
+  await auditWrite({
+    actorUserId: actor?.id,
+    actorRole: actor?.role,
+    action: 'export.division_bracket_pdf',
+    entityType: 'division',
+    entityId: divisionId,
+    payload: { tournamentId: division.tournamentId },
+    requestIp: ctx.ip,
+  });
+}
+
+module.exports = { approvedToExcel, approvedParticipantsToExcel, applicationToPdf, auditToExcel, bracketToPdf, divisionBracketToPdf };

@@ -2,6 +2,7 @@ const { query } = require('../db');
 const { tournaments: tournamentsRepo } = require('../repositories');
 const { ApiError } = require('../apiError');
 const { write: auditWrite } = require('../audit');
+const divisionService = require('./division.service');
 
 const GENERATION_PRESETS = [
   {
@@ -608,59 +609,8 @@ async function resolveTournamentId(requestedTournamentId) {
 async function refreshSuggestedForTournament(tournamentId, { actorUserId = null, force = false } = {}) {
   const selectedTournamentId = await resolveTournamentId(tournamentId);
   if (!selectedTournamentId) return {};
-
-  const [categories, storedBrackets] = await Promise.all([
-    listBracketEntries(selectedTournamentId).then(buildCategoryReport),
-    listStoredBrackets(selectedTournamentId),
-  ]);
-
-  const storedByCategory = new Map(storedBrackets.map((item) => [item.categoryId, item]));
-  const nextBrackets = {};
-  const liveCategoryIds = new Set();
-
-  for (const category of categories) {
-    const existing = storedByCategory.get(category.id);
-    if (!category.readyForBracket) {
-      if (existing && existing.status === 'draft') {
-        await softDeleteBracket(existing.id);
-      }
-      continue;
-    }
-
-    liveCategoryIds.add(category.id);
-    if (existing && PRESERVED_STATUSES.has(existing.status) && !force) {
-      nextBrackets[category.id] = existing;
-      continue;
-    }
-
-    const generated = generateBracket(category, {
-      seeding: existing?.seeding || 'fair_draw',
-      status: existing?.status && BRACKET_STATUSES.has(existing.status) ? existing.status : 'draft',
-    });
-    if (!generated) continue;
-
-    const saved = await saveBracket({
-      actorUserId,
-      tournamentId: selectedTournamentId,
-      category,
-      bracket: generated,
-    });
-    nextBrackets[category.id] = saved;
-  }
-
-  for (const existing of storedBrackets) {
-    if (liveCategoryIds.has(existing.categoryId)) {
-      if (!nextBrackets[existing.categoryId]) nextBrackets[existing.categoryId] = existing;
-      continue;
-    }
-    if (existing.status === 'draft') {
-      await softDeleteBracket(existing.id);
-    } else {
-      nextBrackets[existing.categoryId] = existing;
-    }
-  }
-
-  return nextBrackets;
+  await divisionService.syncTournamentSystem(selectedTournamentId);
+  return {};
 }
 
 async function overview(actor, { tournamentId } = {}) {

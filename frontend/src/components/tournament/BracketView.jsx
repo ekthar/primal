@@ -191,7 +191,7 @@ export default function BracketView({ bracket, onAdvanceWinner }) {
                         winner={match.winnerIndex === sideIndex}
                         onAdvance={
                           onAdvanceWinner && !side.isBye && match.status !== "completed"
-                            ? () => onAdvanceWinner(match.round - 1, Number(match.id.split("-m")[1]) - 1, sideIndex)
+                            ? () => onAdvanceWinner(match.id, side.entryId)
                             : null
                         }
                       />
@@ -232,7 +232,7 @@ export default function BracketView({ bracket, onAdvanceWinner }) {
                           winner={match.winnerIndex === sideIndex}
                           onAdvance={
                             onAdvanceWinner && !side.isBye && match.status !== "completed"
-                              ? () => onAdvanceWinner(match.round - 1, Number(match.id.split("-m")[1]) - 1, sideIndex)
+                              ? () => onAdvanceWinner(match.id, side.entryId)
                               : null
                           }
                         />

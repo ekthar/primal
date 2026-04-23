@@ -1,160 +1,220 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Download, Lock, RefreshCw, Shield, Shuffle, Swords, Trophy, Unlock } from "lucide-react";
+import { AlertTriangle, Download, RefreshCw, Save, Shield, Shuffle, Swords, Trophy, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import BracketView from "@/components/tournament/BracketView";
 import { ResponsivePageShell } from "@/components/shared/ResponsivePrimitives";
 import { SectionLoader } from "@/components/shared/PrimalLoader";
-import { GENERATION_PRESETS as FALLBACK_PRESETS } from "@/lib/brackets";
 import api from "@/lib/api";
 import { toast } from "sonner";
 
 export default function AdminBrackets() {
   const [loading, setLoading] = useState(true);
-  const [busyPresetId, setBusyPresetId] = useState(null);
+  const [syncing, setSyncing] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [savingSeeds, setSavingSeeds] = useState(false);
   const [advancing, setAdvancing] = useState(false);
-  const [updatingBracket, setUpdatingBracket] = useState(false);
-  const [downloadingBracket, setDownloadingBracket] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [tournaments, setTournaments] = useState([]);
   const [selectedTournamentId, setSelectedTournamentId] = useState("");
-  const [categories, setCategories] = useState([]);
-  const [brackets, setBrackets] = useState({});
-  const [presets, setPresets] = useState(FALLBACK_PRESETS);
-  const [selectedCategoryId, setSelectedCategoryId] = useState(null);
+  const [divisions, setDivisions] = useState([]);
+  const [selectedDivisionId, setSelectedDivisionId] = useState("");
+  const [divisionPayload, setDivisionPayload] = useState(null);
+  const [seedDrafts, setSeedDrafts] = useState({});
 
   useEffect(() => {
-    loadOverview();
+    initialize();
   }, []);
 
-  const bracketableCategories = useMemo(
-    () => categories.filter((category) => category.readyForBracket),
-    [categories]
-  );
-
-  const selectedCategory = bracketableCategories.find((category) => category.id === selectedCategoryId) || bracketableCategories[0] || null;
-  const bracket = selectedCategory ? brackets[selectedCategory.id] : null;
-
-  async function loadOverview(tournamentId) {
+  async function initialize() {
     setLoading(true);
-    const { data, error } = await api.bracketOverview(tournamentId ? { tournamentId } : undefined);
+    const { data, error } = await api.adminTournaments();
+    if (error) {
+      setLoading(false);
+      toast.error(error.message || "Failed to load tournaments");
+      return;
+    }
+
+    const items = data?.tournaments || [];
+    const nextTournamentId = items[0]?.id || "";
+    setTournaments(items);
+    setSelectedTournamentId(nextTournamentId);
+    if (nextTournamentId) {
+      await syncAndLoadDivisions(nextTournamentId, { silent: true });
+    } else {
+      setDivisions([]);
+      setLoading(false);
+    }
+  }
+
+  async function syncAndLoadDivisions(tournamentId, { silent = false } = {}) {
+    if (!tournamentId) return;
+    if (!silent) setSyncing(true);
+    const syncResponse = await api.syncTournamentDivisions(tournamentId);
+    if (syncResponse.error) {
+      if (!silent) setSyncing(false);
+      setLoading(false);
+      toast.error(syncResponse.error.message || "Failed to sync divisions");
+      return;
+    }
+
+    const nextDivisions = syncResponse.data?.divisions || [];
+    setDivisions(nextDivisions);
+    const nextDivisionId = nextDivisions[0]?.id || "";
+    setSelectedDivisionId((current) => (current && nextDivisions.some((division) => division.id === current) ? current : nextDivisionId));
+    if (nextDivisionId) {
+      await loadDivisionBracket(currentOrFallbackDivision(nextDivisions, nextDivisionId));
+    } else {
+      setDivisionPayload(null);
+    }
+    if (!silent) {
+      setSyncing(false);
+      toast.success("Division entries refreshed from approved applications");
+    } else {
+      setLoading(false);
+    }
+  }
+
+  function currentOrFallbackDivision(nextDivisions, fallbackId) {
+    const current = selectedDivisionId && nextDivisions.find((division) => division.id === selectedDivisionId);
+    return current?.id || fallbackId;
+  }
+
+  async function loadDivisionBracket(divisionId) {
+    if (!divisionId) {
+      setDivisionPayload(null);
+      setLoading(false);
+      return;
+    }
+    const { data, error } = await api.getDivisionBracket(divisionId);
     setLoading(false);
     if (error) {
-      toast.error(error.message || "Failed to load brackets workspace");
+      toast.error(error.message || "Failed to load division bracket");
       return;
     }
 
-    const nextCategories = data?.categories || [];
-    const readyCategories = nextCategories.filter((item) => item.readyForBracket);
-    setTournaments(data?.tournaments || []);
-    setSelectedTournamentId(data?.selectedTournamentId || "");
-    setCategories(nextCategories);
-    setBrackets(data?.brackets || {});
-    setPresets(data?.generationPresets?.length ? data.generationPresets : FALLBACK_PRESETS);
-    setSelectedCategoryId((current) => {
-      if (current && readyCategories.some((item) => item.id === current)) return current;
-      return readyCategories[0]?.id || null;
-    });
+    setDivisionPayload(data);
+    const nextSeeds = Object.fromEntries((data?.entries || []).map((entry) => [entry.id, entry.seed || ""]));
+    setSeedDrafts(nextSeeds);
   }
 
-  async function regenerate(presetId) {
-    if (!selectedCategory || !selectedTournamentId) return;
-    setBusyPresetId(presetId);
-    const { data, error } = await api.generateBracket({
-      tournamentId: selectedTournamentId,
-      categoryId: selectedCategory.id,
-      seeding: presetId,
-    });
-    setBusyPresetId(null);
+  async function handleTournamentChange(tournamentId) {
+    setSelectedTournamentId(tournamentId);
+    setLoading(true);
+    await syncAndLoadDivisions(tournamentId, { silent: true });
+  }
+
+  async function handleDivisionSelect(divisionId) {
+    setSelectedDivisionId(divisionId);
+    setLoading(true);
+    await loadDivisionBracket(divisionId);
+  }
+
+  async function handleGenerate() {
+    if (!selectedDivisionId) return;
+    setGenerating(true);
+    const { data, error } = await api.generateDivisionBracket(selectedDivisionId, { force: false });
+    setGenerating(false);
     if (error) {
-      toast.error(error.message || "Failed to generate bracket");
+      toast.error(error.message || "Failed to generate division bracket");
       return;
     }
 
-    setBrackets((current) => ({
-      ...current,
-      [selectedCategory.id]: data.bracket,
-    }));
-    toast.success("Bracket generated from approved participants");
+    setDivisionPayload(data);
+    await refreshDivisionList(false);
+    toast.success("Bracket generated and persisted");
   }
 
-  async function advanceWinner(roundIndex, matchIndex, sideIndex) {
-    if (!bracket?.id) return;
+  async function refreshDivisionList(withToast = true) {
+    if (!selectedTournamentId) return;
+    const { data, error } = await api.tournamentDivisions(selectedTournamentId);
+    if (error) {
+      toast.error(error.message || "Failed to refresh divisions");
+      return;
+    }
+    setDivisions(data?.divisions || []);
+    if (withToast) toast.success("Division board refreshed");
+  }
+
+  async function handleSaveSeeds() {
+    if (!selectedDivisionId || !divisionPayload?.entries?.length) return;
+    const seeds = divisionPayload.entries
+      .map((entry) => ({
+        entryId: entry.id,
+        seed: Number(seedDrafts[entry.id] || 0),
+      }))
+      .filter((item) => Number.isInteger(item.seed) && item.seed > 0);
+
+    setSavingSeeds(true);
+    const { error } = await api.setDivisionManualSeeds(selectedDivisionId, { seeds });
+    setSavingSeeds(false);
+    if (error) {
+      toast.error(error.message || "Failed to save manual seeds");
+      return;
+    }
+
+    await loadDivisionBracket(selectedDivisionId);
+    toast.success("Manual seeds saved");
+  }
+
+  async function handleAdvanceWinner(matchId, winnerEntryId) {
+    if (!matchId || !winnerEntryId) return;
     setAdvancing(true);
-    const { data, error } = await api.advanceBracketWinner(bracket.id, { roundIndex, matchIndex, sideIndex });
+    const { data, error } = await api.submitMatchResult(matchId, { winnerEntryId });
     setAdvancing(false);
     if (error) {
-      toast.error(error.message || "Failed to advance bracket winner");
+      toast.error(error.message || "Failed to record match result");
       return;
     }
 
-    setBrackets((current) => ({
-      ...current,
-      [selectedCategory.id]: data.bracket,
-    }));
+    setDivisionPayload(data);
+    await refreshDivisionList(false);
   }
 
-  async function setBracketStatus(status) {
-    if (!bracket?.id) return;
-    setUpdatingBracket(true);
-    const { data, error } = await api.updateBracket(bracket.id, { status });
-    setUpdatingBracket(false);
+  async function handleDownload() {
+    if (!selectedDivisionId) return;
+    setDownloading(true);
+    const { error } = await api.downloadDivisionBracketPdf(selectedDivisionId);
+    setDownloading(false);
     if (error) {
-      toast.error(error.message || "Failed to update bracket status");
-      return;
-    }
-    setBrackets((current) => ({
-      ...current,
-      [selectedCategory.id]: data.bracket,
-    }));
-    toast.success(`Bracket marked ${status}`);
-  }
-
-  async function downloadBracket() {
-    if (!bracket?.id) return;
-    setDownloadingBracket(true);
-    const { error } = await api.downloadBracketPdf(bracket.id);
-    setDownloadingBracket(false);
-    if (error) {
-      toast.error(error.message || "Failed to export bracket");
-      return;
+      toast.error(error.message || "Failed to export division bracket");
     }
   }
 
-  const savedBracketCount = useMemo(
-    () => Object.values(brackets || {}).filter(Boolean).length,
-    [brackets]
+  const readyDivisions = useMemo(
+    () => divisions.filter((division) => Number(division.fighterCount || 0) >= 2),
+    [divisions]
   );
+
+  const selectedDivision = divisions.find((division) => division.id === selectedDivisionId) || null;
+  const bracket = divisionPayload?.bracket || null;
 
   return (
     <ResponsivePageShell>
-      <section className="rounded-[32px] overflow-hidden border border-zinc-800 bg-[radial-gradient(circle_at_top_left,rgba(239,68,68,0.22),transparent_30%),radial-gradient(circle_at_top_right,rgba(59,130,246,0.14),transparent_28%),linear-gradient(180deg,#090909_0%,#111111_100%)] p-7 sm:p-8 text-white shadow-[0_24px_120px_rgba(0,0,0,0.45)]">
+      <section className="rounded-[32px] overflow-hidden border border-zinc-800 bg-[radial-gradient(circle_at_top_left,rgba(239,68,68,0.28),transparent_28%),radial-gradient(circle_at_top_right,rgba(59,130,246,0.2),transparent_32%),radial-gradient(circle_at_bottom,rgba(250,204,21,0.18),transparent_30%),linear-gradient(180deg,#0a0a0a_0%,#111111_100%)] p-7 sm:p-8 text-white shadow-[0_24px_120px_rgba(0,0,0,0.45)]">
         <div className="grid lg:grid-cols-[1.15fr_0.85fr] gap-6 items-start">
           <div>
-            <div className="text-[10px] uppercase tracking-[0.26em] text-red-300 font-semibold">Bracket Intelligence</div>
+            <div className="text-[10px] uppercase tracking-[0.26em] text-red-300 font-semibold">Division Engine</div>
             <h1 className="font-display text-4xl sm:text-5xl font-semibold tracking-tight mt-3 max-w-3xl">
-              Build clean fight trees from approved participants.
+              Persisted divisions, entries, and match progression.
             </h1>
             <p className="text-sm text-zinc-300 mt-4 max-w-2xl leading-6">
-              This screen now groups real approved applications by discipline, gender, age group, weight class, and experience level. Generation and winner advancement persist to the backend.
+              Approved applications are expanded into one entry per discipline, grouped into strict divisions, and generated into a deterministic single-elimination tree with bye propagation and winner carry-forward.
             </p>
 
             <div className="mt-6 grid sm:grid-cols-3 gap-3">
-              <HeroMetric label="Ready categories" value={bracketableCategories.length} helper="Real divisions with enough approvals" />
+              <HeroMetric label="Total divisions" value={divisions.length} helper="All persisted tournament buckets" />
+              <HeroMetric label="Ready divisions" value={readyDivisions.length} helper="At least two approved fighters" />
               <HeroMetric
-                label="Saved brackets"
-                value={savedBracketCount}
-                helper="Persisted event trees"
-              />
-              <HeroMetric
-                label="Fight slots"
-                value={Object.values(brackets).reduce((sum, item) => sum + (item?.fixtures?.length || 0), 0)}
-                helper="Scheduled bouts across saved brackets"
+                label="Generated matches"
+                value={divisions.reduce((sum, division) => sum + Number(division.matchCount || 0), 0)}
+                helper="Persisted graph nodes"
               />
             </div>
 
             <div className="mt-6 flex flex-wrap gap-2">
-              <Pill icon={Shield} text="Strict category integrity" />
-              <Pill icon={Swords} text="Same-club avoidance" />
+              <Pill icon={Shield} text="Strict division integrity" />
+              <Pill icon={Swords} text="Soft same-club avoidance" />
               <Pill icon={AlertTriangle} text="Conflict diagnostics" />
             </div>
           </div>
@@ -165,17 +225,18 @@ export default function AdminBrackets() {
               <Button
                 variant="outline"
                 className="border-zinc-700 bg-zinc-950/50 text-zinc-100 hover:bg-zinc-900"
-                onClick={() => loadOverview(selectedTournamentId || undefined)}
-                disabled={loading}
+                onClick={() => syncAndLoadDivisions(selectedTournamentId)}
+                disabled={syncing || !selectedTournamentId}
               >
-                <RefreshCw className="size-4" /> Refresh
+                <RefreshCw className="size-4" /> {syncing ? "Syncing..." : "Sync divisions"}
               </Button>
             </div>
+
             <div className="mt-4">
               <label className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Tournament</label>
               <select
                 value={selectedTournamentId}
-                onChange={(event) => loadOverview(event.target.value)}
+                onChange={(event) => handleTournamentChange(event.target.value)}
                 className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950/80 px-3 text-sm text-zinc-100 outline-none"
               >
                 {tournaments.map((tournament) => (
@@ -185,50 +246,31 @@ export default function AdminBrackets() {
                 ))}
               </select>
             </div>
-            <div className="mt-4 space-y-3">
-              {presets.map((preset) => (
-                <button
-                  key={preset.id}
-                  type="button"
-                  onClick={() => regenerate(preset.id)}
-                  disabled={!selectedCategory || busyPresetId !== null}
-                  className="w-full rounded-2xl border border-zinc-800 bg-zinc-950/70 px-4 py-4 text-left transition-colors hover:bg-zinc-900/80 disabled:opacity-50"
+
+            <div className="mt-5 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+              <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500 font-semibold">Generation controls</div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  className="border-zinc-700 bg-zinc-950/50 text-zinc-100 hover:bg-zinc-900"
+                  onClick={handleGenerate}
+                  disabled={generating || !selectedDivision || Number(selectedDivision.fighterCount || 0) < 2}
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="font-medium text-white">{preset.label}</div>
-                    <Shuffle className="size-4 text-red-300" />
-                  </div>
-                  <div className="mt-2 text-sm text-zinc-400">{preset.description}</div>
-                </button>
-              ))}
-            </div>
-            {bracket ? (
-              <div className="mt-4 space-y-2 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
-                <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500 font-semibold">Bracket controls</div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Button
-                    variant="outline"
-                    className="border-zinc-700 bg-zinc-950/50 text-zinc-100 hover:bg-zinc-900"
-                    onClick={() => setBracketStatus(bracket.status === "locked" ? "draft" : "locked")}
-                    disabled={updatingBracket}
-                  >
-                    {bracket.status === "locked" ? <Unlock className="size-4" /> : <Lock className="size-4" />}
-                    {bracket.status === "locked" ? "Unlock draft refresh" : "Lock bracket"}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="border-zinc-700 bg-zinc-950/50 text-zinc-100 hover:bg-zinc-900"
-                    onClick={downloadBracket}
-                    disabled={downloadingBracket}
-                  >
-                    <Download className="size-4" /> {downloadingBracket ? "Exporting..." : "Download PDF"}
-                  </Button>
-                </div>
-                <div className="text-xs text-zinc-500">
-                  Draft brackets auto-refresh from real approved fighters. Locked, live, and completed brackets are preserved.
-                </div>
+                  <Shuffle className="size-4" /> {generating ? "Generating..." : selectedDivision?.matchCount ? "Regenerate bracket" : "Generate bracket"}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="border-zinc-700 bg-zinc-950/50 text-zinc-100 hover:bg-zinc-900"
+                  onClick={handleDownload}
+                  disabled={downloading || !selectedDivisionId}
+                >
+                  <Download className="size-4" /> {downloading ? "Exporting..." : "Download PDF"}
+                </Button>
               </div>
-            ) : null}
+              <div className="mt-3 text-xs text-zinc-500">
+                Regeneration is blocked once a division has recorded winners. Update manual seeds before generating if you need a protected bracket order.
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -236,100 +278,126 @@ export default function AdminBrackets() {
       {loading ? (
         <div className="mt-6">
           <SectionLoader
-            title="Loading bracket model"
-            description="Reading tournaments, approved fighters, and persisted event trees."
+            title="Loading division graph"
+            description="Reading tournaments, approved fighters, persisted divisions, and match progress."
             cards={3}
             rows={4}
           />
         </div>
       ) : (
-        <div className="mt-6 grid xl:grid-cols-[330px_1fr] gap-5">
+        <div className="mt-6 grid xl:grid-cols-[340px_1fr] gap-5">
           <aside className="rounded-3xl border border-border bg-surface elev-card p-5 h-max">
             <div className="flex items-start gap-3">
               <Trophy className="size-5 text-primary shrink-0 mt-0.5" />
               <div>
-                <h2 className="font-display text-2xl font-semibold tracking-tight">Bracket-ready categories</h2>
+                <h2 className="font-display text-2xl font-semibold tracking-tight">Division board</h2>
                 <p className="text-sm text-secondary-muted mt-1">
-                  Real approved entries grouped per tournament. Only categories with at least two approved participants can generate a bracket.
+                  Each division is a real competition bucket grouped by tournament, discipline, sex, age band, weight class, and experience level.
                 </p>
               </div>
             </div>
+
             <div className="mt-5 space-y-3">
-              {bracketableCategories.map((category) => {
-                const categoryBracket = brackets[category.id];
-                const sameClubHits = categoryBracket?.generation?.summary?.sameClubCollisions || 0;
-                return (
-                  <button
-                    key={category.id}
-                    type="button"
-                    onClick={() => setSelectedCategoryId(category.id)}
-                    className={`w-full rounded-2xl border p-4 text-left transition-all ${
-                      selectedCategoryId === category.id ? "border-foreground bg-surface-muted" : "border-border bg-background/60 hover:bg-surface-muted/40"
-                    }`}
-                  >
-                    <div className="font-medium">{category.label}</div>
-                    <div className="text-sm text-secondary-muted mt-1">
-                      {category.approvedCount} approved · {category.clubCount} clubs · {category.rulesetLabel}
-                    </div>
-                    <div className="mt-2 text-[11px] uppercase tracking-wider text-tertiary">
-                      {categoryBracket
-                        ? sameClubHits > 0
-                          ? `${sameClubHits} same-club warning${sameClubHits > 1 ? "s" : ""}`
-                          : "Saved bracket available"
-                        : "No bracket generated yet"}
-                    </div>
-                  </button>
-                );
-              })}
-              {!bracketableCategories.length && (
+              {divisions.map((division) => (
+                <button
+                  key={division.id}
+                  type="button"
+                  onClick={() => handleDivisionSelect(division.id)}
+                  className={`w-full rounded-2xl border p-4 text-left transition-all ${
+                    selectedDivisionId === division.id ? "border-foreground bg-surface-muted" : "border-border bg-background/60 hover:bg-surface-muted/40"
+                  }`}
+                >
+                  <div className="font-medium">{division.label}</div>
+                  <div className="text-sm text-secondary-muted mt-1">
+                    {division.fighterCount} fighters · {division.matchCount || 0} matches · {division.disciplineLabel}
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2 text-[11px] uppercase tracking-wider text-tertiary">
+                    <span>{Number(division.fighterCount || 0) >= 2 ? "Ready" : "Building"}</span>
+                    {division.conflictCount ? <span>{division.conflictCount} conflict</span> : null}
+                    {division.championName ? <span>Champion: {division.championName}</span> : null}
+                  </div>
+                </button>
+              ))}
+
+              {!divisions.length ? (
                 <div className="rounded-2xl border border-dashed border-border bg-background/60 p-4 text-sm text-secondary-muted">
-                  No real bracket-ready categories found for this tournament yet.
+                  No divisions found yet. Sync once approved applications exist in this tournament.
                 </div>
-              )}
+              ) : null}
             </div>
           </aside>
 
           <section className="space-y-5 min-w-0">
-            {selectedCategory ? (
+            {selectedDivision ? (
               <Tabs defaultValue="warroom" className="space-y-5">
                 <TabsList className="bg-surface-muted p-1 rounded-xl h-auto flex w-full justify-start overflow-x-auto">
                   <TabsTrigger value="warroom" className="data-[state=active]:bg-surface rounded-lg px-4 py-2">War room</TabsTrigger>
-                  <TabsTrigger value="policy" className="data-[state=active]:bg-surface rounded-lg px-4 py-2">Rules</TabsTrigger>
+                  <TabsTrigger value="seeding" className="data-[state=active]:bg-surface rounded-lg px-4 py-2">Entries & seeds</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="warroom" className="space-y-5">
                   {bracket ? (
-                    <BracketView bracket={bracket} onAdvanceWinner={advancing ? undefined : advanceWinner} />
+                    <BracketView bracket={bracket} onAdvanceWinner={advancing ? undefined : handleAdvanceWinner} />
                   ) : (
                     <div className="rounded-3xl border border-dashed border-border bg-surface p-8 text-sm text-secondary-muted">
-                      No saved bracket exists for this category yet. Choose a generation preset to build one from the approved applications.
+                      No persisted bracket exists for this division yet. Generate one once your entry list looks correct.
                     </div>
                   )}
                 </TabsContent>
 
-                <TabsContent value="policy">
+                <TabsContent value="seeding">
                   <div className="rounded-3xl border border-border bg-surface elev-card p-6">
-                    <h3 className="font-display text-2xl font-semibold tracking-tight">Bracket policy for this system</h3>
-                    <div className="mt-5 grid md:grid-cols-2 gap-4 text-sm">
-                      <PolicyCard title="Hard rules" items={[
-                        "Only approved entries from the selected tournament can enter brackets.",
-                        "Categories are split by discipline, age group, gender, weight class, and experience level.",
-                        "Only one fighter per slot; no overlapping match placement.",
-                        "Generated brackets persist and can be advanced round by round.",
-                      ]} />
-                      <PolicyCard title="Soft rules" items={[
-                        "Same club should not meet in round 1 if avoidable.",
-                        "Top seeds should stay separated where possible.",
-                        "Byes should favor cleaner bracket structure.",
-                        "Fixture order should support ring/cage operations.",
-                      ]} />
+                    <div className="flex items-start justify-between gap-4 flex-wrap">
+                      <div>
+                        <h3 className="font-display text-2xl font-semibold tracking-tight">Entries and manual seeds</h3>
+                        <p className="text-sm text-secondary-muted mt-1">
+                          Manual seeds take precedence. Leave a seed blank to fall back to the derived heuristic score.
+                        </p>
+                      </div>
+                      <Button onClick={handleSaveSeeds} disabled={savingSeeds || !divisionPayload?.entries?.length}>
+                        <Save className="size-4" /> {savingSeeds ? "Saving..." : "Save seeds"}
+                      </Button>
+                    </div>
+
+                    <div className="mt-5 grid gap-3">
+                      {(divisionPayload?.entries || []).map((entry, index) => (
+                        <div key={entry.id} className="rounded-2xl border border-border bg-background/60 p-4">
+                          <div className="flex items-start justify-between gap-4 flex-wrap">
+                            <div className="min-w-0">
+                              <div className="font-medium">{entry.participantName}</div>
+                              <div className="mt-1 text-sm text-secondary-muted">
+                                {entry.clubName || "Independent"} · Derived score {entry.derivedSeedScore}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className="inline-flex items-center gap-2 rounded-full border border-border bg-surface-muted px-3 py-1 text-xs text-secondary-muted">
+                                <Users className="size-3.5" /> Rank {index + 1}
+                              </span>
+                              <input
+                                type="number"
+                                min="1"
+                                value={seedDrafts[entry.id] ?? ""}
+                                onChange={(event) => setSeedDrafts((current) => ({ ...current, [entry.id]: event.target.value }))}
+                                className="h-10 w-24 rounded-xl border border-border bg-background px-3 text-sm outline-none"
+                                placeholder="Seed"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+
+                      {!divisionPayload?.entries?.length ? (
+                        <div className="rounded-2xl border border-dashed border-border bg-background/60 p-4 text-sm text-secondary-muted">
+                          No entries have been synced into this division yet.
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 </TabsContent>
               </Tabs>
             ) : (
               <div className="rounded-2xl border border-dashed border-border bg-surface p-8 text-sm text-secondary-muted">
-                No bracket-ready categories available yet.
+                No divisions available for this tournament yet.
               </div>
             )}
           </section>
@@ -354,18 +422,5 @@ function Pill({ icon: Icon, text }) {
     <span className="inline-flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-950/70 px-3 py-1.5 text-[11px] uppercase tracking-[0.14em] text-zinc-300">
       <Icon className="size-3.5 text-red-300" /> {text}
     </span>
-  );
-}
-
-function PolicyCard({ title, items }) {
-  return (
-    <div className="rounded-2xl border border-border bg-background/60 p-5">
-      <div className="font-medium">{title}</div>
-      <div className="mt-3 space-y-2">
-        {items.map((item) => (
-          <div key={item} className="text-secondary-muted">{item}</div>
-        ))}
-      </div>
-    </div>
   );
 }

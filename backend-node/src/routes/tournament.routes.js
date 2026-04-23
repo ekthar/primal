@@ -2,6 +2,7 @@ const { Router } = require('express');
 const { ah, validate, requireAuth, requireRole } = require('../middleware');
 const { schemas } = require('../validators');
 const tournaments = require('../services/tournament.service');
+const divisions = require('../services/match.service');
 
 const router = Router();
 
@@ -21,6 +22,14 @@ router.patch('/:id', validate(schemas.tournament.adminUpdate), ah(async (req, re
 
 router.delete('/:id', ah(async (req, res) => {
   res.json({ tournament: await tournaments.archiveAdmin(req.user, req.params.id, { ip: req.ip }) });
+}));
+
+router.get('/:id/divisions', validate(schemas.division.list, 'query'), ah(async (req, res) => {
+  res.json({ divisions: await divisions.listTournamentDivisions(req.user, req.params.id) });
+}));
+
+router.post('/:id/divisions/sync', validate(schemas.division.sync), ah(async (req, res) => {
+  res.json({ divisions: await divisions.syncTournamentDivisions(req.user, req.params.id, { ip: req.ip }) });
 }));
 
 module.exports = router;
