@@ -3,23 +3,13 @@ const { ah, validate, requireAuth } = require('../middleware');
 const { schemas } = require('../validators');
 const apps = require('../services/application.service');
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
 const { config } = require('../config');
 
 const router = Router();
-const storage = multer.diskStorage({
-  destination: (req, _file, cb) => {
-    const dir = path.resolve(config.uploadDir, 'applications', req.params.id || 'tmp');
-    fs.mkdirSync(dir, { recursive: true });
-    cb(null, dir);
-  },
-  filename: (_req, file, cb) => {
-    const safe = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '-');
-    cb(null, `${Date.now()}-${safe}`);
-  },
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: config.maxUploadMb * 1024 * 1024 },
 });
-const upload = multer({ storage, limits: { fileSize: config.maxUploadMb * 1024 * 1024 } });
 
 router.get('/', requireAuth, validate(schemas.queue.list, 'query'), ah(async (req, res) => {
   res.json({ items: await apps.listForMe(req.user, req.query) });

@@ -23,3 +23,9 @@ services:
         sync: false
       - key: PDF_SIGNATURE_SECRET
         sync: false
+      - key: UPLOAD_STORAGE_PROVIDER
+        value: vercel-blob
+      - key: BLOB_READ_WRITE_TOKEN
+        sync: false
+      - key: BLOB_ACCESS
+        value: public

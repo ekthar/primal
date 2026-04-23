@@ -18,6 +18,7 @@ const { buildSignatureForApplication } = require('../pdfSignature');
 const { approvedParticipantReport } = require('./report.service');
 const bracketService = require('./bracket.service');
 const matchService = require('./match.service');
+const documentStorage = require('./documentStorage.service');
 
 function formatDateTime(value) {
   if (!value) return '—';
@@ -44,13 +45,6 @@ function statusLabel(status) {
 function asText(value) {
   if (value === null || value === undefined || value === '') return '—';
   return String(value);
-}
-
-function safeJoin(baseDir, subPath) {
-  const root = path.resolve(baseDir);
-  const resolved = path.resolve(root, subPath || '');
-  if (!resolved.startsWith(root)) return null;
-  return resolved;
 }
 
 function isPdfImage(docRow) {
@@ -109,6 +103,19 @@ function registerFontIfPresent(doc, fontName, fontPath) {
   } catch (_err) {
     return false;
   }
+}
+
+async function loadRenderableDocumentImages(documents) {
+  const renderableImages = await Promise.all(documents.filter((documentRow) => isPdfImage(documentRow)).map(async (documentRow) => {
+    try {
+      const imageBuffer = await documentStorage.readDocumentBuffer(documentRow);
+      return { ...documentRow, imageBuffer };
+    } catch (_error) {
+      return null;
+    }
+  }));
+
+  return renderableImages.filter(Boolean);
 }
 
 function resolvePdfFonts(doc) {
@@ -281,7 +288,7 @@ function drawImageGallery(doc, images, palette, fonts) {
     doc.save();
     doc.roundedRect(cardX, y, cardW, cardH, 6).fill('#e2e8f0');
     doc.restore();
-    doc.image(images[i].absolutePath, cardX + 2, y + 2, {
+    doc.image(images[i].imageBuffer, cardX + 2, y + 2, {
       fit: [cardW - 4, cardH - 4],
       align: 'center',
       valign: 'center',
@@ -531,11 +538,7 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
     eventsRepo.listForApplication(app.id),
   ]);
 
-  const uploadRoot = path.resolve(config.uploadDir);
-  const renderableImages = documents
-    .filter((d) => isPdfImage(d))
-    .map((d) => ({ ...d, absolutePath: safeJoin(uploadRoot, d.storage_key) }))
-    .filter((d) => d.absolutePath && fs.existsSync(d.absolutePath));
+  const renderableImages = await loadRenderableDocumentImages(documents);
   const primaryImage = renderableImages.find((d) => d.kind === 'photo_id') || renderableImages[0] || null;
   const address = app.metadata && typeof app.metadata === 'object' ? app.metadata.address : null;
 
@@ -670,7 +673,7 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
   if (primaryImage) {
     doc.save();
     doc.roundedRect(PHOTO_X + 2, PHOTO_Y + 2, PHOTO_W - 4, PHOTO_H - 4, 7).clip();
-    doc.image(primaryImage.absolutePath, PHOTO_X + 2, PHOTO_Y + 2, {
+    doc.image(primaryImage.imageBuffer, PHOTO_X + 2, PHOTO_Y + 2, {
       fit: [PHOTO_W - 4, PHOTO_H - 4],
       align: 'center',
       valign: 'center',

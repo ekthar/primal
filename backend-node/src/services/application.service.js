@@ -8,9 +8,8 @@ const { config } = require('../config');
 const { write: auditWrite } = require('../audit');
 const { dispatch: notify } = require('../notifications');
 const { createHash } = require('crypto');
-const path = require('path');
-const fs = require('fs');
 const tournamentService = require('./tournament.service');
+const documentStorage = require('./documentStorage.service');
 
 const HOUR = 60 * 60 * 1000;
 const REQUIRED_DOCUMENT_KINDS = ['medical', 'photo_id', 'consent'];
@@ -145,9 +144,8 @@ async function uploadDocument(user, applicationId, { kind, label, expiresOn, fil
   await assertCanEdit(user, app);
   if (!file) throw ApiError.badRequest('File required');
 
-  const checksum = createHash('sha256').update(fs.readFileSync(file.path)).digest('hex');
-  const relativeDir = path.join('applications', applicationId);
-  const storageKey = path.join(relativeDir, file.filename).replace(/\\/g, '/');
+  const checksum = createHash('sha256').update(file.buffer).digest('hex');
+  const storedDocument = await documentStorage.storeDocument(applicationId, file);
 
   const doc = await documentsRepo.create({
     applicationId,
@@ -156,7 +154,7 @@ async function uploadDocument(user, applicationId, { kind, label, expiresOn, fil
     label: label || file.originalname,
     mimeType: file.mimetype,
     sizeBytes: file.size,
-    storageKey,
+    storageKey: storedDocument.storageKey,
     checksumSha256: checksum,
     uploadedBy: user.id,
     expiresOn: expiresOn || null,
@@ -164,7 +162,7 @@ async function uploadDocument(user, applicationId, { kind, label, expiresOn, fil
   });
   await auditWrite({ actorUserId: user.id, actorRole: user.role, action: 'document.upload',
     entityType: 'application', entityId: applicationId, payload: { documentId: doc.id, kind }, requestIp: ctx.ip });
-  return { ...doc, url: `/uploads/${doc.storage_key}` };
+  return { ...doc, url: documentStorage.getPublicDocumentUrl(doc.storage_key) };
 }
 
 async function listDocuments(user, applicationId) {
@@ -174,7 +172,7 @@ async function listDocuments(user, applicationId) {
   const documents = await documentsRepo.listForApplication(applicationId);
   return documents.map((doc) => ({
     ...doc,
-    url: `/uploads/${doc.storage_key}`,
+    url: documentStorage.getPublicDocumentUrl(doc.storage_key),
   }));
 }
 
@@ -188,7 +186,7 @@ async function getById(user, id) {
   ]);
   return {
     ...app,
-    documents: documents.map((doc) => ({ ...doc, url: `/uploads/${doc.storage_key}` })),
+    documents: documents.map((doc) => ({ ...doc, url: documentStorage.getPublicDocumentUrl(doc.storage_key) })),
     statusEvents: events,
   };
 }

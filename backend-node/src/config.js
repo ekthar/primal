@@ -61,7 +61,12 @@ const config = {
   },
 
   uploadDir: process.env.UPLOAD_DIR || './uploads',
+  uploadStorageProvider: process.env.UPLOAD_STORAGE_PROVIDER || 'local',
   maxUploadMb: parseInt(process.env.MAX_UPLOAD_MB || '10', 10),
+  blob: {
+    readWriteToken: process.env.BLOB_READ_WRITE_TOKEN || '',
+    access: process.env.BLOB_ACCESS || 'public',
+  },
 };
 
 module.exports = { config };
