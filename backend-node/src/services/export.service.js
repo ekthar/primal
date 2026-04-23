@@ -297,6 +297,77 @@ function drawImageGallery(doc, images, palette, fonts) {
   if (images.length % 2 === 1) doc.y += cardH + 22;
 }
 
+function drawPanel(doc, { x, y, width, height, fill = '#ffffff', stroke = '#e2e8f0', radius = 10 }) {
+  doc.save();
+  doc.roundedRect(x, y, width, height, radius).fill(fill);
+  doc.roundedRect(x, y, width, height, radius).strokeColor(stroke).lineWidth(1).stroke();
+  doc.restore();
+}
+
+function drawMetricChip(doc, { x, y, width, height, label, value, palette, fonts, tone = '#ffffff' }) {
+  drawPanel(doc, { x, y, width, height, fill: tone, stroke: palette.line, radius: 12 });
+  doc.fillColor(palette.textMuted).font(fonts.bodyBold).fontSize(7.5)
+    .text(label, x + 10, y + 8, { width: width - 20 });
+  doc.fillColor(palette.text).font(fonts.headingBold).fontSize(13)
+    .text(value, x + 10, y + 20, { width: width - 20, ellipsis: true });
+}
+
+function drawLabeledGrid(doc, rows, options) {
+  const {
+    x,
+    y,
+    width,
+    columns = 2,
+    labelWidth = 72,
+    rowHeight = 34,
+    gap = 10,
+    palette,
+    fonts,
+    fill = '#ffffff',
+  } = options;
+
+  const colGap = 10;
+  const colWidth = (width - colGap * (columns - 1)) / columns;
+
+  rows.forEach((row, index) => {
+    const col = index % columns;
+    const line = Math.floor(index / columns);
+    const boxX = x + col * (colWidth + colGap);
+    const boxY = y + line * (rowHeight + gap);
+
+    drawPanel(doc, { x: boxX, y: boxY, width: colWidth, height: rowHeight, fill, stroke: palette.line, radius: 8 });
+    doc.fillColor(palette.textMuted).font(fonts.bodyBold).fontSize(7.3)
+      .text(asText(row[0]), boxX + 10, boxY + 8, { width: labelWidth });
+    doc.fillColor(palette.text).font(fonts.body).fontSize(8.8)
+      .text(asText(row[1]), boxX + 10 + labelWidth, boxY + 8, { width: colWidth - labelWidth - 20, ellipsis: true });
+  });
+
+  return y + Math.ceil(rows.length / columns) * (rowHeight + gap) - gap;
+}
+
+function drawTimelineCards(doc, events, options) {
+  const { x, width, palette, fonts } = options;
+  if (!events.length) {
+    doc.fillColor(palette.textMuted).font(fonts.body).fontSize(9).text('No status events recorded.');
+    return;
+  }
+
+  events.forEach((ev) => {
+    ensureSpace(doc, 44);
+    const y = doc.y;
+    drawPanel(doc, { x, y, width, height: 38, fill: '#ffffff', stroke: palette.line, radius: 8 });
+    doc.fillColor(palette.text).font(fonts.headingBold).fontSize(8.5)
+      .text(`${statusLabel(ev.from_status)} -> ${statusLabel(ev.to_status)}`, x + 12, y + 8, { width: width - 150, ellipsis: true });
+    doc.fillColor(palette.textMuted).font(fonts.body).fontSize(7.8)
+      .text(formatDateTime(ev.created_at), x + width - 128, y + 8, { width: 116, align: 'right' });
+    if (ev.reason) {
+      doc.fillColor(palette.textMuted).font(fonts.body).fontSize(7.8)
+        .text(ev.reason, x + 12, y + 20, { width: width - 24, ellipsis: true });
+    }
+    doc.y = y + 44;
+  });
+}
+
 async function approvedToExcel(res, { tournamentId } = {}) {
   const rows = await appsRepo.query({ status: 'approved', tournamentId, limit: 10000 });
   const wb = new ExcelJS.Workbook();
@@ -373,10 +444,7 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
       errorCorrectionLevel: 'M',
       margin: 1,
       width: 128,
-      color: {
-        dark: palette.accent,
-        light: '#00000000',
-      },
+      color: { dark: palette.accent, light: '#00000000' },
     });
   } catch (_err) {
     qrBuffer = null;
@@ -397,7 +465,7 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
   const address = app.metadata && typeof app.metadata === 'object' ? app.metadata.address : null;
 
   res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `attachment; filename="application-${app.id}.pdf"`);
+  res.setHeader('Content-Disposition',     `attachment; filename="application-${app.id}.pdf"`  );
   const doc = new PDFDocument({
     size: 'A4',
     margin: 40,
@@ -410,43 +478,34 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
 
   doc.pipe(res);
   const fonts = resolvePdfFonts(doc);
-
-  // Header band
   const contentWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
-  const headerX = doc.page.margins.left;
-  const headerY = doc.page.margins.top;
-  const headerH = 72;
+  const pageX = doc.page.margins.left;
+  const pageY = doc.page.margins.top;
+
   doc.save();
-  doc.roundedRect(headerX, headerY, contentWidth, headerH, 10).fill(palette.primary);
+  doc.rect(0, 0, doc.page.width, doc.page.height).fill('#fff9f7');
+  doc.fillOpacity(0.72).fillColor('#fde2e7').circle(doc.page.width - 88, 84, 140).fill();
+  doc.fillOpacity(0.62).fillColor('#dbeafe').circle(82, doc.page.height - 120, 120).fill();
+  doc.fillOpacity(0.34).fillColor('#fecaca').circle(doc.page.width / 2 + 40, doc.page.height / 2, 180).fill();
   doc.restore();
 
-  const logoSize = 40;
-  const logoX = headerX + 14;
-  const logoY = headerY + 16;
+  const seasonStamp = String(app.tournament_name || brandName).replace(/championship/gi, '').trim() || 'Championship';
+  const mastheadH = 132;
+  drawPanel(doc, { x: pageX, y: pageY, width: contentWidth, height: mastheadH, fill: palette.primary, stroke: palette.primary, radius: 18 });
+  doc.save();
+  doc.fillOpacity(0.12).fillColor('#ffffff').circle(pageX + contentWidth - 112, pageY + 70, 52).fill();
+  doc.fillOpacity(0.08).fillColor('#ffffff').circle(pageX + contentWidth - 112, pageY + 70, 64).fill();
+  doc.restore();
   drawLogoMark(doc, {
-    x: logoX,
-    y: logoY,
-    size: logoSize,
+    x: pageX + 18,
+    y: pageY + 18,
+    size: 52,
     logoPath: config.pdf?.logoPath,
     brandName,
-    primary: palette.primary,
     accent: palette.accent,
     fonts,
   });
-  const headerTextX = logoX + logoSize + 12;
 
-  doc.fillColor('#ffffff').font(fonts.headingBold).fontSize(18)
-    .text(`${brandName} Participant Application`, headerTextX, headerY + 14, { width: contentWidth - 120 });
-  doc.fillColor('#cbd5e1').font(fonts.body).fontSize(9)
-    .text(`Generated: ${formatDateTime(new Date())}`, headerTextX, headerY + 40);
-  doc.fillColor('#cbd5e1').font(fonts.body).fontSize(9)
-    .text(`Application ID: ${app.id}  |  Signature: ${signature.sig.slice(0, 16)}...`, headerTextX, headerY + 52, { width: contentWidth - 120 });
-
-  // Status badge
-  const badgeText = statusLabel(app.status);
-  const badgeW = Math.max(80, doc.widthOfString(badgeText, { font: fonts.headingBold, size: 9 }) + 18);
-  const badgeX = headerX + contentWidth - badgeW - 18;
-  const badgeY = headerY + 18;
   const statusColor = app.status === 'approved'
     ? '#166534'
     : app.status === 'rejected'
@@ -454,34 +513,67 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
       : app.status === 'needs_correction'
         ? '#92400e'
         : palette.accent;
-  doc.save();
-  doc.roundedRect(badgeX, badgeY, badgeW, 20, 10).fill(statusColor);
-  doc.restore();
+  const badgeText = statusLabel(app.status);
+  const badgeW = Math.max(92, doc.widthOfString(badgeText, { font: fonts.headingBold, size: 9 }) + 28);
+  drawPanel(doc, { x: pageX + contentWidth - badgeW - 18, y: pageY + 18, width: badgeW, height: 24, fill: statusColor, stroke: statusColor, radius: 12 });
   doc.fillColor('#ffffff').font(fonts.headingBold).fontSize(9)
-    .text(badgeText, badgeX, badgeY + 6, { width: badgeW, align: 'center' });
+    .text(badgeText, pageX + contentWidth - badgeW - 18, pageY + 26, { width: badgeW, align: 'center' });
 
-  doc.y = headerY + headerH + 16;
+  const headingX = pageX + 84;
+  doc.fillColor('#ffffff').font(fonts.headingBold).fontSize(24)
+    .text(`${brandName} Fight Series`, headingX, pageY + 18);
+  doc.fillColor('#fca5a5').font(fonts.heading).fontSize(10)
+    .text('Participant Application Sheet', headingX, pageY + 48);
+  doc.fillColor('#cbd5e1').font(fonts.body).fontSize(8.6)
+    .text(`Generated ${formatDateTime(new Date())}`, headingX, pageY + 68);
+  doc.fillColor('#cbd5e1').font(fonts.body).fontSize(8.6)
+    .text(`Application ${app.id}`, headingX, pageY + 82, { width: 220, ellipsis: true });
+  doc.fillColor('#cbd5e1').font(fonts.body).fontSize(8.6)
+    .text(`Signature ${signature.sig.slice(0, 22)}...`, headingX + 232, pageY + 82, { width: contentWidth - 340, ellipsis: true });
+  doc.fillColor('#e2e8f0').font(fonts.bodyBold).fontSize(7.2)
+    .text('SANCTIONED APPLICATION RECORD', headingX, pageY + 99, { width: 180 });
+  doc.fillColor('#ffffff').font(fonts.headingBold).fontSize(16)
+    .text(brandInitials(seasonStamp), pageX + contentWidth - 142, pageY + 42, { width: 60, align: 'center' });
+  doc.fillColor('#f8fafc').font(fonts.bodyBold).fontSize(7.5)
+    .text(seasonStamp.toUpperCase(), pageX + contentWidth - 178, pageY + 80, { width: 132, align: 'center', ellipsis: true });
+  doc.fillColor('#cbd5e1').font(fonts.body).fontSize(6.9)
+    .text('Season crest', pageX + contentWidth - 178, pageY + 92, { width: 132, align: 'center' });
 
-  // Summary cards
-  const leftW = 338;
-  const gap = 12;
-  const rightW = contentWidth - leftW - gap;
-  const cardH = 220;
-  const cardY = doc.y;
-  const leftX = headerX;
-  const rightX = leftX + leftW + gap;
+  const chipY = pageY + mastheadH + 16;
+  const chipGap = 10;
+  const chipW = (contentWidth - chipGap * 3) / 4;
+  drawMetricChip(doc, { x: pageX, y: chipY, width: chipW, height: 42, label: 'Tournament', value: asText(app.tournament_name), palette, fonts, tone: '#ffffff' });
+  drawMetricChip(doc, { x: pageX + chipW + chipGap, y: chipY, width: chipW, height: 42, label: 'Discipline', value: asText(app.discipline || 'Open'), palette, fonts, tone: '#fff5f5' });
+  drawMetricChip(doc, { x: pageX + (chipW + chipGap) * 2, y: chipY, width: chipW, height: 42, label: 'Weight Class', value: asText(app.weight_class || 'Open'), palette, fonts, tone: '#f8fafc' });
+  drawMetricChip(doc, { x: pageX + (chipW + chipGap) * 3, y: chipY, width: chipW, height: 42, label: 'Entry Type', value: app.club_name ? 'Club Entry' : 'Individual', palette, fonts, tone: '#f0fdf4' });
 
-  doc.save();
-  doc.roundedRect(leftX, cardY, leftW, cardH, 8).fill(palette.surface);
-  doc.roundedRect(rightX, cardY, rightW, cardH, 8).fill(palette.surface);
-  doc.restore();
+  const approvalStripY = chipY + 56;
+  const approvalStripH = 52;
+  drawPanel(doc, { x: pageX, y: approvalStripY, width: contentWidth, height: approvalStripH, fill: '#fffaf0', stroke: '#fed7aa', radius: 14 });
+  doc.fillColor('#9a3412').font(fonts.bodyBold).fontSize(7.3)
+    .text('APPROVAL & AUTHENTICATION STRIP', pageX + 14, approvalStripY + 10, { width: 190 });
+  doc.fillColor(palette.text).font(fonts.headingBold).fontSize(10.5)
+    .text(statusLabel(app.status), pageX + 14, approvalStripY + 23, { width: 110, ellipsis: true });
+  doc.fillColor(palette.textMuted).font(fonts.body).fontSize(7.8)
+    .text(`Reviewer ${asText(app.reviewer_id)}`, pageX + 132, approvalStripY + 14, { width: 150, ellipsis: true });
+  doc.fillColor(palette.textMuted).font(fonts.body).fontSize(7.8)
+    .text(`Decision ${formatDateTime(app.decided_at)}`, pageX + 132, approvalStripY + 27, { width: 150, ellipsis: true });
+  doc.fillColor(palette.textMuted).font(fonts.body).fontSize(7.8)
+    .text(`Verified via signed export digest ${signature.dig.slice(0, 12)}...`, pageX + 300, approvalStripY + 20, { width: contentWidth - 314, ellipsis: true });
 
-  doc.fillColor(palette.text).font(fonts.headingBold).fontSize(11)
-    .text('Applicant Profile', leftX + 12, cardY + 10);
-  doc.fillColor(palette.text).font(fonts.headingBold).fontSize(11)
-    .text('Uploaded Photo', rightX + 12, cardY + 10);
+  const mainY = approvalStripY + approvalStripH + 14;
+  const leftW = 352;
+  const rightW = contentWidth - leftW - 16;
+  const profileH = 224;
+  drawPanel(doc, { x: pageX, y: mainY, width: leftW, height: profileH, fill: '#ffffff', stroke: palette.line, radius: 16 });
+  drawPanel(doc, { x: pageX + leftW + 16, y: mainY, width: rightW, height: profileH, fill: '#ffffff', stroke: palette.line, radius: 16 });
 
-  const profileLines = [
+  doc.fillColor(palette.text).font(fonts.headingBold).fontSize(12)
+    .text('Applicant Identity', pageX + 16, mainY + 16);
+  doc.fillColor(palette.textMuted).font(fonts.body).fontSize(8.5)
+    .text('Primary identity, contact, and competition profile.', pageX + 16, mainY + 30);
+
+  drawLabeledGrid(doc, [
     ['Applicant', `${asText(app.first_name)} ${asText(app.last_name)}`],
     ['Email', asText(app.email)],
     ['Phone', asText(app.phone)],
@@ -489,138 +581,121 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
     ['Gender', asText(app.gender)],
     ['Nationality', asText(app.nationality)],
     ['Club', asText(app.club_name || 'Individual')],
-    ['Discipline', asText(app.discipline)],
-    ['Weight Class', asText(app.weight_class)],
-    ['Weight (kg)', asText(app.weight_kg)],
     ['Record', `${app.record_wins || 0}-${app.record_losses || 0}-${app.record_draws || 0}`],
-    ['Tournament', asText(app.tournament_name)],
-  ];
-
-  let lineY = cardY + 30;
-  profileLines.forEach(([k, v]) => {
-    if (lineY > cardY + cardH - 16) return;
-    doc.fillColor(palette.textMuted).font(fonts.bodyBold).fontSize(8.5)
-      .text(k, leftX + 12, lineY, { width: 92 });
-    doc.fillColor(palette.text).font(fonts.body).fontSize(8.5)
-      .text(v, leftX + 106, lineY, { width: leftW - 118 });
-    lineY += 15;
+    ['Discipline', asText(app.discipline)],
+    ['Weight', app.weight_kg ? `${app.weight_kg} kg` : '?'],
+  ], {
+    x: pageX + 16,
+    y: mainY + 52,
+    width: leftW - 32,
+    columns: 2,
+    labelWidth: 62,
+    rowHeight: 30,
+    gap: 8,
+    palette,
+    fonts,
+    fill: '#f8fafc',
   });
 
-  const imageBoxX = rightX + 12;
-  const imageBoxY = cardY + 30;
-  const imageBoxW = rightW - 24;
-  const imageBoxH = 158;
-  doc.save();
-  doc.roundedRect(imageBoxX, imageBoxY, imageBoxW, imageBoxH, 6).fill('#e2e8f0');
-  doc.restore();
-
-  if (primaryImage) {
-    doc.image(primaryImage.absolutePath, imageBoxX + 2, imageBoxY + 2, {
-      fit: [imageBoxW - 4, imageBoxH - 4],
-      align: 'center',
-      valign: 'center',
-    });
-    doc.fillColor(palette.textMuted).font(fonts.body).fontSize(8)
-      .text(primaryImage.original_filename || primaryImage.storage_key, imageBoxX, imageBoxY + imageBoxH + 6, {
-        width: imageBoxW,
-        ellipsis: true,
-      });
-  } else {
-    doc.fillColor(palette.textMuted).font(fonts.body).fontSize(9)
-      .text('No renderable image uploaded\n(accepted in PDF: JPG, PNG)', imageBoxX + 10, imageBoxY + 64, {
-        width: imageBoxW - 20,
-        align: 'center',
-      });
-  }
-
-  doc.y = cardY + cardH + 8;
-
-  // QR digital signature card
-  ensureSpace(doc, 76);
-  const linkCardY = doc.y;
-  doc.save();
-  doc.roundedRect(headerX, linkCardY, contentWidth, 74, 8).fill('#fee2e2');
-  doc.restore();
-  doc.fillColor(palette.text).font(fonts.headingBold).fontSize(10)
-    .text('Digital Signature Verification', headerX + 12, linkCardY + 10);
+  doc.fillColor(palette.text).font(fonts.headingBold).fontSize(12)
+    .text('Verification & Photo', pageX + leftW + 32, mainY + 16);
   doc.fillColor(palette.textMuted).font(fonts.body).fontSize(8.5)
-    .text('Scan the QR code to validate this application signature publicly. No login is required for authenticity check.', headerX + 12, linkCardY + 25, {
-      width: contentWidth - 100,
+    .text('Visual ID block and public signature verification.', pageX + leftW + 32, mainY + 30);
+
+  const photoX = pageX + leftW + 32;
+  const photoY = mainY + 52;
+  const photoW = 118;
+  const photoH = 144;
+  drawPanel(doc, { x: photoX, y: photoY, width: photoW, height: photoH, fill: '#f8fafc', stroke: '#94a3b8', radius: 12 });
+  drawPanel(doc, { x: photoX + 8, y: photoY + 18, width: photoW - 16, height: photoH - 38, fill: '#edf2f7', stroke: palette.line, radius: 8 });
+  doc.fillColor('#475569').font(fonts.bodyBold).fontSize(7)
+    .text('PHOTO ID', photoX, photoY + 8, { width: photoW, align: 'center' });
+  if (primaryImage) {
+    doc.image(primaryImage.absolutePath, photoX + 11, photoY + 21, {
+      fit: [photoW - 22, photoH - 44],
+      align: 'center',
+      valign: 'center',
     });
-  doc.fillColor(palette.accent).font(fonts.body).fontSize(8)
-    .text(signature.url, headerX + 12, linkCardY + 50, { width: contentWidth - 100, ellipsis: true });
-  doc.fillColor('#7f1d1d').font(fonts.body).fontSize(7.5)
-    .text(`Digest: ${signature.dig.slice(0, 20)}...  Issued: ${formatDateTime(new Date(signature.iat * 1000))}`, headerX + 12, linkCardY + 63, {
-      width: contentWidth - 100,
-      ellipsis: true,
-    });
+  } else {
+    doc.fillColor(palette.textMuted).font(fonts.body).fontSize(8.5)
+      .text('No renderable image uploaded', photoX + 16, photoY + 68, { width: photoW - 32, align: 'center' });
+  }
+  doc.fillColor(palette.text).font(fonts.bodyBold).fontSize(7.1)
+    .text(`${asText(app.first_name)} ${asText(app.last_name)}`, photoX + 8, photoY + photoH - 16, { width: photoW - 16, align: 'center', ellipsis: true });
+
+  const verifyX = photoX + photoW + 16;
+  const verifyW = rightW - (verifyX - (pageX + leftW + 16)) - 16;
+  drawPanel(doc, { x: verifyX, y: photoY, width: verifyW, height: 72, fill: '#fff1f2', stroke: '#fecdd3', radius: 10 });
+  doc.fillColor('#7f1d1d').font(fonts.headingBold).fontSize(9.2)
+    .text('Digital signature', verifyX + 12, photoY + 10);
+  doc.fillColor(palette.textMuted).font(fonts.body).fontSize(7.8)
+    .text('Scan the QR code or open the verify link to confirm authenticity.', verifyX + 12, photoY + 24, { width: verifyW - 92 });
+  doc.fillColor(palette.accent).font(fonts.body).fontSize(7.4)
+    .text(signature.url, verifyX + 12, photoY + 48, { width: verifyW - 92, ellipsis: true });
   if (qrBuffer) {
-    doc.image(qrBuffer, headerX + contentWidth - 64, linkCardY + 8, {
-      fit: [54, 54],
+    doc.image(qrBuffer, verifyX + verifyW - 60, photoY + 10, {
+      fit: [48, 48],
       align: 'center',
       valign: 'center',
     });
   }
-  doc.y = linkCardY + 80;
 
-  sectionHeading(doc, 'Application Details', palette, fonts);
-  const details = [
+  drawPanel(doc, { x: verifyX, y: photoY + 82, width: verifyW, height: 62, fill: '#f8fafc', stroke: palette.line, radius: 10 });
+  doc.fillColor(palette.text).font(fonts.headingBold).fontSize(8.8)
+    .text('Application digest', verifyX + 12, photoY + 92);
+  doc.fillColor(palette.textMuted).font(fonts.body).fontSize(7.5)
+    .text(`Digest ${signature.dig.slice(0, 28)}...`, verifyX + 12, photoY + 108, { width: verifyW - 24, ellipsis: true });
+  doc.fillColor(palette.textMuted).font(fonts.body).fontSize(7.5)
+    .text(`Issued ${formatDateTime(new Date(signature.iat * 1000))}`, verifyX + 12, photoY + 122, { width: verifyW - 24, ellipsis: true });
+
+  doc.y = mainY + profileH + 16;
+  sectionHeading(doc, 'Competition Declaration', palette, fonts);
+  const detailsEndY = drawLabeledGrid(doc, [
     ['Submitted At', formatDateTime(app.submitted_at)],
     ['Review Started', formatDateTime(app.review_started_at)],
     ['Review Due', formatDateTime(app.review_due_at)],
-    ['Correction Due', formatDateTime(app.correction_due_at)],
     ['Decided At', formatDateTime(app.decided_at)],
+    ['Correction Due', formatDateTime(app.correction_due_at)],
     ['Reviewer ID', asText(app.reviewer_id)],
-    ['Correction Reason', asText(app.correction_reason)],
+    ['Experience Level', asText(app.form_data?.experienceLevel)],
+    ['Selected Disciplines', Array.isArray(app.form_data?.selectedDisciplines) ? app.form_data.selectedDisciplines.join(', ') : '?'],
     ['Rejection Reason', asText(app.rejection_reason)],
     ['Reopen Reason', asText(app.reopen_reason)],
-    ['Address', address
-      ? `${asText(address.line1)}, ${asText(address.line2)}, ${asText(address.district)}, ${asText(address.state)}, ${asText(address.country)} ${asText(address.postalCode)}`
-      : '—'],
-    ['Experience Level', asText(app.form_data?.experienceLevel)],
-    ['Selected Disciplines', Array.isArray(app.form_data?.selectedDisciplines)
-      ? app.form_data.selectedDisciplines.join(', ')
-      : '—'],
+    ['Address', address ? `${asText(address.line1)}, ${asText(address.line2)}, ${asText(address.district)}, ${asText(address.state)}, ${asText(address.country)} ${asText(address.postalCode)}` : '?'],
     ['Applicant Notes', asText(app.form_data?.notes)],
-  ];
-  drawKeyValueTable(doc, details, {
-    x: headerX,
+  ], {
+    x: pageX,
+    y: doc.y,
     width: contentWidth,
-    labelWidth: 160,
+    columns: 2,
+    labelWidth: 88,
+    rowHeight: 32,
+    gap: 8,
     palette,
     fonts,
+    fill: '#ffffff',
   });
+  doc.y = detailsEndY + 16;
 
   sectionHeading(doc, 'Document Register', palette, fonts);
   drawDocumentTable(doc, documents, palette, fonts);
 
   if (renderableImages.length) {
-    sectionHeading(doc, 'Photo Attachments', palette, fonts);
+    sectionHeading(doc, 'Supporting Attachments', palette, fonts);
     drawImageGallery(doc, renderableImages, palette, fonts);
   }
 
-  sectionHeading(doc, 'Status Timeline', palette, fonts);
-  if (!statusEvents.length) {
-    doc.fillColor(palette.textMuted).font(fonts.body).fontSize(9).text('No status events recorded.');
-  } else {
-    statusEvents.forEach((ev) => {
-      ensureSpace(doc, 22);
-      doc.fillColor(palette.text).font(fonts.heading).fontSize(9)
-        .text(`${statusLabel(ev.from_status)} -> ${statusLabel(ev.to_status)}`, { continued: true });
-      doc.fillColor(palette.textMuted).font(fonts.body).fontSize(8)
-        .text(`  (${formatDateTime(ev.created_at)})`);
-      if (ev.reason) {
-        doc.fillColor(palette.textMuted).font(fonts.body).fontSize(8.5).text(`Reason: ${ev.reason}`);
-      }
-      doc.moveDown(0.3);
-    });
-  }
+  sectionHeading(doc, 'Workflow Timeline', palette, fonts);
+  drawTimelineCards(doc, statusEvents, { x: pageX, width: contentWidth, palette, fonts });
 
-  doc.moveDown(0.6)
+  doc.moveDown(0.7)
     .fillColor('#64748b')
     .font(fonts.body)
     .fontSize(8)
-    .text(`Generated by ${brandName}. This document is digitally signed through QR verification and intended for archival records.`);
+    .text(`${brandName} application export ? branded review sheet ? digitally signed and verifiable`, pageX, doc.y, {
+      width: contentWidth,
+      align: 'center',
+    });
 
   doc.end();
 
