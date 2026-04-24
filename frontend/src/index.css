@@ -46,6 +46,17 @@
     --glass-bg: 0 0% 100% / 0.82;
     --glass-border: 240 6% 78% / 0.9;
 
+    /* Primal OS — federation palette (shared with PDF exports).
+       These must stay in sync with backend-node/src/services/pdfTokens.js. */
+    --primal-paper: #FAFAF7;
+    --primal-ink: #0A0A0A;
+    --primal-ink-red: #7A1E22;
+    --primal-accent: #E5484D;
+    --primal-verify: #0F7B5C;
+    --primal-gold: #C8A96A;
+    --primal-line: #1D1F22;
+    --primal-line-soft: #D9D6CE;
+
     --radius: 0.625rem;
   }
 
@@ -83,6 +94,16 @@
 
     --glass-bg: 240 6% 8% / 0.84;
     --glass-border: 0 0% 100% / 0.12;
+
+    /* Primal OS — federation palette (dark mode). */
+    --primal-paper: #0E0E10;
+    --primal-ink: #F7F6F0;
+    --primal-ink-red: #FF6B70;
+    --primal-accent: #FF4D4F;
+    --primal-verify: #35B890;
+    --primal-gold: #E3BE77;
+    --primal-line: #F7F6F0;
+    --primal-line-soft: #3A3A3D;
   }
 }
 

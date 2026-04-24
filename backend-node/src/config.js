@@ -50,8 +50,14 @@ const config = {
 
   pdf: {
     brandName: process.env.PDF_BRAND_NAME || 'Primal',
-    brandPrimary: process.env.PDF_BRAND_PRIMARY || '#f58220',
-    brandAccent: process.env.PDF_BRAND_ACCENT || '#ef1a1a',
+    // Phase 0 (Primal OS) — unified federation palette.
+    //   paper  near-white, toner-friendly
+    //   ink    structure + body text
+    //   accent Primal ink-red, used for status + verification accents
+    paper: process.env.PDF_PAPER || '#FAFAF7',
+    ink: process.env.PDF_INK || '#0A0A0A',
+    brandPrimary: process.env.PDF_BRAND_PRIMARY || '#0A0A0A',
+    brandAccent: process.env.PDF_BRAND_ACCENT || '#7A1E22',
     logoPath: process.env.PDF_LOGO_PATH || './assets/primal.png',
     fontBodyPath: process.env.PDF_FONT_BODY_PATH || './assets/fonts/InterTight-Regular.ttf',
     fontBodyBoldPath: process.env.PDF_FONT_BODY_BOLD_PATH || './assets/fonts/InterTight-SemiBold.ttf',
