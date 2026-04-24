@@ -35,6 +35,10 @@ const {
   drawBracketHeader,
   drawChampionCard: drawBracketChampionCard,
   autoSlotHeight,
+  drawReportHeader,
+  drawKpiStrip,
+  drawDataTable,
+  drawStatusDistributionBar,
 } = require('./pdfComposition');
 
 function formatDateTime(value) {
@@ -525,92 +529,9 @@ async function groupedAnalyticsToExcel(res, { tournamentId, discipline } = {}) {
   res.end();
 }
 
-function drawAnalyticsTable(doc, title, rows, palette, fonts) {
-  const x = doc.page.margins.left;
-  const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
-  const columns = [
-    { key: 'label', label: title, width: 190 },
-    { key: 'submitted', label: 'Submitted', width: 60 },
-    { key: 'under_review', label: 'Review', width: 56 },
-    { key: 'needs_correction', label: 'Correction', width: 64 },
-    { key: 'season_closed', label: 'Season Closed', width: 68 },
-    { key: 'approved', label: 'Approved', width: 60 },
-    { key: 'rejected', label: 'Rejected', width: 60 },
-    { key: 'total', label: 'Total', width: 52 },
-  ];
-
-  ensureSpace(doc, 36);
-  doc.fillColor(palette.text).font(fonts.headingBold).fontSize(13).text(title);
-  doc.moveDown(0.3);
-
-  const headerY = doc.y;
-  doc.save();
-  doc.roundedRect(x, headerY, width, 22, 6).fill('#ece6dc');
-  doc.restore();
-
-  let headerX = x;
-  columns.forEach((column) => {
-    doc.fillColor(palette.text).font(fonts.bodyBold).fontSize(8)
-      .text(column.label.toUpperCase(), headerX + 6, headerY + 7, { width: column.width - 12, ellipsis: true });
-    headerX += column.width;
-  });
-
-  doc.y = headerY + 26;
-  if (!rows.length) {
-    doc.fillColor(palette.textMuted).font(fonts.body).fontSize(9).text('No grouped rows found for the selected filters.');
-    doc.moveDown(1);
-    return;
-  }
-
-  rows.forEach((row, index) => {
-    const participantNames = Array.isArray(row.participantNames) ? row.participantNames.filter(Boolean) : [];
-    const participantDetails = Array.isArray(row.participantDetails) ? row.participantDetails.filter(Boolean) : [];
-    const participantLine = participantDetails.length ? participantDetails.join(' • ') : participantNames.length ? participantNames.join(', ') : '';
-    let rowHeight = 20;
-    if (participantLine) {
-      doc.font(fonts.body).fontSize(7.2);
-      rowHeight = Math.max(28, doc.heightOfString(participantLine, { width: columns[0].width - 12 }) + 18);
-    }
-
-    ensureSpace(doc, rowHeight + 2);
-    const rowY = doc.y;
-    if (index % 2 === 0) {
-      doc.save();
-      doc.roundedRect(x, rowY, width, rowHeight, 4).fill('#fbfaf7');
-      doc.restore();
-    }
-
-    const values = {
-      label: row.label,
-      submitted: row.statuses.submitted,
-      under_review: row.statuses.under_review,
-      needs_correction: row.statuses.needs_correction,
-      season_closed: row.statuses.season_closed,
-      approved: row.statuses.approved,
-      rejected: row.statuses.rejected,
-      total: row.statuses.total,
-    };
-
-    let valueX = x;
-    columns.forEach((column) => {
-      if (column.key === 'label') {
-        doc.fillColor(palette.text).font(fonts.body).fontSize(8.5)
-          .text(String(values[column.key]), valueX + 6, rowY + 5, { width: column.width - 12, ellipsis: !participantLine });
-        if (participantLine) {
-          doc.fillColor(palette.textMuted).font(fonts.body).fontSize(7.2)
-            .text(participantLine, valueX + 6, rowY + 15, { width: column.width - 12, ellipsis: false });
-        }
-      } else {
-        doc.fillColor(palette.text).font(fonts.body).fontSize(8.5)
-          .text(String(values[column.key]), valueX + 6, rowY + 6, { width: column.width - 12, ellipsis: true });
-      }
-      valueX += column.width;
-    });
-    doc.y = rowY + rowHeight;
-  });
-
-  doc.moveDown(0.8);
-}
+// Legacy `drawAnalyticsTable` has been retired. The analytics tables in
+// groupedAnalyticsToPdf now use `drawDataTable` from pdfComposition.js with
+// inline status distribution bars (drawStatusDistributionBar).
 
 async function groupedAnalyticsToPdf(res, actor, { tournamentId, discipline } = {}, ctx = {}) {
   const report = await groupedApplicationReport({ tournamentId, discipline });
@@ -635,7 +556,7 @@ async function groupedAnalyticsToPdf(res, actor, { tournamentId, discipline } = 
     }),
     size: 'A4',
     layout: 'landscape',
-    margins: { top: 28, bottom: 28, left: 28, right: 28 },
+    margins: { top: 28, bottom: 32, left: 28, right: 28 },
   });
   doc.pipe(res);
   const fonts = resolvePdfFonts(doc);
@@ -645,51 +566,106 @@ async function groupedAnalyticsToPdf(res, actor, { tournamentId, discipline } = 
   doc.restore();
 
   const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
-  drawPanel(doc, {
+
+  const cursorY = drawReportHeader(doc, {
+    palette, fonts, brandName,
+    title: 'Application Analytics',
+    subtitle: tournamentId ? 'Tournament report' : 'Federation-wide report',
+    metaLines: [
+      `Generated ${formatDateTime(report.generatedAt)}`,
+      `Tournament ${displayText(report.filters.tournamentId, 'All')}`,
+      `Discipline ${displayText(report.filters.discipline, 'All')}`,
+    ],
+  });
+
+  const pending = report.totals.submitted + report.totals.under_review + report.totals.needs_correction;
+  let y = drawKpiStrip(doc, {
     x: doc.page.margins.left,
-    y: doc.page.margins.top,
+    y: cursorY,
     width: pageWidth,
-    height: 84,
-    fill: palette.surface,
-    stroke: palette.line,
-    radius: 16,
+    height: 52,
+    palette, fonts,
+    kpis: [
+      { label: 'All applications', value: report.totals.total },
+      { label: 'Approved', value: report.totals.approved, highlight: true,
+        delta: report.totals.total ? `${Math.round((report.totals.approved / report.totals.total) * 100)}% of total` : undefined },
+      { label: 'Pending review', value: pending },
+      { label: 'Rejected', value: report.totals.rejected },
+    ],
   });
 
-  doc.fillColor(palette.primary).font(fonts.bodyBold).fontSize(9)
-    .text('GROUPED APPLICATION ANALYTICS', doc.page.margins.left + 18, doc.page.margins.top + 16);
-  doc.fillColor(palette.text).font(fonts.headingBold).fontSize(24)
-    .text(brandName, doc.page.margins.left + 18, doc.page.margins.top + 30);
-  doc.fillColor(palette.textMuted).font(fonts.body).fontSize(9)
-    .text(`Generated ${formatDateTime(report.generatedAt)} / Tournament ${displayText(report.filters.tournamentId, 'All')} / Discipline ${displayText(report.filters.discipline, 'All')}`, doc.page.margins.left + 18, doc.page.margins.top + 58);
+  // Shared columns for discipline / weight / category tables — inline status
+  // distribution bar makes each table scannable at a glance.
+  const pageBottom = doc.page.height - doc.page.margins.bottom - 32;
+  const makeColumns = (labelHeader) => ([
+    { key: 'label', label: labelHeader, width: 180 },
+    { key: 'total', label: 'Total', width: 50, align: 'right',
+      render: ({ doc: d, row, x, y: cy, width: cw }) => {
+        d.save();
+        d.fillColor(palette.ink).font(fonts.bodyBold || fonts.body).fontSize(TYPE_SCALE.body.size);
+        d.text(String(row.statuses.total || 0), x, cy + 5, { width: cw, align: 'right', lineBreak: false, height: 0 });
+        d.restore();
+      } },
+    { key: 'approved', label: 'Approved', width: 55, align: 'right',
+      render: ({ doc: d, row, x, y: cy, width: cw }) => {
+        d.save();
+        d.fillColor(palette.verify).font(fonts.bodyBold || fonts.body).fontSize(TYPE_SCALE.body.size);
+        d.text(String(row.statuses.approved || 0), x, cy + 5, { width: cw, align: 'right', lineBreak: false, height: 0 });
+        d.restore();
+      } },
+    { key: 'pending', label: 'Pending', width: 55, align: 'right',
+      render: ({ doc: d, row, x, y: cy, width: cw }) => {
+        const v = (row.statuses.submitted || 0) + (row.statuses.under_review || 0) + (row.statuses.needs_correction || 0);
+        d.save();
+        d.fillColor(palette.ink).font(fonts.body).fontSize(TYPE_SCALE.body.size);
+        d.text(String(v), x, cy + 5, { width: cw, align: 'right', lineBreak: false, height: 0 });
+        d.restore();
+      } },
+    { key: 'rejected', label: 'Rejected', width: 55, align: 'right',
+      render: ({ doc: d, row, x, y: cy, width: cw }) => {
+        d.save();
+        d.fillColor(palette.accent).font(fonts.body).fontSize(TYPE_SCALE.body.size);
+        d.text(String(row.statuses.rejected || 0), x, cy + 5, { width: cw, align: 'right', lineBreak: false, height: 0 });
+        d.restore();
+      } },
+    { key: 'distribution', label: 'Distribution', width: 280,
+      render: ({ row, x, y: cy, width: cw }) => {
+        drawStatusDistributionBar(doc, {
+          x, y: cy + 2, width: cw, height: 8, palette,
+          segments: [
+            { tone: 'verify', count: row.statuses.approved || 0 },
+            { tone: 'ink',    count: (row.statuses.submitted || 0) + (row.statuses.under_review || 0) },
+            { tone: 'warn',   count: row.statuses.needs_correction || 0 },
+            { tone: 'accent', count: row.statuses.rejected || 0 },
+            { tone: 'muted',  count: row.statuses.season_closed || 0 },
+          ],
+        });
+      } },
+  ]);
 
-  const kpiY = doc.page.margins.top + 104;
-  const kpiW = (pageWidth - 24) / 4;
-  [
-    ['All applications', report.totals.total],
-    ['Approved', report.totals.approved],
-    ['Pending', report.totals.submitted + report.totals.under_review + report.totals.needs_correction],
-    ['Rejected', report.totals.rejected],
-  ].forEach(([label, value], index) => {
-    drawMetricChip(doc, {
-      x: doc.page.margins.left + index * (kpiW + 8),
-      y: kpiY,
-      width: kpiW,
-      height: 54,
-      label,
-      value: String(value),
-      palette,
-      fonts,
-      tone: palette.surface,
-    });
-  });
+  const ML = doc.page.margins.left;
+  const renderSection = (title, rows) => {
+    const estHeight = 28 + 18 + rows.length * 18 + 8;
+    if (y + estHeight > pageBottom) {
+      doc.addPage();
+      doc.save();
+      doc.rect(0, 0, doc.page.width, doc.page.height).fill(palette.paper);
+      doc.restore();
+      y = doc.page.margins.top;
+    }
+    y = drawDataTable(doc, {
+      x: ML, y, width: pageWidth,
+      title, rows, columns: makeColumns(title.split(' · ')[0]),
+      palette, fonts,
+    }) + 8;
+  };
 
-  doc.y = kpiY + 72;
-  drawAnalyticsTable(doc, 'By discipline', report.disciplineGroups, palette, fonts);
-  drawAnalyticsTable(doc, 'By weight class', report.weightClassGroups, palette, fonts);
-  drawAnalyticsTable(doc, 'By category', report.categoryGroups.map((row) => ({
+  renderSection('By discipline', report.disciplineGroups);
+  renderSection('By weight class', report.weightClassGroups);
+  renderSection('By category', report.categoryGroups.map((row) => ({
     ...row,
-    label: `${row.label} / ${row.discipline} / ${row.weightClass}`,
-  })), palette, fonts);
+    label: `${row.label} · ${row.discipline} · ${row.weightClass}`,
+  })));
 
   finalizePageRibbons(doc, {
     palette,
@@ -733,8 +709,8 @@ async function seasonalReportToPdf(res, actor, tournamentId, ctx = {}) {
       keywords: ['season', 'archive', report.tournament.name],
     }),
     size: 'A4',
-    layout: 'portrait',
-    margins: { top: 24, bottom: 24, left: 24, right: 24 },
+    layout: 'landscape',
+    margins: { top: 28, bottom: 32, left: 28, right: 28 },
   });
   doc.pipe(res);
   const fonts = resolvePdfFonts(doc);
@@ -743,55 +719,108 @@ async function seasonalReportToPdf(res, actor, tournamentId, ctx = {}) {
   doc.rect(0, 0, doc.page.width, doc.page.height).fill(palette.paper);
   doc.restore();
 
-  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
-  drawPanel(doc, {
-    x: doc.page.margins.left,
-    y: doc.page.margins.top,
-    width: pageWidth,
-    height: 88,
-    fill: palette.surface,
-    stroke: palette.line,
-    radius: 16,
-  });
-  doc.fillColor(palette.primary).font(fonts.bodyBold).fontSize(9)
-    .text('SEASON ARCHIVE REPORT', doc.page.margins.left + 18, doc.page.margins.top + 16);
-  doc.fillColor(palette.text).font(fonts.headingBold).fontSize(22)
-    .text(report.tournament.name, doc.page.margins.left + 18, doc.page.margins.top + 30);
-  doc.fillColor(palette.textMuted).font(fonts.body).fontSize(9)
-    .text(`Season ${displayText(report.tournament.season, 'N/A')} / Archived ${displayText(formatDateOnly(report.tournament.archivedAt), 'Active')} / Generated ${formatDateTime(report.generatedAt)}`, doc.page.margins.left + 18, doc.page.margins.top + 58);
+  const ML = doc.page.margins.left;
+  const pageWidth = doc.page.width - ML - doc.page.margins.right;
+  const pageBottom = doc.page.height - doc.page.margins.bottom - 32;
 
-  const kpiY = doc.page.margins.top + 104;
-  const kpiW = (pageWidth - 8) / 2;
-  [
-    ['Registered', report.totals.total],
-    ['Approved', report.totals.approved],
-    ['Divisions', report.divisions.length],
-    ['Matches', report.matches.filter((row) => row.matchId).length],
-  ].forEach(([label, value], index) => {
-    const row = Math.floor(index / 2);
-    const col = index % 2;
-    drawMetricChip(doc, {
-      x: doc.page.margins.left + col * (kpiW + 8),
-      y: kpiY + row * 60,
-      width: kpiW,
-      height: 52,
-      label,
-      value: String(value),
-      palette,
-      fonts,
-      tone: palette.surface,
-    });
+  const matchesPlayed = report.matches.filter((row) => row.matchId).length;
+  const matchesCompleted = report.matches.filter((row) => row.status === 'completed').length;
+
+  const cursorY = drawReportHeader(doc, {
+    palette, fonts, brandName,
+    title: report.tournament.name,
+    subtitle: `Season archive · ${displayText(report.tournament.season, 'N/A')}`,
+    metaLines: [
+      `Archived ${displayText(formatDateOnly(report.tournament.archivedAt), 'Active')}`,
+      `Generated ${formatDateTime(report.generatedAt)}`,
+      `${report.divisions.length} divisions`,
+      `${matchesPlayed} matches played`,
+    ],
   });
 
-  doc.y = kpiY + 128;
-  drawSeasonRegistrationTable(doc, report.registrations, palette, fonts);
-  drawSeasonDivisionTable(doc, report.divisions, palette, fonts);
-  drawSeasonMatchesTable(doc, report.matches, palette, fonts);
+  let y = drawKpiStrip(doc, {
+    x: ML, y: cursorY, width: pageWidth, height: 52, palette, fonts,
+    kpis: [
+      { label: 'Registered', value: report.totals.total },
+      { label: 'Approved',   value: report.totals.approved, highlight: true,
+        delta: report.totals.total ? `${Math.round((report.totals.approved / report.totals.total) * 100)}% of registered` : undefined },
+      { label: 'Divisions',  value: report.divisions.length },
+      { label: 'Matches',    value: matchesPlayed,
+        delta: matchesPlayed ? `${matchesCompleted} completed` : undefined },
+    ],
+  });
+
+  const renderSection = (title, rows, columns) => {
+    const estHeight = 28 + 18 + rows.length * 18 + 8;
+    if (y + estHeight > pageBottom) {
+      doc.addPage();
+      doc.save();
+      doc.rect(0, 0, doc.page.width, doc.page.height).fill(palette.paper);
+      doc.restore();
+      y = doc.page.margins.top;
+    }
+    y = drawDataTable(doc, {
+      x: ML, y, width: pageWidth,
+      title, rows, columns,
+      palette, fonts,
+    }) + 8;
+  };
+
+  // Registered participants — the core season record
+  renderSection('Registered participants by category', report.registrations, [
+    { key: 'applicationDisplayId', label: 'App ID', width: 80 },
+    { key: 'participantName', label: 'Participant', width: 130 },
+    { key: 'discipline', label: 'Discipline', width: 80 },
+    { key: 'weightClass', label: 'Wt class', width: 64 },
+    { key: 'weightKg', label: 'Kg', width: 40, align: 'right' },
+    { key: 'status', label: 'Status', width: 80 },
+    { key: 'category', label: 'Category', width: 150 },
+    { key: 'bracketState', label: 'Bracket', width: 76 },
+  ]);
+
+  // Divisions — winner highlighted
+  renderSection('Division winners and category summary', report.divisions, [
+    { key: 'discipline_name', label: 'Discipline', width: 110 },
+    { key: 'label', label: 'Division', width: 210 },
+    { key: 'fighter_count', label: 'Fighters', width: 60, align: 'right' },
+    { key: 'match_count', label: 'Matches', width: 60, align: 'right' },
+    { key: 'champion_name', label: 'Champion', width: 150,
+      render: ({ doc: d, row, x, y: cy, width: cw }) => {
+        d.save();
+        d.fillColor(row.champion_name ? palette.ink : palette.textMuted)
+         .font(row.champion_name ? (fonts.bodyBold || fonts.body) : fonts.body)
+         .fontSize(TYPE_SCALE.body.size);
+        d.text(displayText(row.champion_name, 'Pending'), x, cy + 5, {
+          width: cw, ellipsis: true, lineBreak: false, height: 0,
+        });
+        d.restore();
+      } },
+    { key: 'champion_club_name', label: 'Club', width: 110 },
+  ]);
+
+  // Matches — full ledger
+  renderSection('Matches played', report.matches, [
+    { key: 'divisionLabel', label: 'Division', width: 200 },
+    { key: 'roundNumber', label: 'Rnd', width: 40, align: 'right' },
+    { key: 'matchNumber', label: 'Bout', width: 40, align: 'right' },
+    { key: 'redName', label: 'Red', width: 120 },
+    { key: 'blueName', label: 'Blue', width: 120 },
+    { key: 'winnerName', label: 'Winner', width: 130,
+      render: ({ doc: d, row, x, y: cy, width: cw }) => {
+        d.save();
+        d.fillColor(row.winnerName ? palette.ink : palette.textMuted)
+         .font(row.winnerName ? (fonts.bodyBold || fonts.body) : fonts.body)
+         .fontSize(TYPE_SCALE.body.size);
+        d.text(displayText(row.winnerName, 'Pending'), x, cy + 5, {
+          width: cw, ellipsis: true, lineBreak: false, height: 0,
+        });
+        d.restore();
+      } },
+    { key: 'status', label: 'Status', width: 80 },
+  ]);
 
   finalizePageRibbons(doc, {
-    palette,
-    fonts,
-    brand: brandName,
+    palette, fonts, brand: brandName,
     identifier: `Season Archive · ${report.tournament.name}`,
   });
   doc.end();
@@ -806,96 +835,11 @@ async function seasonalReportToPdf(res, actor, tournamentId, ctx = {}) {
   });
 }
 
-function drawSeasonRegistrationTable(doc, rows, palette, fonts) {
-  const columns = [
-    { key: 'applicationDisplayId', label: 'App ID', width: 54 },
-    { key: 'participantName', label: 'Participant', width: 104 },
-    { key: 'discipline', label: 'Discipline', width: 68 },
-    { key: 'weightClass', label: 'Wt Class', width: 54 },
-    { key: 'weightKg', label: 'Kg', width: 34 },
-    { key: 'status', label: 'Status', width: 64 },
-    { key: 'category', label: 'Category', width: 118 },
-    { key: 'bracketState', label: 'Bracket', width: 70 },
-  ];
-  drawWideTable(doc, 'Registered participants by category', rows, columns, palette, fonts);
-}
-
-function drawSeasonDivisionTable(doc, rows, palette, fonts) {
-  const columns = [
-    { key: 'discipline_name', label: 'Discipline', width: 82 },
-    { key: 'label', label: 'Division', width: 170 },
-    { key: 'fighter_count', label: 'Fighters', width: 48 },
-    { key: 'match_count', label: 'Matches', width: 48 },
-    { key: 'champion_name', label: 'Winner', width: 110 },
-    { key: 'champion_club_name', label: 'Club', width: 86 },
-  ];
-  drawWideTable(doc, 'Division winners and category summary', rows, columns, palette, fonts);
-}
-
-function drawSeasonMatchesTable(doc, rows, palette, fonts) {
-  const columns = [
-    { key: 'divisionLabel', label: 'Division', width: 154 },
-    { key: 'roundNumber', label: 'Rnd', width: 34 },
-    { key: 'matchNumber', label: 'Bout', width: 34 },
-    { key: 'redName', label: 'Red', width: 84 },
-    { key: 'blueName', label: 'Blue', width: 84 },
-    { key: 'winnerName', label: 'Winner', width: 84 },
-    { key: 'status', label: 'Status', width: 58 },
-  ];
-  drawWideTable(doc, 'Bracket and match ledger', rows.filter((row) => row.matchId), columns, palette, fonts);
-}
-
-function drawWideTable(doc, title, rows, columns, palette, fonts) {
-  ensureSpace(doc, 36);
-  doc.fillColor(palette.text).font(fonts.headingBold).fontSize(13).text(title);
-  doc.moveDown(0.3);
-  const x = doc.page.margins.left;
-  const width = columns.reduce((sum, column) => sum + column.width, 0);
-
-  const drawHeader = () => {
-    const headerY = doc.y;
-    doc.save();
-    doc.roundedRect(x, headerY, width, 22, 6).fill('#ece6dc');
-    doc.restore();
-
-    let currentX = x;
-    columns.forEach((column) => {
-      doc.fillColor(palette.text).font(fonts.bodyBold).fontSize(7.2)
-        .text(column.label.toUpperCase(), currentX + 4, headerY + 7, { width: column.width - 8, ellipsis: true });
-      currentX += column.width;
-    });
-    doc.y = headerY + 26;
-  };
-
-  drawHeader();
-  if (!rows.length) {
-    doc.fillColor(palette.textMuted).font(fonts.body).fontSize(9).text('No rows found.');
-    doc.moveDown(0.8);
-    return;
-  }
-
-  rows.forEach((row, index) => {
-    if (doc.y + 20 > doc.page.height - doc.page.margins.bottom) {
-      doc.addPage();
-      drawHeader();
-    }
-    const rowY = doc.y;
-    if (index % 2 === 0) {
-      doc.save();
-      doc.roundedRect(x, rowY, width, 19, 4).fill('#fbfaf7');
-      doc.restore();
-    }
-    let rowX = x;
-    columns.forEach((column) => {
-      doc.fillColor(palette.text).font(fonts.body).fontSize(7.2)
-        .text(displayText(row[column.key], ''), rowX + 4, rowY + 6, { width: column.width - 8, ellipsis: true });
-      rowX += column.width;
-    });
-    doc.y = rowY + 21;
-  });
-
-  doc.moveDown(0.8);
-}
+// Season-report tabular helpers (drawSeasonRegistrationTable,
+// drawSeasonDivisionTable, drawSeasonMatchesTable, drawWideTable) now live
+// inside `seasonalReportToPdf` as inline column definitions passed to
+// `drawDataTable` from pdfComposition.js — the Primal OS unified table
+// primitive with an ink header band, zebra rows, and custom cell renderers.
 
 // ─── Grid layout helpers ──────────────────────────────────────────────────────
 
