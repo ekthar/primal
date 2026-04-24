@@ -177,7 +177,7 @@ function Nav({ registrationOpen }) {
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between gap-3">
         <Link href="/" className="flex items-center gap-2" data-testid="nav-brand">
-          <div className="size-8 rounded-lg bg-foreground text-background flex items-center justify-center font-display font-bold text-sm">P</div>
+          <img src="/primal-logo.png" alt="Primal" className="size-8 rounded-lg object-cover" />
           <span className="font-display font-semibold tracking-tight">Primal</span>
         </Link>
         <nav className="hidden lg:flex items-center gap-7 text-sm text-secondary-muted">
@@ -824,7 +824,7 @@ function Footer() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 grid sm:grid-cols-3 gap-8 text-sm text-tertiary">
         <div>
           <div className="flex items-center gap-2">
-            <div className="size-7 rounded-lg bg-foreground text-background flex items-center justify-center font-display font-bold text-xs">P</div>
+            <img src="/primal-logo.png" alt="Primal" className="size-7 rounded-lg object-cover" />
             <span className="font-display font-semibold tracking-tight text-foreground">Primal</span>
           </div>
           <p className="mt-3 leading-relaxed">Built for sanctioning bodies, gyms, federations, and promoters.</p>

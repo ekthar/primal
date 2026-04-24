@@ -49,9 +49,9 @@ const config = {
 
   pdf: {
     brandName: process.env.PDF_BRAND_NAME || 'Primal',
-    brandPrimary: process.env.PDF_BRAND_PRIMARY || '#0b0b0b',
+    brandPrimary: process.env.PDF_BRAND_PRIMARY || '#f58220',
     brandAccent: process.env.PDF_BRAND_ACCENT || '#ef1a1a',
-    logoPath: process.env.PDF_LOGO_PATH || './assets/primal-logo.png',
+    logoPath: process.env.PDF_LOGO_PATH || './assets/primal.png',
     fontBodyPath: process.env.PDF_FONT_BODY_PATH || './assets/fonts/InterTight-Regular.ttf',
     fontBodyBoldPath: process.env.PDF_FONT_BODY_BOLD_PATH || './assets/fonts/InterTight-SemiBold.ttf',
     fontHeadingPath: process.env.PDF_FONT_HEADING_PATH || './assets/fonts/Manrope-SemiBold.ttf',

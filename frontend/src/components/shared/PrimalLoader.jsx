@@ -16,9 +16,7 @@ export function FullPageLoader({ title = "Primal", message = "Preparing your fig
           aria-hidden
         />
         <div className="flex items-center gap-3">
-          <div className="size-11 rounded-2xl bg-foreground text-background flex items-center justify-center font-display font-bold text-base">
-            P
-          </div>
+          <img src="/primal-logo.png" alt="Primal" className="size-11 rounded-2xl object-cover" />
           <div>
             <div className="font-display text-xl font-semibold tracking-tight">{title}</div>
             <div className="text-[11px] uppercase tracking-[0.18em] text-tertiary">Fight operations platform</div>

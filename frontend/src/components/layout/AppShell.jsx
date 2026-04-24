@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import ThemeToggle from "@/components/shared/ThemeToggle";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -82,9 +82,7 @@ const HOME_BY_ROLE = {
 function Brand({ compact = false }) {
   return (
     <div className="flex items-center gap-2">
-      <div className="size-8 rounded-lg bg-foreground text-background flex items-center justify-center font-display font-bold text-sm">
-        P
-      </div>
+      <img src="/primal-logo.png" alt="Primal" className="size-8 rounded-lg object-cover" />
       <div className={`leading-tight ${compact ? "hidden min-[420px]:block" : ""}`}>
         <div className="font-display font-semibold tracking-tight text-[15px]">Primal</div>
         <div className="text-[10px] uppercase tracking-[0.14em] text-tertiary">Fight operations</div>
@@ -106,6 +104,7 @@ function RoleSwitcher() {
           className="flex items-center gap-2.5 w-full rounded-xl border border-border bg-surface hover:bg-surface-muted px-2.5 py-2 transition-colors focus-ring"
         >
           <Avatar className="size-8 border border-border">
+            <AvatarImage src={user.avatarUrl || ""} alt={user.name || "User"} />
             <AvatarFallback className="bg-surface-muted text-[11px] font-semibold">
               {user.avatar}
             </AvatarFallback>
@@ -268,7 +267,7 @@ function MobileTopbar({ nav }) {
   const current = nav.find((item) => isActivePath(router.pathname, item.to));
   const fallbackRoute = HOME_BY_ROLE[user?.role] || "/";
   return (
-    <div data-testid="mobile-topbar" className="md:hidden sticky top-0 z-30 flex items-center justify-between gap-3 px-4 h-14 border-b border-border bg-background/85 backdrop-blur-xl">
+    <div data-testid="mobile-topbar" className="md:hidden sticky top-0 z-30 flex min-h-14 items-center justify-between gap-3 border-b border-border bg-background/90 px-3 py-2 backdrop-blur-xl supports-[padding:max(0px)]:pt-[max(0.5rem,env(safe-area-inset-top))]">
       <div className="flex items-center gap-3 min-w-0">
         <BackButton fallbackRoute={fallbackRoute} compact />
         <MobileNavSheet nav={nav} />
@@ -277,6 +276,7 @@ function MobileTopbar({ nav }) {
       <div className="flex items-center gap-2">
         <ThemeToggle compact />
         <Avatar className="size-8 border border-border">
+          <AvatarImage src={user?.avatarUrl || ""} alt={user?.name || "User"} />
           <AvatarFallback className="bg-surface-muted text-[11px] font-semibold">
             {user?.avatar || "?"}
           </AvatarFallback>
@@ -317,9 +317,9 @@ export default function AppShell({ children }) {
   const nav = NAV[user?.role] || [];
 
   return (
-    <div className="flex min-h-screen items-start bg-background">
+    <div className="flex min-h-[100dvh] items-start overflow-x-clip bg-[radial-gradient(circle_at_top,hsla(var(--surface-muted),0.9),transparent_48%),hsl(var(--background))]">
       <DesktopSidebar />
-      <main className="flex-1 flex min-w-0 flex-col">
+      <main className="flex min-w-0 flex-1 flex-col">
         <MobileTopbar nav={nav} />
         <DesktopTopbar nav={nav} />
         <div className="flex-1 min-w-0 app-shell-safe-bottom md:pb-0">{children}</div>

@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import {
+  Camera,
   CheckCircle2,
   ChevronRight,
   FileWarning,
   ListChecks,
+  QrCode,
   RefreshCcw,
   Search,
   ShieldCheck,
@@ -13,6 +15,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import StatusPill from "@/components/shared/StatusPill";
@@ -35,6 +38,17 @@ export default function ReviewerWorkbench() {
   const [activeApplication, setActiveApplication] = useState(null);
   const [loadingApplication, setLoadingApplication] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerSupported, setScannerSupported] = useState(false);
+  const [scannerBusy, setScannerBusy] = useState(false);
+  const [scannerError, setScannerError] = useState("");
+  const [scannerResult, setScannerResult] = useState(null);
+  const [scannedValue, setScannedValue] = useState("");
+  const videoRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const streamRef = useRef(null);
+  const detectorRef = useRef(null);
+  const frameRequestRef = useRef(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -65,6 +79,31 @@ export default function ReviewerWorkbench() {
     loadApplication(activeId);
   }, [activeId]);
 
+  useEffect(() => {
+    const supported = typeof window !== "undefined" && "BarcodeDetector" in window && typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
+    setScannerSupported(supported);
+  }, []);
+
+  useEffect(() => {
+    if (!scannerOpen) {
+      stopScanner();
+      setScannerError("");
+      setScannerBusy(false);
+      return;
+    }
+
+    if (!scannerSupported) {
+      setScannerError("Live camera scanning is not supported on this device. Paste the QR verification URL instead.");
+      return;
+    }
+
+    startScanner();
+
+    return () => {
+      stopScanner();
+    };
+  }, [scannerOpen, scannerSupported]);
+
   async function loadQueue() {
     setLoadingQueue(true);
     const { data, error } = await api.queueBoard({ status: "all", q: search || undefined, limit: 200, offset: 0 });
@@ -92,6 +131,128 @@ export default function ReviewerWorkbench() {
   async function refreshAll() {
     await loadQueue();
     if (activeId) await loadApplication(activeId);
+  }
+
+  function stopScanner() {
+    if (frameRequestRef.current) {
+      cancelAnimationFrame(frameRequestRef.current);
+      frameRequestRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+  }
+
+  async function startScanner() {
+    stopScanner();
+    setScannerError("");
+    setScannerResult(null);
+    setScannerBusy(true);
+
+    try {
+      if (!detectorRef.current) {
+        detectorRef.current = new window.BarcodeDetector({ formats: ["qr_code"] });
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+      setScannerBusy(false);
+      frameRequestRef.current = requestAnimationFrame(scanVideoFrame);
+    } catch (error) {
+      setScannerBusy(false);
+      setScannerError(error.message || "Unable to start the camera scanner.");
+    }
+  }
+
+  async function scanVideoFrame() {
+    if (!videoRef.current || !detectorRef.current) return;
+
+    try {
+      const barcodes = await detectorRef.current.detect(videoRef.current);
+      if (barcodes.length > 0 && barcodes[0].rawValue) {
+        await verifyScannedCode(barcodes[0].rawValue);
+        return;
+      }
+    } catch (error) {
+      setScannerError(error.message || "Failed to read the QR code.");
+      return;
+    }
+
+    frameRequestRef.current = requestAnimationFrame(scanVideoFrame);
+  }
+
+  async function verifyScannedCode(rawValue) {
+    stopScanner();
+    setScannerBusy(true);
+    setScannerError("");
+    setScannedValue(rawValue);
+
+    let verificationUrl;
+    try {
+      verificationUrl = new URL(rawValue, window.location.origin);
+    } catch (_error) {
+      setScannerBusy(false);
+      setScannerError("The scanned QR code is not a valid verification URL.");
+      return;
+    }
+
+    if (!verificationUrl.pathname.includes("/api/public/verify/application-signature")) {
+      setScannerBusy(false);
+      setScannerError("This QR code is not a Primal application verification code.");
+      return;
+    }
+
+    const { data, error } = await api.verifyApplicationSignatureUrl(verificationUrl.toString());
+    setScannerBusy(false);
+    if (error) {
+      setScannerResult(null);
+      setScannerError(error.message || error.reason || "Verification failed.");
+      return;
+    }
+
+    setScannerResult(data);
+  }
+
+  async function handleQrPhotoSelection(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) return;
+    if (!scannerSupported || !detectorRef.current) {
+      setScannerError("Photo QR decoding is not supported on this device. Paste the verification URL instead.");
+      return;
+    }
+
+    try {
+      setScannerBusy(true);
+      setScannerError("");
+      const imageBitmap = await createImageBitmap(file);
+      const barcodes = await detectorRef.current.detect(imageBitmap);
+      if (!barcodes.length || !barcodes[0].rawValue) {
+        setScannerBusy(false);
+        setScannerError("No QR code was found in that image.");
+        return;
+      }
+      await verifyScannedCode(barcodes[0].rawValue);
+    } catch (error) {
+      setScannerBusy(false);
+      setScannerError(error.message || "Failed to scan the QR photo.");
+    }
+  }
+
+  function openVerifiedApplication() {
+    const applicationId = scannerResult?.application?.id;
+    if (!applicationId) return;
+    setScannerOpen(false);
+    setActiveId(applicationId);
+    router.replace(`/admin/review/${applicationId}`);
   }
 
   async function handleStartReview() {
@@ -320,6 +481,11 @@ export default function ReviewerWorkbench() {
                   </div>
                 </SheetContent>
               </Sheet>
+              {user?.role === "admin" ? (
+                <Button variant="outline" className="flex-1 sm:flex-none" onClick={() => setScannerOpen(true)}>
+                  <QrCode className="size-4 mr-1.5" /> Verify QR
+                </Button>
+              ) : null}
               <Button variant="ghost" className="flex-1 sm:flex-none" disabled={actionBusy} onClick={refreshAll}>
                 Refresh
               </Button>
@@ -409,6 +575,11 @@ export default function ReviewerWorkbench() {
           </div>
         </div>
         <StickyActionBar className="lg:hidden">
+          {user?.role === "admin" ? (
+            <Button variant="outline" className="flex-1" onClick={() => setScannerOpen(true)}>
+              <QrCode className="size-4 mr-1.5" /> Verify QR
+            </Button>
+          ) : null}
           {activeApplication.status === "submitted" && (
             <Button variant="outline" className="flex-1" disabled={actionBusy} onClick={handleStartReview}>
               <RefreshCcw className="size-4 mr-1.5" /> Start review
@@ -438,6 +609,76 @@ export default function ReviewerWorkbench() {
           </>
         )}
       </section>
+      <Dialog open={scannerOpen} onOpenChange={setScannerOpen}>
+        <DialogContent className="max-w-md rounded-3xl border-border p-0 sm:max-w-md">
+          <DialogHeader className="border-b border-border px-5 py-4">
+            <DialogTitle className="flex items-center gap-2">
+              <QrCode className="size-5 text-primary" /> Verify printed application
+            </DialogTitle>
+            <DialogDescription>
+              Scan the QR code from the printed application PDF to verify the signature and open the matching record.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 px-5 py-4">
+            <div className="overflow-hidden rounded-2xl border border-border bg-surface-muted">
+              <video ref={videoRef} className="aspect-square w-full bg-black object-cover" muted playsInline />
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <Button type="button" variant="outline" onClick={startScanner} disabled={!scannerSupported || scannerBusy}>
+                <Camera className="size-4" /> {scannerBusy ? "Starting..." : "Use camera"}
+              </Button>
+              <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
+                <QrCode className="size-4" /> Scan QR photo
+              </Button>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleQrPhotoSelection}
+              className="hidden"
+            />
+            <div className="space-y-2">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-tertiary">Paste verification URL</div>
+              <Input
+                value={scannedValue}
+                onChange={(event) => setScannedValue(event.target.value)}
+                placeholder="https://.../api/public/verify/application-signature?aid=..."
+                className="bg-surface"
+              />
+              <Button type="button" className="w-full" onClick={() => verifyScannedCode(scannedValue)} disabled={!scannedValue.trim() || scannerBusy}>
+                Verify code
+              </Button>
+            </div>
+            {scannerError ? (
+              <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
+                {scannerError}
+              </div>
+            ) : null}
+            {scannerResult ? (
+              <div className={`rounded-2xl border px-4 py-4 text-sm ${scannerResult.valid ? "border-emerald-200 bg-emerald-50 dark:border-emerald-900/50 dark:bg-emerald-950/30" : "border-orange-200 bg-orange-50 dark:border-orange-900/50 dark:bg-orange-950/30"}`}>
+                <div className="font-semibold">
+                  {scannerResult.valid ? "Signature verified" : "Signature check failed"}
+                </div>
+                <div className="mt-1 text-secondary-muted">{scannerResult.reason}</div>
+                {scannerResult.application ? (
+                  <div className="mt-3 space-y-1">
+                    <div>{scannerResult.application.applicant}</div>
+                    <div className="text-secondary-muted">{scannerResult.application.tournament}</div>
+                    <div className="text-secondary-muted">Status: {scannerResult.application.status}</div>
+                  </div>
+                ) : null}
+                {scannerResult.valid && scannerResult.application?.id ? (
+                  <Button type="button" className="mt-4 w-full" onClick={openVerifiedApplication}>
+                    Open verified application
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

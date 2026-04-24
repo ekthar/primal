@@ -30,4 +30,8 @@ router.get('/applications/:id.pdf', ah(async (req, res) => {
   await exporter.applicationToPdf(res, req.params.id, req.user, { ip: req.ip });
 }));
 
+router.get('/applications/:id.paper', ah(async (req, res) => {
+  res.json({ paper: await exporter.applicationToPaper(req.params.id, req.user) });
+}));
+
 module.exports = router;

@@ -14,6 +14,18 @@ const documentStorage = require('./documentStorage.service');
 const HOUR = 60 * 60 * 1000;
 const REQUIRED_DOCUMENT_KINDS = ['medical', 'photo_id', 'consent'];
 
+function withAvatarUrlFromDocuments(entity, documents) {
+  const photoDocument = documents.find((documentRow) => documentRow.kind === 'photo_id');
+  if (!photoDocument) {
+    return entity;
+  }
+
+  return {
+    ...entity,
+    avatar_url: documentStorage.getPublicDocumentUrl(photoDocument.storage_key),
+  };
+}
+
 function assertRegistrationWindowOpen(tournament, message = 'Registration window closed') {
   if (!tournamentService.getRegistrationState(tournament).registrationOpen) {
     throw ApiError.forbidden(message);
@@ -184,11 +196,11 @@ async function getById(user, id) {
     seRepo.listForApplication(id),
     documentsRepo.listForApplication(id),
   ]);
-  return {
+  return withAvatarUrlFromDocuments({
     ...app,
     documents: documents.map((doc) => ({ ...doc, url: documentStorage.getPublicDocumentUrl(doc.storage_key) })),
     statusEvents: events,
-  };
+  }, documents);
 }
 
 async function listForMe(user, query = {}) {

@@ -174,11 +174,8 @@ function sectionHeading(doc, title, palette, fonts) {
 function drawLogoMark(doc, { x, y, size, logoPath, brandName, accent, fonts }) {
   const logo = resolveLogoPath(logoPath);
   if (logo) {
-    doc.save();
-    doc.roundedRect(x, y, size, size, 8).fill('#ffffff');
-    doc.restore();
-    doc.image(logo, x + 3, y + 3, {
-      fit: [size - 6, size - 6],
+    doc.image(logo, x, y, {
+      fit: [size, size],
       align: 'center',
       valign: 'center',
     });
@@ -233,13 +230,13 @@ function drawDocumentTable(doc, documents, palette, fonts) {
   ensureSpace(doc, 22);
   const headerY = doc.y;
   doc.save();
-  doc.roundedRect(x, headerY, width, 18, 4).fill('#e2e8f0');
+  doc.roundedRect(x, headerY, width, 18, 4).fill(palette.primary);
   doc.restore();
 
   let colX = x;
   columns.forEach((c) => {
-    doc.fillColor(palette.text).font(fonts.headingBold).fontSize(8)
-      .text(c.label, colX + 4, headerY + 5, { width: c.w - 8 });
+    doc.fillColor('#111111').font(fonts.headingBold).fontSize(8)
+      .text(String(c.label).toUpperCase(), colX + 4, headerY + 5, { width: c.w - 8 });
     colX += c.w;
   });
 
@@ -263,14 +260,14 @@ function drawDocumentTable(doc, documents, palette, fonts) {
     const rowY = doc.y;
     if (idx % 2 === 0) {
       doc.save();
-      doc.roundedRect(x, rowY, width, rowHeight, 3).fill('#f8fafc');
+      doc.roundedRect(x, rowY, width, rowHeight, 3).fill('#fff8f1');
       doc.restore();
     }
 
     let vx = x;
     columns.forEach((c) => {
       doc.fillColor(palette.text).font(fonts.body).fontSize(8)
-        .text(values[c.key], vx + 4, rowY + 5, { width: c.w - 8, ellipsis: true });
+        .text(String(values[c.key]).toUpperCase ? values[c.key] : values[c.key], vx + 4, rowY + 5, { width: c.w - 8, ellipsis: true });
       vx += c.w;
     });
     doc.y = rowY + rowHeight + 2;
@@ -292,7 +289,7 @@ function drawImageGallery(doc, images, palette, fonts) {
     const cardX = x + col * (cardW + gap);
 
     doc.save();
-    doc.roundedRect(cardX, y, cardW, cardH, 6).fill('#e2e8f0');
+    doc.roundedRect(cardX, y, cardW, cardH, 2).fill('#fff3e2');
     doc.restore();
     doc.image(images[i].imageBuffer, cardX + 2, y + 2, {
       fit: [cardW - 4, cardH - 4],
@@ -368,7 +365,7 @@ function drawTimelineCards(doc, events, options) {
   events.forEach((ev) => {
     ensureSpace(doc, 44);
     const y = doc.y;
-    drawPanel(doc, { x, y, width, height: 38, fill: '#ffffff', stroke: palette.line, radius: 8 });
+    drawPanel(doc, { x, y, width, height: 38, fill: '#fffdf9', stroke: palette.line, radius: 2 });
     doc.fillColor(palette.text).font(fonts.headingBold).fontSize(8.5)
       .text(`${statusLabel(ev.from_status)} -> ${statusLabel(ev.to_status)}`, x + 12, y + 8, { width: width - 150, ellipsis: true });
     doc.fillColor(palette.textMuted).font(fonts.body).fontSize(7.8)
@@ -485,20 +482,21 @@ function valueText(doc, text, x, y, w, palette, fonts, size = 9) {
 /** Status pill badge */
 function statusPill(doc, status, x, y, fonts) {
   const configs = {
-    approved:          { bg: '#d1fae5', text: '#065f46', label: 'Approved' },
-    rejected:          { bg: '#fee2e2', text: '#991b1b', label: 'Rejected' },
-    needs_correction:  { bg: '#fef3c7', text: '#92400e', label: 'Needs Correction' },
-    pending:           { bg: '#e0e7ff', text: '#3730a3', label: 'Pending' },
-    under_review:      { bg: '#f0f9ff', text: '#0369a1', label: 'Under Review' },
+    approved:          { bg: '#ece6dc', text: '#1f2937', stroke: '#2f3742', label: 'APPROVED' },
+    rejected:          { bg: '#ece6dc', text: '#1f2937', stroke: '#2f3742', label: 'REJECTED' },
+    needs_correction:  { bg: '#ece6dc', text: '#1f2937', stroke: '#2f3742', label: 'CORRECTION' },
+    pending:           { bg: '#ece6dc', text: '#1f2937', stroke: '#2f3742', label: 'PENDING' },
+    under_review:      { bg: '#ece6dc', text: '#1f2937', stroke: '#2f3742', label: 'UNDER REVIEW' },
   };
-  const cfg = configs[status] || { bg: '#f1f5f9', text: '#475569', label: statusLabel(status) };
+  const cfg = configs[status] || { bg: '#ece6dc', text: '#1f2937', stroke: '#2f3742', label: String(statusLabel(status)).toUpperCase() };
   const label = cfg.label;
   const pillW = Math.max(72, doc.widthOfString(label, { font: fonts.headingBold }) + 22);
   doc.save();
-  doc.roundedRect(x, y, pillW, 18, 9).fill(cfg.bg);
+  doc.roundedRect(x, y, pillW, 18, 3).fill(cfg.bg);
+  doc.roundedRect(x, y, pillW, 18, 3).strokeColor(cfg.stroke).lineWidth(0.8).stroke();
   doc.restore();
   doc.fillColor(cfg.text).font(fonts.headingBold).fontSize(8)
-    .text(label, x, y + 5, { width: pillW, align: 'center' });
+      .text(label, x, y + 5, { width: pillW, align: 'center' });
   return pillW;
 }
 
@@ -510,32 +508,363 @@ function kvRow(doc, label, value, x, y, totalW, palette, fonts, labelW = 90) {
     .text(asText(value), x + labelW, y, { width: totalW - labelW, ellipsis: true });
 }
 
-// ─── Redesigned applicationToPdf ────────────────────────────────────────────
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
 
-async function applicationToPdf(res, applicationId, actor, ctx = {}) {
+function statusPillLabel(status) {
+  const labels = {
+    approved: 'APPROVED',
+    rejected: 'REJECTED',
+    needs_correction: 'CORRECTION',
+    pending: 'PENDING',
+    under_review: 'UNDER REVIEW',
+  };
+
+  return labels[status] || String(statusLabel(status)).toUpperCase();
+}
+
+function buildApplicationExportViewModel(app, documents, statusEvents, renderableImages, brandName, palette) {
+  const appliedDisciplines = collectAppliedDisciplines(app);
+  const address = app.metadata && typeof app.metadata === 'object' ? app.metadata.address : null;
+  const primaryImage = renderableImages.find((documentRow) => documentRow.kind === 'photo_id') || null;
+  const metricChips = [
+    { label: 'Discipline', value: asText(app.discipline || 'Open') },
+    { label: 'Weight Class', value: asText(app.weight_class || 'Open') },
+    { label: 'Entry Type', value: app.club_name ? 'Club Entry' : 'Individual' },
+    { label: 'Status', value: statusLabel(app.status) },
+  ];
+  const identityRows = [
+    ['Full Name', `${asText(app.first_name)} ${asText(app.last_name)}`],
+    ['Email', asText(app.email)],
+    ['Phone', asText(app.phone)],
+    ['Date of Birth', formatDateOnly(app.date_of_birth)],
+    ['Gender', asText(app.gender)],
+    ['Nationality', asText(app.nationality)],
+    ['Club / Team', asText(app.club_name || 'Individual')],
+    ['Fight Record', `${app.record_wins || 0}W - ${app.record_losses || 0}L - ${app.record_draws || 0}D`],
+    ['Weight', app.weight_kg ? `${app.weight_kg} kg` : '-'],
+    ['Experience', asText(app.form_data?.experienceLevel)],
+  ];
+  const declarationRows = [
+    ['Submitted', formatDateTime(app.submitted_at)],
+    ['Review Started', formatDateTime(app.review_started_at)],
+    ['Review Due', formatDateTime(app.review_due_at)],
+    ['Decided', formatDateTime(app.decided_at)],
+    ['Correction Due', formatDateTime(app.correction_due_at)],
+    ['Disciplines', appliedDisciplines.length ? appliedDisciplines.join(', ') : 'Open'],
+    ['Rejection Reason', asText(app.rejection_reason)],
+    ['Reopen Reason', asText(app.reopen_reason)],
+    ['Notes', asText(app.form_data?.notes)],
+  ];
+  const addressText = address
+    ? `${asText(address.line1)}, ${asText(address.line2)}, ${asText(address.district)}, ${asText(address.state)}, ${asText(address.country)} ${asText(address.postalCode)}`
+    : null;
+  const documentRows = documents.map((documentRow) => ({
+    kind: asText(documentRow.kind),
+    name: asText(documentRow.original_filename || documentRow.storage_key),
+    mime: asText(documentRow.mime_type),
+    size: documentRow.size_bytes ? `${Math.round(documentRow.size_bytes / 1024)} KB` : '-',
+    uploaded: formatDateOnly(documentRow.created_at),
+  }));
+  const attachmentRows = renderableImages.slice(0, 4).map((documentRow) => ({
+    name: asText(documentRow.original_filename || documentRow.storage_key),
+    kind: asText(documentRow.kind),
+  }));
+  const timelineRows = statusEvents.map((eventRow) => ({
+    transition: `${statusLabel(eventRow.from_status)} -> ${statusLabel(eventRow.to_status)}`,
+    createdAt: formatDateTime(eventRow.created_at),
+    reason: eventRow.reason ? asText(eventRow.reason) : null,
+  }));
+
+  return {
+    brandName,
+    palette,
+    generatedAt: formatDateTime(new Date()),
+    applicationId: asText(app.id),
+    tournamentName: asText(app.tournament_name),
+    status: app.status,
+    statusLabel: statusLabel(app.status),
+    statusPillLabel: statusPillLabel(app.status),
+    reviewerId: asText(app.reviewer_id),
+    decidedAt: formatDateTime(app.decided_at),
+    applicantName: `${asText(app.first_name)} ${asText(app.last_name)}`,
+    appliedDisciplines,
+    metricChips,
+    identityRows,
+    declarationRows,
+    addressText,
+    documentRows,
+    attachmentRows,
+    timelineRows,
+    primaryImageName: primaryImage ? asText(primaryImage.original_filename || primaryImage.storage_key) : null,
+  };
+}
+
+async function loadApplicationExportViewModel(applicationId, actor) {
   const app = await appsRepo.findFullById(applicationId);
-  if (!app) { res.status(404).json({ error: { code: 'NOT_FOUND' } }); return; }
+  if (!app) {
+    const error = new Error('Application not found');
+    error.status = 404;
+    error.code = 'NOT_FOUND';
+    throw error;
+  }
+
   await assertCanView(actor, app);
 
   const brandName = config.pdf?.brandName || 'Primal';
   const palette = {
-    primary:    normalizeHexColor(config.pdf?.brandPrimary, '#0f172a'),
-    accent:     normalizeHexColor(config.pdf?.brandAccent,  '#e11d48'),
-    text:       '#0f172a',
-    textMuted:  '#64748b',
-    line:       '#e2e8f0',
-    surface:    '#f8fafc',
-    cardBorder: '#e8edf3',
+    primary: '#8c6a43',
+    accent: '#2f3742',
+    text: '#1f2937',
+    textMuted: '#5f6773',
+    line: '#2f3742',
+    surface: '#f4f1ea',
+    cardBorder: '#2f3742',
   };
 
   const [documents, statusEvents] = await Promise.all([
     docsRepo.listForApplication(app.id),
     eventsRepo.listForApplication(app.id),
   ]);
-
   const renderableImages = await loadRenderableDocumentImages(documents);
-  const primaryImage = renderableImages.find((d) => d.kind === 'photo_id') || renderableImages[0] || null;
-  const appliedDisciplines = collectAppliedDisciplines(app);
+  const viewModel = buildApplicationExportViewModel(app, documents, statusEvents, renderableImages, brandName, palette);
+
+  return {
+    app,
+    brandName,
+    palette,
+    documents,
+    statusEvents,
+    renderableImages,
+    viewModel,
+  };
+}
+
+function renderKeyValueRowsHtml(rows) {
+  return rows.map((row, index) => `
+    <div style="display: flex; align-items: center; min-height: 32px; background: ${index % 2 === 0 ? '#ede7dc' : '#fbfaf7'}; border: 1px solid #2f3742; border-radius: 8px; padding: 0 12px; gap: 12px;" layer-name="Identity Row">
+      <div style="width: 112px; color: #5f6773; font-size: 10px; font-family: 'Manrope', sans-serif; font-weight: 700; text-transform: uppercase;">${escapeHtml(row[0])}</div>
+      <div style="flex: 1; color: #1f2937; font-size: 11px; font-family: 'Inter Tight', sans-serif;">${escapeHtml(row[1])}</div>
+    </div>
+  `).join('');
+}
+
+function renderMicroCardsHtml(rows, columns) {
+  const items = rows.map((row) => `
+    <div style="display: flex; flex-direction: column; width: calc((100% - ${(columns - 1) * 10}px) / ${columns}); min-height: 56px; border: 1px solid #2f3742; border-radius: 8px; background: #fbfaf7; padding: 8px; gap: 6px;" layer-name="Micro Card">
+      <div style="color: #5f6773; font-size: 9px; font-family: 'Manrope', sans-serif; font-weight: 700; text-transform: uppercase;">${escapeHtml(row[0])}</div>
+      <div style="color: #1f2937; font-size: 11px; font-family: 'Inter Tight', sans-serif;">${escapeHtml(row[1])}</div>
+    </div>
+  `).join('');
+
+  return `<div style="display: flex; flex-wrap: wrap; gap: 10px; width: 100%;">${items}</div>`;
+}
+
+function renderTableRowsHtml(rows) {
+  if (!rows.length) {
+    return '<div style="color: #5f6773; font-size: 11px; font-family: \'Inter Tight\', sans-serif;">No uploaded documents.</div>';
+  }
+
+  const header = `
+    <div style="display: flex; align-items: center; border: 1px solid #2f3742; border-radius: 8px; background: #8c6a43; min-height: 30px; padding: 0 8px;" layer-name="Table Header">
+      <div style="width: 80px; color: #f8f5ef; font-size: 10px; font-family: 'Manrope', sans-serif; font-weight: 700; text-transform: uppercase;">Kind</div>
+      <div style="width: 200px; color: #f8f5ef; font-size: 10px; font-family: 'Manrope', sans-serif; font-weight: 700; text-transform: uppercase;">File Name</div>
+      <div style="width: 98px; color: #f8f5ef; font-size: 10px; font-family: 'Manrope', sans-serif; font-weight: 700; text-transform: uppercase;">Mime Type</div>
+      <div style="width: 56px; color: #f8f5ef; font-size: 10px; font-family: 'Manrope', sans-serif; font-weight: 700; text-transform: uppercase;">Size</div>
+      <div style="flex: 1; color: #f8f5ef; font-size: 10px; font-family: 'Manrope', sans-serif; font-weight: 700; text-transform: uppercase;">Uploaded</div>
+    </div>
+  `;
+
+  const body = rows.map((row, index) => `
+    <div style="display: flex; align-items: center; border: 1px solid #2f3742; border-radius: 8px; background: ${index % 2 === 0 ? '#ede7dc' : '#fbfaf7'}; min-height: 28px; padding: 0 8px;" layer-name="Table Row">
+      <div style="width: 80px; color: #1f2937; font-size: 10px; font-family: 'Inter Tight', sans-serif;">${escapeHtml(row.kind)}</div>
+      <div style="width: 200px; color: #1f2937; font-size: 10px; font-family: 'Inter Tight', sans-serif;">${escapeHtml(row.name)}</div>
+      <div style="width: 98px; color: #1f2937; font-size: 10px; font-family: 'Inter Tight', sans-serif;">${escapeHtml(row.mime)}</div>
+      <div style="width: 56px; color: #1f2937; font-size: 10px; font-family: 'Inter Tight', sans-serif;">${escapeHtml(row.size)}</div>
+      <div style="flex: 1; color: #1f2937; font-size: 10px; font-family: 'Inter Tight', sans-serif;">${escapeHtml(row.uploaded)}</div>
+    </div>
+  `).join('');
+
+  return `${header}${body}`;
+}
+
+function renderAttachmentCardsHtml(rows) {
+  if (!rows.length) return '';
+
+  return `
+    <div style="display: flex; flex-wrap: wrap; gap: 12px; width: 100%;" layer-name="Supporting Attachments">
+      ${rows.map((row) => `
+        <div style="display: flex; flex-direction: column; width: calc((100% - 12px) / 2); gap: 6px;" layer-name="Attachment Card">
+          <div style="display: flex; align-items: center; justify-content: center; height: 130px; border: 1px solid #2f3742; border-radius: 8px; background: #ede7dc; color: #5f6773; font-size: 11px; font-family: 'Manrope', sans-serif; text-transform: uppercase;">${escapeHtml(row.kind)}</div>
+          <div style="color: #1f2937; font-size: 10px; font-family: 'Inter Tight', sans-serif;">${escapeHtml(row.name)}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderTimelineRowsHtml(rows) {
+  if (!rows.length) {
+    return '<div style="color: #5f6773; font-size: 11px; font-family: \'Inter Tight\', sans-serif;">No status events recorded.</div>';
+  }
+
+  return rows.map((row) => `
+    <div style="display: flex; flex-direction: column; border: 1px solid #2f3742; border-radius: 8px; background: #fbfaf7; padding: 10px 12px; gap: 6px;" layer-name="Timeline Row">
+      <div style="display: flex; justify-content: space-between; gap: 12px;">
+        <div style="color: #1f2937; font-size: 11px; font-family: 'Manrope', sans-serif; font-weight: 700;">${escapeHtml(row.transition)}</div>
+        <div style="color: #5f6773; font-size: 10px; font-family: 'Inter Tight', sans-serif;">${escapeHtml(row.createdAt)}</div>
+      </div>
+      ${row.reason ? `<div style="color: #5f6773; font-size: 10px; font-family: 'Inter Tight', sans-serif;">${escapeHtml(row.reason)}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+function renderApplicationPaperHtml(viewModel) {
+  const chipsHtml = viewModel.metricChips.map((chip) => `
+    <div style="display: flex; flex-direction: column; width: calc((100% - 24px) / 4); min-height: 54px; border: 1px solid #2f3742; border-radius: 8px; background: #fbfaf7; padding: 10px; gap: 6px;" layer-name="Metric Chip">
+      <div style="color: #5f6773; font-size: 9px; font-family: 'Manrope', sans-serif; font-weight: 700; text-transform: uppercase;">${escapeHtml(chip.label)}</div>
+      <div style="color: #1f2937; font-size: 12px; font-family: 'Inter Tight', sans-serif; font-weight: 700;">${escapeHtml(chip.value)}</div>
+    </div>
+  `).join('');
+
+  return `
+    <div layer-name="Participant Application Export" style="display: flex; flex-direction: column; width: 794px; background: #f4f1ea; box-sizing: border-box; font-family: 'Inter Tight', sans-serif; color: #1f2937;">
+      <div layer-name="Header" style="display: flex; flex-direction: column; width: 100%; background: ${escapeHtml(viewModel.palette.primary)}; padding: 32px; gap: 18px;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px;">
+          <div style="display: flex; gap: 14px; align-items: center;">
+            <div style="display: flex; align-items: center; justify-content: center; width: 54px; height: 54px; border: 1px solid #f8f5ef; color: #f8f5ef; font-size: 16px; font-weight: 700;">${escapeHtml(brandInitials(viewModel.brandName))}</div>
+            <div style="display: flex; flex-direction: column; gap: 5px;">
+              <div style="color: #f8f5ef; font-size: 22px; font-weight: 700;">${escapeHtml(viewModel.brandName)}</div>
+              <div style="color: #ece6dc; font-size: 10px;">${escapeHtml(viewModel.tournamentName)}</div>
+              <div style="color: #e4d7c6; font-size: 9px;">Application ${escapeHtml(viewModel.applicationId)} / ${escapeHtml(viewModel.generatedAt)}</div>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 10px;">
+            <div style="display: flex; align-items: center; justify-content: center; min-width: 104px; height: 28px; border: 1px solid #2f3742; border-radius: 999px; background: #ece6dc; padding: 0 14px; color: #1f2937; font-size: 10px; font-weight: 700;">${escapeHtml(viewModel.statusPillLabel)}</div>
+            <div style="color: #ece6dc; font-size: 9px; text-transform: uppercase;">Participant Registration Export</div>
+          </div>
+        </div>
+      </div>
+      <div layer-name="Content" style="display: flex; flex-direction: column; width: 100%; padding: 24px 32px 32px 32px; gap: 14px;">
+        <div style="display: flex; gap: 8px; width: 100%;">${chipsHtml}</div>
+        <div style="display: flex; flex-direction: column; border: 1px solid #2f3742; border-radius: 10px; background: #fbfaf7; padding: 12px 14px; gap: 8px;">
+          <div style="color: #5f6773; font-size: 9px; font-weight: 700; text-transform: uppercase;">Applied Disciplines</div>
+          <div style="color: #1f2937; font-size: 14px; font-weight: 700;">${escapeHtml(viewModel.appliedDisciplines.length ? viewModel.appliedDisciplines.join(' / ') : 'Open')}</div>
+        </div>
+        <div style="display: flex; width: 100%; gap: 8px; align-items: stretch;">
+          <div style="display: flex; flex-direction: column; width: 57.5%; border: 1px solid #2f3742; border-radius: 10px; background: #fbfaf7; padding: 12px 14px; gap: 8px;" layer-name="Applicant Identity">
+            <div style="color: #1f2937; font-size: 12px; font-weight: 700;">Applicant Identity</div>
+            <div style="height: 1px; background: #2f3742; width: 100%;"></div>
+            ${renderKeyValueRowsHtml(viewModel.identityRows)}
+          </div>
+          <div style="display: flex; flex-direction: column; width: calc(42.5% - 8px); border: 1px solid #2f3742; border-radius: 10px; background: #fbfaf7; padding: 12px; gap: 10px;" layer-name="Verification Panel">
+            <div style="display: flex; gap: 10px;">
+              <div style="display: flex; flex-direction: column; gap: 6px; width: 80px;">
+                <div style="display: flex; align-items: center; justify-content: center; width: 80px; height: 104px; border: 1px solid #2f3742; border-radius: 8px; background: #e7e0d5; color: #5f6773; font-size: 10px; text-transform: uppercase;">${viewModel.primaryImageName ? 'Photo ID' : 'No Photo'}</div>
+                <div style="color: #5f6773; font-size: 9px; font-weight: 700; text-transform: uppercase;">${escapeHtml(viewModel.primaryImageName || 'No photo uploaded')}</div>
+              </div>
+              <div style="display: flex; flex-direction: column; flex: 1; gap: 8px;">
+                <div style="color: #1f2937; font-size: 11px; font-weight: 700;">${escapeHtml(viewModel.applicantName)}</div>
+                <div style="display: flex; flex-direction: column; gap: 2px;">
+                  <div style="color: #5f6773; font-size: 9px; font-weight: 700; text-transform: uppercase;">Reviewer</div>
+                  <div style="color: #1f2937; font-size: 10px;">${escapeHtml(viewModel.reviewerId)}</div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 2px;">
+                  <div style="color: #5f6773; font-size: 9px; font-weight: 700; text-transform: uppercase;">Decided</div>
+                  <div style="color: #1f2937; font-size: 10px;">${escapeHtml(viewModel.decidedAt)}</div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <div style="display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 2px; background: ${escapeHtml(viewModel.palette.primary)}; color: #f8f5ef; font-size: 9px; font-weight: 700;">OK</div>
+                  <div style="display: flex; flex-direction: column; gap: 2px;">
+                    <div style="color: #1f2937; font-size: 10px; font-weight: 700;">Digitally Verified</div>
+                    <div style="color: #5f6773; font-size: 9px;">Signed record / internal reference copy</div>
+                    <div style="color: #5f6773; font-size: 9px;">Verified copy of the submitted participant record</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px;" layer-name="Competition Declaration">
+            <div style="display: flex; flex-direction: column; gap: 5px;">
+            <div style="color: #5f6773; font-size: 9px; font-weight: 700; text-transform: uppercase;">Competition Declaration</div>
+            <div style="height: 1px; background: #2f3742; width: 100%;"></div>
+          </div>
+          ${renderMicroCardsHtml(viewModel.declarationRows, 3)}
+          ${viewModel.addressText ? `
+            <div style="display: flex; flex-direction: column; border: 1px solid #2f3742; border-radius: 8px; background: #fbfaf7; padding: 8px; gap: 6px;">
+              <div style="color: #5f6773; font-size: 9px; font-weight: 700; text-transform: uppercase;">Address</div>
+              <div style="color: #1f2937; font-size: 11px;">${escapeHtml(viewModel.addressText)}</div>
+            </div>
+          ` : ''}
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px;" layer-name="Document Register">
+          <div style="display: flex; flex-direction: column; gap: 5px;">
+            <div style="color: #5f6773; font-size: 9px; font-weight: 700; text-transform: uppercase;">Document Register</div>
+            <div style="height: 1px; background: #2f3742; width: 100%;"></div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 2px;">${renderTableRowsHtml(viewModel.documentRows)}</div>
+        </div>
+        ${viewModel.attachmentRows.length ? `
+          <div style="display: flex; flex-direction: column; gap: 10px;" layer-name="Supporting Attachments Section">
+            <div style="display: flex; flex-direction: column; gap: 5px;">
+              <div style="color: #5f6773; font-size: 9px; font-weight: 700; text-transform: uppercase;">Supporting Attachments</div>
+              <div style="height: 1px; background: #2f3742; width: 100%;"></div>
+            </div>
+            ${renderAttachmentCardsHtml(viewModel.attachmentRows)}
+          </div>
+        ` : ''}
+        <div style="display: flex; flex-direction: column; gap: 10px;" layer-name="Workflow Timeline">
+          <div style="display: flex; flex-direction: column; gap: 5px;">
+            <div style="color: #5f6773; font-size: 9px; font-weight: 700; text-transform: uppercase;">Workflow Timeline</div>
+            <div style="height: 1px; background: #2f3742; width: 100%;"></div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">${renderTimelineRowsHtml(viewModel.timelineRows)}</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px; padding-top: 8px;">
+          <div style="height: 1px; background: #2f3742; width: 100%;"></div>
+          <div style="color: #5f6773; font-size: 9px; text-align: center;">${escapeHtml(`${viewModel.brandName} / Participant Application Export / Digitally signed / ${viewModel.generatedAt}`)}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function applicationToPaper(applicationId, actor) {
+  const { viewModel } = await loadApplicationExportViewModel(applicationId, actor);
+
+  return {
+    artboard: {
+      name: `Participant Application ${viewModel.applicationId}`,
+      width: 794,
+      height: 'fit-content',
+      backgroundColor: '#f4f1ea',
+    },
+    html: renderApplicationPaperHtml(viewModel),
+    data: viewModel,
+  };
+}
+
+// ─── Redesigned applicationToPdf ────────────────────────────────────────────
+
+async function applicationToPdf(res, applicationId, actor, ctx = {}) {
+  const {
+    app,
+    brandName,
+    palette,
+    documents,
+    statusEvents,
+    renderableImages,
+    viewModel,
+  } = await loadApplicationExportViewModel(applicationId, actor);
+  const primaryImage = renderableImages.find((d) => d.kind === 'photo_id') || null;
+  const appliedDisciplines = viewModel.appliedDisciplines;
   const address = app.metadata && typeof app.metadata === 'object' ? app.metadata.address : null;
 
   res.setHeader('Content-Type', 'application/pdf');
@@ -560,7 +889,7 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
 
   // ── Page background ──────────────────────────────────────────────────────
   doc.save();
-  doc.rect(0, 0, doc.page.width, doc.page.height).fill('#f1f5f9');
+  doc.rect(0, 0, doc.page.width, doc.page.height).fill('#f4f1ea');
   doc.restore();
 
   // ── HEADER BAND ──────────────────────────────────────────────────────────
@@ -570,13 +899,10 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
   doc.restore();
 
   // Logo mark
-  const LOGO_SIZE = 40;
-  doc.save();
-  doc.roundedRect(PX, PY + 8, LOGO_SIZE, LOGO_SIZE, 8).fill(palette.accent);
-  doc.restore();
+  const LOGO_SIZE = 54;
   const logo = resolveLogoPath(config.pdf?.logoPath);
   if (logo) {
-    doc.image(logo, PX + 4, PY + 12, { fit: [LOGO_SIZE - 8, LOGO_SIZE - 8], align: 'center', valign: 'center' });
+    doc.image(logo, PX, PY + 2, { fit: [LOGO_SIZE, LOGO_SIZE], align: 'center', valign: 'center' });
   } else {
     doc.fillColor('#ffffff').font(fonts.headingBold).fontSize(14)
       .text(brandInitials(brandName), PX, PY + 19, { width: LOGO_SIZE, align: 'center' });
@@ -584,17 +910,17 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
 
   // Brand + tournament
   doc.fillColor('#ffffff').font(fonts.headingBold).fontSize(18)
-    .text(brandName, PX + LOGO_SIZE + 12, PY + 10);
-  doc.fillColor('#94a3b8').font(fonts.body).fontSize(8.5)
-    .text(asText(app.tournament_name), PX + LOGO_SIZE + 12, PY + 33);
-  doc.fillColor('#64748b').font(fonts.body).fontSize(7.5)
-    .text(`Application  ${app.id}   ·   ${formatDateTime(new Date())}`, PX + LOGO_SIZE + 12, PY + 47);
+    .text(brandName, PX + LOGO_SIZE + 14, PY + 10);
+  doc.fillColor('#ece6dc').font(fonts.body).fontSize(8.5)
+    .text(asText(app.tournament_name), PX + LOGO_SIZE + 14, PY + 33);
+  doc.fillColor('#e4d7c6').font(fonts.body).fontSize(7.5)
+    .text(`Application  ${app.id}   /   ${formatDateTime(new Date())}`, PX + LOGO_SIZE + 14, PY + 47);
 
   // Status pill + ID (right-aligned)
   const pillX = PX + CW - 130;
   statusPill(doc, app.status, pillX, PY + 14, fonts);
-  doc.fillColor('#94a3b8').font(fonts.body).fontSize(7)
-    .text('Participant registration export', pillX - 30, PY + 40, { width: 160, align: 'right' });
+  doc.fillColor('#ece6dc').font(fonts.body).fontSize(7)
+    .text('PARTICIPANT REGISTRATION EXPORT', pillX - 34, PY + 40, { width: 170, align: 'right' });
 
   // Divider below header
   doc.y = PY + HEADER_H + 10;
@@ -611,7 +937,7 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
   const chipY = doc.y;
   chips.forEach((chip, i) => {
     const cx = PX + i * (CHIP_W + GRID.gap);
-    gridCard(doc, cx, chipY, CHIP_W, CHIP_H, { fill: '#ffffff', stroke: palette.cardBorder, radius: GRID.radius.md });
+    gridCard(doc, cx, chipY, CHIP_W, CHIP_H, { fill: '#fbfaf7', stroke: palette.cardBorder, radius: 8 });
     microLabel(doc, chip.label, cx + 10, chipY + 8, CHIP_W - 20, palette, fonts);
     doc.fillColor(palette.text).font(fonts.headingBold).fontSize(11)
       .text(chip.value, cx + 10, chipY + 20, { width: CHIP_W - 20, ellipsis: true });
@@ -620,7 +946,7 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
 
   const disciplinesY = doc.y;
   const disciplinesH = 58;
-  gridCard(doc, PX, disciplinesY, CW, disciplinesH, { fill: '#ffffff', stroke: palette.cardBorder, radius: GRID.radius.lg, accentColor: palette.accent });
+  gridCard(doc, PX, disciplinesY, CW, disciplinesH, { fill: '#fbfaf7', stroke: palette.cardBorder, radius: 8, accentColor: palette.primary, accentW: 4 });
   microLabel(doc, 'Applied Disciplines', PX + 14, disciplinesY + 10, CW - 28, palette, fonts);
   doc.fillColor(palette.text).font(fonts.headingBold).fontSize(12)
     .text(appliedDisciplines.length ? appliedDisciplines.join(' / ') : 'Open', PX + 14, disciplinesY + 24, { width: CW - 28, ellipsis: true });
@@ -646,7 +972,7 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
     ['Experience',   asText(app.form_data?.experienceLevel)],
   ];
   const ID_CARD_H = ID_ROWS.length * 22 + 36;
-  gridCard(doc, PX, ROW2_Y, LEFT_W, ID_CARD_H, { fill: '#ffffff', stroke: palette.cardBorder, radius: GRID.radius.lg, accentColor: palette.accent });
+  gridCard(doc, PX, ROW2_Y, LEFT_W, ID_CARD_H, { fill: '#fbfaf7', stroke: palette.cardBorder, radius: 8, accentColor: palette.primary, accentW: 4 });
 
   doc.fillColor(palette.text).font(fonts.headingBold).fontSize(10)
     .text('Applicant Identity', PX + 14, ROW2_Y + 12);
@@ -654,7 +980,7 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
 
   ID_ROWS.forEach((row, i) => {
     const ry = ROW2_Y + 36 + i * 22;
-    const bgFill = i % 2 === 0 ? '#f8fafc' : '#ffffff';
+    const bgFill = i % 2 === 0 ? '#ede7dc' : '#fbfaf7';
     doc.save();
     doc.rect(PX + 14, ry, LEFT_W - 28, 20).fill(bgFill);
     doc.restore();
@@ -663,15 +989,15 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
 
   // RIGHT: photo + digital approval stacked
   const PHOTO_CARD_H = 160;
-  gridCard(doc, RIGHT_X, ROW2_Y, RIGHT_W, PHOTO_CARD_H, { fill: '#ffffff', stroke: palette.cardBorder, radius: GRID.radius.lg });
+  gridCard(doc, RIGHT_X, ROW2_Y, RIGHT_W, PHOTO_CARD_H, { fill: '#fbfaf7', stroke: palette.cardBorder, radius: 8 });
 
   const PHOTO_W = 80;
   const PHOTO_H = 104;
   const PHOTO_X = RIGHT_X + 12;
   const PHOTO_Y = ROW2_Y + 16;
   doc.save();
-  doc.roundedRect(PHOTO_X, PHOTO_Y, PHOTO_W, PHOTO_H, 8).fill(palette.surface);
-  doc.roundedRect(PHOTO_X, PHOTO_Y, PHOTO_W, PHOTO_H, 8).strokeColor('#cbd5e1').lineWidth(0.75).stroke();
+  doc.roundedRect(PHOTO_X, PHOTO_Y, PHOTO_W, PHOTO_H, 8).fill('#e7e0d5');
+  doc.roundedRect(PHOTO_X, PHOTO_Y, PHOTO_W, PHOTO_H, 8).strokeColor('#2f3742').lineWidth(0.75).stroke();
   doc.restore();
 
   if (primaryImage) {
@@ -703,16 +1029,16 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
     .text(formatDateTime(app.decided_at), VX, PHOTO_Y + 44, { width: VW });
 
   doc.save();
-  doc.circle(VX + 12, PHOTO_Y + 78, 11).fill('#16a34a');
+  doc.circle(VX + 12, PHOTO_Y + 78, 11).fill(palette.primary);
   doc.lineWidth(2).lineCap('round').strokeColor('#ffffff');
   doc.moveTo(VX + 7, PHOTO_Y + 78).lineTo(VX + 11, PHOTO_Y + 82).lineTo(VX + 18, PHOTO_Y + 73).stroke();
   doc.restore();
-  doc.fillColor('#166534').font(fonts.bodyBold).fontSize(8.5)
-    .text('Digitally verified', VX + 28, PHOTO_Y + 70, { width: VW - 28, ellipsis: true });
-  doc.fillColor('#334155').font('Times-Italic').fontSize(12)
-    .text('digitally signed', VX + 28, PHOTO_Y + 83, { width: VW - 28, ellipsis: true });
+  doc.fillColor('#1f2937').font(fonts.bodyBold).fontSize(8.5)
+    .text('DIGITALLY VERIFIED', VX + 28, PHOTO_Y + 70, { width: VW - 28, ellipsis: true });
+  doc.fillColor(palette.textMuted).font(fonts.bodyBold).fontSize(7.2)
+    .text('SIGNED RECORD / INTERNAL REFERENCE COPY', VX, PHOTO_Y + 84, { width: VW, align: 'left' });
   doc.fillColor(palette.textMuted).font(fonts.body).fontSize(7.2)
-    .text('Verified copy of the submitted participant record', VX, PHOTO_Y + 104, { width: VW, align: 'left' });
+    .text('VERIFIED COPY OF THE SUBMITTED PARTICIPANT RECORD', VX, PHOTO_Y + 104, { width: VW, align: 'left' });
 
   doc.y = Math.max(ROW2_Y + ID_CARD_H, ROW2_Y + PHOTO_CARD_H) + 12;
 
@@ -760,7 +1086,7 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
       const idx = i + c;
       if (idx >= declRows.length) break;
       const cx = PX + c * (DECL_CW + GRID.gap);
-      gridCard(doc, cx, rowY, DECL_CW, DECL_CARD_H, { fill: '#ffffff', stroke: palette.cardBorder, radius: GRID.radius.sm });
+      gridCard(doc, cx, rowY, DECL_CW, DECL_CARD_H, { fill: '#fbfaf7', stroke: palette.cardBorder, radius: 6 });
       microLabel(doc, declRows[idx][0], cx + 8, rowY + 5, DECL_CW - 16, palette, fonts);
       doc.fillColor(palette.text).font(fonts.body).fontSize(8)
         .text(asText(declRows[idx][1]), cx + 8, rowY + 15, { width: DECL_CW - 16, ellipsis: true });
@@ -772,7 +1098,7 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
   if (address) {
     ensureSpace(doc, DECL_CARD_H + 5);
     const addrY = doc.y;
-    gridCard(doc, PX, addrY, CW, DECL_CARD_H, { fill: '#ffffff', stroke: palette.cardBorder, radius: GRID.radius.sm });
+    gridCard(doc, PX, addrY, CW, DECL_CARD_H, { fill: '#fbfaf7', stroke: palette.cardBorder, radius: 6 });
     microLabel(doc, 'Address', PX + 8, addrY + 5, CW - 16, palette, fonts);
     const addrStr = `${asText(address.line1)}, ${asText(address.line2)}, ${asText(address.district)}, ${asText(address.state)}, ${asText(address.country)} ${asText(address.postalCode)}`;
     doc.fillColor(palette.text).font(fonts.body).fontSize(8)
@@ -791,14 +1117,6 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
   doc.moveDown(0.8);
 
   // ── ROW 5: Supporting images ──────────────────────────────────────────────
-  if (renderableImages.length) {
-    ensureSpace(doc, 60);
-    microLabel(doc, 'Supporting Attachments', PX, doc.y, CW, palette, fonts);
-    gridRule(doc, PX, doc.y + 13, CW, palette.line);
-    doc.y += 18;
-    drawImageGallery(doc, renderableImages, palette, fonts);
-    doc.moveDown(0.8);
-  }
 
   // ── ROW 6: Timeline ───────────────────────────────────────────────────────
   ensureSpace(doc, 60);
@@ -1180,5 +1498,14 @@ async function divisionBracketToPdf(res, divisionId, actor, ctx = {}) {
   });
 }
 
-module.exports = { approvedToExcel, approvedParticipantsToExcel, applicationToPdf, auditToExcel, bracketToPdf, divisionBracketToPdf };
+module.exports = {
+  approvedToExcel,
+  approvedParticipantsToExcel,
+  applicationToPaper,
+  applicationToPdf,
+  auditToExcel,
+  bracketToPdf,
+  divisionBracketToPdf,
+};
+
 

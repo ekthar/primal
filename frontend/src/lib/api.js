@@ -117,6 +117,20 @@ async function downloadFile(path, { query, filename }) {
   return { data: { ok: true }, error: null };
 }
 
+async function requestAbsolute(url, { raw = false } = {}) {
+  try {
+    const res = await fetch(url);
+    if (raw) return { data: res, error: null };
+
+    const isJson = res.headers.get("content-type")?.includes("application/json");
+    const payload = isJson ? await res.json() : await res.text();
+    if (!res.ok) return { data: null, error: payload?.error || payload || { code: `HTTP_${res.status}`, message: res.statusText } };
+    return { data: payload, error: null };
+  } catch (err) {
+    return { data: null, error: { code: "NETWORK", message: err.message } };
+  }
+}
+
 export const api = {
   register: (body) => request("POST", "/api/auth/register", { body }),
   login: (body) => request("POST", "/api/auth/login", { body }),
@@ -204,6 +218,7 @@ export const api = {
   publicIndiaStates: () => request("GET", "/api/public/india/states"),
   publicIndiaDistricts: (state) => request("GET", "/api/public/india/districts", { query: { state } }),
   publicIndiaPincodeLookup: (pincode) => request("GET", `/api/public/india/pincode/${encodeURIComponent(pincode)}`),
+  verifyApplicationSignatureUrl: (verificationUrl) => requestAbsolute(verificationUrl),
 
   adminTournaments: (query) => request("GET", "/api/tournaments", { query }),
   createTournament: (body) => request("POST", "/api/tournaments", { body }),

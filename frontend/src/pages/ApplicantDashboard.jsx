@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Download, Eye, FileCheck2, Gavel, ShieldAlert } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Camera, Download, Eye, FileCheck2, FileText, Gavel, ScanLine, ShieldAlert, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,6 +22,43 @@ function getAccessMessage(application) {
     return "Correction access stays tied to the correction window set by admin.";
   }
   return "Submitted applications remain viewable after registration closes, even when they are no longer editable.";
+}
+
+const REQUIRED_UPLOADS = [
+  {
+    kind: "medical",
+    label: "Medical certificate",
+    description: "Capture the doctor-approved medical certificate or upload a clear PDF copy.",
+    accepts: "image/*,application/pdf",
+    capture: "environment",
+    icon: FileText,
+  },
+  {
+    kind: "photo_id",
+    label: "Photo ID",
+    description: "Use the rear camera for a flat, readable ID photo with all edges visible.",
+    accepts: "image/*",
+    capture: "environment",
+    icon: Camera,
+  },
+  {
+    kind: "consent",
+    label: "Signed consent",
+    description: "Scan the signed application or consent sheet directly from the phone camera.",
+    accepts: "image/*,application/pdf",
+    capture: "environment",
+    icon: ScanLine,
+  },
+];
+
+function formatFileSize(file) {
+  if (!file?.size) return "-";
+  if (file.size < 1024 * 1024) return `${Math.max(1, Math.round(file.size / 1024))} KB`;
+  return `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function isImageFile(file) {
+  return Boolean(file?.type?.startsWith("image/"));
 }
 
 export default function ApplicantDashboard() {
@@ -142,7 +179,7 @@ export default function ApplicantDashboard() {
 
   async function uploadAndSubmitDraft(application) {
     const files = draftUploads[application.id] || {};
-    const requiredKinds = ["medical", "photo_id", "consent"];
+    const requiredKinds = REQUIRED_UPLOADS.map((item) => item.kind);
     const missing = requiredKinds.filter((kind) => !files[kind]);
     if (missing.length) {
       toast.error("Upload medical certificate, photo ID, and signed consent before submitting");
@@ -337,26 +374,34 @@ export default function ApplicantDashboard() {
                     <div className="mt-4 rounded-xl border border-border bg-surface p-4">
                       <div className="font-medium text-sm">Finish this season application</div>
                       <p className="mt-2 text-sm text-secondary-muted">
-                        Upload the required documents here, then submit while the season registration window is still open.
+                        Upload or scan each required document here, confirm the preview, then submit while registration is still open.
                       </p>
-                      <div className="mt-4 grid sm:grid-cols-3 gap-3">
-                        {[
-                          ["medical", "Medical certificate"],
-                          ["photo_id", "Photo ID"],
-                          ["consent", "Signed consent"],
-                        ].map(([kind, label]) => (
-                          <div key={kind}>
-                            <div className="text-[10px] uppercase tracking-wider text-tertiary font-semibold">{label}</div>
-                            <input
-                              type="file"
-                              onChange={(event) => setDraftFile(application.id, kind, event.target.files?.[0] || null)}
-                              className="mt-2 block w-full text-sm"
-                            />
+                      <div className="mt-4 rounded-2xl border border-border bg-background/70 p-4">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">Mobile capture</div>
+                            <div className="mt-1 text-sm text-secondary-muted">
+                              On mobile, use scan to open the camera directly and preview each document before submission.
+                            </div>
                           </div>
-                        ))}
+                          <div className="rounded-full border border-border bg-surface px-3 py-1 text-[11px] font-medium text-secondary-muted">
+                            3 required items
+                          </div>
+                        </div>
+                        <div className="mt-4 grid gap-3 xl:grid-cols-3">
+                          {REQUIRED_UPLOADS.map((item) => (
+                            <DraftUploadCard
+                              key={item.kind}
+                              applicationId={application.id}
+                              item={item}
+                              file={draftUploads[application.id]?.[item.kind] || null}
+                              onFileChange={setDraftFile}
+                            />
+                          ))}
+                        </div>
                       </div>
                       <div className="mt-4 flex justify-end">
-                        <Button onClick={() => uploadAndSubmitDraft(application)} disabled={submittingDraftId === application.id}>
+                        <Button className="w-full sm:w-auto" onClick={() => uploadAndSubmitDraft(application)} disabled={submittingDraftId === application.id}>
                           <InlineLoadingLabel loading={submittingDraftId === application.id} loadingText="Submitting...">
                             Submit this season application
                           </InlineLoadingLabel>
@@ -505,6 +550,116 @@ function Detail({ label, value }) {
     <div className="flex items-center justify-between gap-4">
       <dt className="text-[10px] uppercase tracking-wider text-tertiary font-semibold">{label}</dt>
       <dd className="text-right">{value}</dd>
+    </div>
+  );
+}
+
+function DraftUploadCard({ applicationId, item, file, onFileChange }) {
+  const libraryInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
+  const Icon = item.icon;
+
+  function openLibraryPicker() {
+    if (libraryInputRef.current) {
+      libraryInputRef.current.click();
+    }
+  }
+
+  function openCameraPicker() {
+    if (cameraInputRef.current) {
+      cameraInputRef.current.click();
+    }
+  }
+
+  function handleFileSelection(event) {
+    onFileChange(applicationId, item.kind, event.target.files?.[0] || null);
+    event.target.value = "";
+  }
+
+  return (
+    <div className="flex h-full flex-col rounded-2xl border border-border bg-surface p-4">
+      <div className="flex items-start gap-3">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl border border-border bg-background text-primary">
+          <Icon className="size-4" />
+        </div>
+        <div className="min-w-0">
+          <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">{item.label}</div>
+          <p className="mt-1 text-sm text-secondary-muted">{item.description}</p>
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-1 flex-col gap-3">
+        <SelectedFilePreview file={file} label={item.label} />
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-1">
+          <Button type="button" variant="outline" className="w-full justify-center" onClick={openCameraPicker}>
+            <ScanLine className="size-4" /> Scan on mobile
+          </Button>
+          <Button type="button" variant="outline" className="w-full justify-center" onClick={openLibraryPicker}>
+            <Upload className="size-4" /> Choose file
+          </Button>
+        </div>
+      </div>
+
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept={item.accepts}
+        capture={item.capture}
+        onChange={handleFileSelection}
+        className="hidden"
+      />
+      <input
+        ref={libraryInputRef}
+        type="file"
+        accept={item.accepts}
+        onChange={handleFileSelection}
+        className="hidden"
+      />
+    </div>
+  );
+}
+
+function SelectedFilePreview({ file, label }) {
+  const [previewUrl, setPreviewUrl] = useState(null);
+
+  useEffect(() => {
+    if (!file || !isImageFile(file)) {
+      setPreviewUrl(null);
+      return undefined;
+    }
+
+    const nextPreviewUrl = URL.createObjectURL(file);
+    setPreviewUrl(nextPreviewUrl);
+
+    return () => {
+      URL.revokeObjectURL(nextPreviewUrl);
+    };
+  }, [file]);
+
+  if (!file) {
+    return (
+      <div className="flex min-h-40 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-background/70 px-4 py-6 text-center">
+        <div className="text-sm font-medium">{label} preview</div>
+        <div className="mt-1 text-sm text-secondary-muted">Nothing selected yet.</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border bg-background/70">
+      {previewUrl ? (
+        <img src={previewUrl} alt={`${label} preview`} className="h-40 w-full object-cover" />
+      ) : (
+        <div className="flex h-40 items-center justify-center bg-surface-muted px-4 text-center text-sm text-secondary-muted">
+          Preview unavailable for this file type.
+        </div>
+      )}
+      <div className="space-y-1 border-t border-border px-4 py-3">
+        <div className="text-sm font-medium break-all">{file.name}</div>
+        <div className="text-xs text-secondary-muted">
+          {file.type || "Unknown file type"} / {formatFileSize(file)}
+        </div>
+      </div>
     </div>
   );
 }

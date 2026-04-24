@@ -52,7 +52,7 @@ export default function Login() {
       <div className="flex-1 flex flex-col">
         <div className="flex items-center justify-between px-6 sm:px-10 py-5">
           <Link href="/" className="flex items-center gap-2" data-testid="back-home">
-            <div className="size-8 rounded-lg bg-foreground text-background flex items-center justify-center font-display font-bold text-sm">P</div>
+            <img src="/primal-logo.png" alt="Primal" className="size-8 rounded-lg object-cover" />
             <span className="font-display font-semibold tracking-tight">Primal</span>
           </Link>
           <ThemeToggle compact />
