@@ -879,8 +879,11 @@ async function approvedParticipantsToPdf(res, actor, { tournamentId } = {}, ctx 
 
   const allRows = [...report.clubParticipants, ...report.individualParticipants];
   const todayIso = new Date().toISOString().slice(0, 10);
-  const approvedTodayCount = allRows.filter((row) => typeof row.approvedAt === 'string'
-    && row.approvedAt.slice(0, 10) === todayIso).length;
+  const approvedTodayCount = allRows.filter((row) => {
+    if (!row.approvedAt) return false;
+    const d = row.approvedAt instanceof Date ? row.approvedAt : new Date(row.approvedAt);
+    return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === todayIso;
+  }).length;
   const sexCounts = allRows.reduce((acc, row) => {
     const key = (row.sex || 'unspecified').toLowerCase();
     acc[key] = (acc[key] || 0) + 1;
