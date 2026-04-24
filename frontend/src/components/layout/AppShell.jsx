@@ -248,6 +248,7 @@ function DesktopTopbar({ nav }) {
   const router = useRouter();
   const current = nav.find((item) => isActivePath(router.pathname, item.to));
   const fallbackRoute = HOME_BY_ROLE[user?.role] || "/";
+  const platformKey = typeof navigator !== "undefined" && /mac/i.test(navigator.platform) ? "⌘" : "Ctrl";
 
   return (
     <div className="hidden md:flex items-center justify-between gap-4 border-b border-border bg-background/80 px-6 py-4 backdrop-blur-xl">
@@ -257,6 +258,16 @@ function DesktopTopbar({ nav }) {
           <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-tertiary">Workspace</div>
           <div className="truncate text-sm font-medium text-foreground">{current?.label || "Control panel"}</div>
         </div>
+      </div>
+      <div
+        className="hidden lg:inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface/60 px-2.5 py-1 text-[11px] text-tertiary"
+        aria-hidden
+        title="Open the command palette"
+      >
+        <span>Press</span>
+        <kbd className="rounded bg-background px-1.5 py-0.5 font-mono text-[10px] text-foreground shadow-[inset_0_-1px_0_hsl(var(--border))]">{platformKey}</kbd>
+        <kbd className="rounded bg-background px-1.5 py-0.5 font-mono text-[10px] text-foreground shadow-[inset_0_-1px_0_hsl(var(--border))]">K</kbd>
+        <span>to search</span>
       </div>
     </div>
   );
