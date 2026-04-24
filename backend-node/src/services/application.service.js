@@ -10,19 +10,32 @@ const { dispatch: notify } = require('../notifications');
 const { createHash } = require('crypto');
 const tournamentService = require('./tournament.service');
 const documentStorage = require('./documentStorage.service');
+const { resolveAvatarUrl } = require('./avatar.service');
+const { formatPersonName, applicationDisplayId, reviewerDisplayId } = require('./identity.service');
 
 const HOUR = 60 * 60 * 1000;
 const REQUIRED_DOCUMENT_KINDS = ['medical', 'photo_id', 'consent'];
 
-function withAvatarUrlFromDocuments(entity, documents) {
-  const photoDocument = documents.find((documentRow) => documentRow.kind === 'photo_id');
-  if (!photoDocument) {
-    return entity;
-  }
-
+function withDisplayFields(entity) {
   return {
     ...entity,
-    avatar_url: documentStorage.getPublicDocumentUrl(photoDocument.storage_key),
+    applicant_display_name: formatPersonName(entity.first_name, entity.last_name),
+    application_display_id: applicationDisplayId(entity.id),
+    reviewer_display_id: entity.reviewer_id ? reviewerDisplayId(entity.reviewer_id) : null,
+  };
+}
+
+function withAvatarUrlFromDocuments(entity, documents) {
+  const photoDocument = documents.find((documentRow) => documentRow.kind === 'photo_id');
+  return {
+    ...withDisplayFields(entity),
+    avatar_url: resolveAvatarUrl({
+      explicitAvatarUrl: entity.avatar_url || null,
+      photoAvatarUrl: photoDocument ? documentStorage.getPublicDocumentUrl(photoDocument.storage_key) : null,
+      name: formatPersonName(entity.first_name, entity.last_name),
+      key: entity.profile_id || entity.id,
+      audience: 'internal',
+    }),
   };
 }
 
@@ -30,6 +43,13 @@ function assertRegistrationWindowOpen(tournament, message = 'Registration window
   if (!tournamentService.getRegistrationState(tournament).registrationOpen) {
     throw ApiError.forbidden(message);
   }
+}
+
+function isSeasonClosedSource(app, tournament) {
+  if (app.status === STATUS.SEASON_CLOSED) return true;
+  if (!tournament) return false;
+  const state = tournamentService.getRegistrationState(tournament);
+  return Boolean(tournament.deleted_at || !state.registrationOpen);
 }
 
 // ---- Authorization helpers ---------------------------------------------------
@@ -60,6 +80,9 @@ async function assertCanEdit(user, app) {
     }
     return;
   }
+  if (app.status === STATUS.SEASON_CLOSED) {
+    throw ApiError.forbidden('Application is locked because the season has closed');
+  }
   throw ApiError.forbidden(`Cannot edit application in status ${app.status}`);
 }
 
@@ -82,6 +105,13 @@ async function create(user, { tournamentId, profileId, formData }, ctx = {}) {
       const club = await clubsRepo.findById(profile.club_id);
       if (!club || club.primary_user_id !== user.id) throw ApiError.forbidden();
     }
+  }
+  const existingApplication = await appsRepo.findByProfileAndTournament(profile.id, tournamentId);
+  if (existingApplication) {
+    throw ApiError.conflict('Application already exists for this tournament', {
+      tournamentId,
+      applicationId: existingApplication.id,
+    });
   }
   const app = await appsRepo.create({
     profileId: profile.id,
@@ -177,6 +207,71 @@ async function uploadDocument(user, applicationId, { kind, label, expiresOn, fil
   return { ...doc, url: documentStorage.getPublicDocumentUrl(doc.storage_key) };
 }
 
+async function reapply(user, sourceApplicationId, { tournamentId }, ctx = {}) {
+  const sourceApplication = await appsRepo.findById(sourceApplicationId);
+  if (!sourceApplication) throw ApiError.notFound();
+  await assertCanView(user, sourceApplication);
+
+  const [sourceTournament, targetTournament] = await Promise.all([
+    tournamentsRepo.findByIdAny ? tournamentsRepo.findByIdAny(sourceApplication.tournament_id) : tournamentsRepo.findById(sourceApplication.tournament_id),
+    tournamentsRepo.findById(tournamentId),
+  ]);
+  if (!targetTournament) throw ApiError.badRequest('Unknown target tournament', { field: 'tournamentId' });
+  assertRegistrationWindowOpen(targetTournament, 'Target tournament registration window is closed');
+  if (sourceApplication.tournament_id === tournamentId) {
+    throw ApiError.conflict('Cannot reapply into the same tournament', { tournamentId });
+  }
+  if (!isSeasonClosedSource(sourceApplication, sourceTournament)) {
+    throw ApiError.conflict('Source application is not from a closed season', {
+      sourceApplicationId,
+      sourceStatus: sourceApplication.status,
+    });
+  }
+
+  const existingApplication = await appsRepo.findByProfileAndTournament(sourceApplication.profile_id, tournamentId);
+  if (existingApplication) {
+    throw ApiError.conflict('Application already exists for this tournament', {
+      tournamentId,
+      applicationId: existingApplication.id,
+    });
+  }
+
+  const nextApplication = await appsRepo.create({
+    profileId: sourceApplication.profile_id,
+    tournamentId,
+    clubId: sourceApplication.club_id || null,
+    submittedBy: user.id,
+    formData: sourceApplication.form_data || {},
+  });
+  await seRepo.add({
+    applicationId: nextApplication.id,
+    fromStatus: null,
+    toStatus: STATUS.DRAFT,
+    actorUserId: user.id,
+    actorRole: user.role,
+    reason: `Reapplied from ${sourceApplicationId}`,
+    metadata: {
+      sourceApplicationId,
+      sourceTournamentId: sourceApplication.tournament_id,
+      targetTournamentId: tournamentId,
+      kind: 'season_reapply',
+    },
+  });
+  await auditWrite({
+    actorUserId: user.id,
+    actorRole: user.role,
+    action: 'application.reapply',
+    entityType: 'application',
+    entityId: nextApplication.id,
+    payload: {
+      sourceApplicationId,
+      targetTournamentId: tournamentId,
+    },
+    requestIp: ctx.ip,
+  });
+  return nextApplication;
+}
+
 async function listDocuments(user, applicationId) {
   const app = await appsRepo.findById(applicationId);
   if (!app) throw ApiError.notFound();
@@ -205,16 +300,16 @@ async function getById(user, id) {
 
 async function listForMe(user, query = {}) {
   // Scope by role.
-  if (user.role === 'admin' || user.role === 'reviewer') return appsRepo.query(query);
+  if (user.role === 'admin' || user.role === 'reviewer') return appsRepo.query(query).then((list) => list.map(withDisplayFields));
   if (user.role === 'club') {
     const clubs = await clubsRepo.listForUser(user.id);
     if (!clubs.length) return [];
-    return appsRepo.query({ ...query, clubId: clubs[0].id });
+    return appsRepo.query({ ...query, clubId: clubs[0].id }).then((list) => list.map(withDisplayFields));
   }
   // applicant
   const profile = await profilesRepo.findByUserId(user.id);
   if (!profile) return [];
-  return appsRepo.query({ ...query }).then((list) => list.filter((a) => a.profile_id === profile.id));
+  return appsRepo.query({ ...query }).then((list) => list.filter((a) => a.profile_id === profile.id).map(withDisplayFields));
 }
 
 async function requestCancel(user, id, { reason }, ctx = {}) {
@@ -274,11 +369,12 @@ async function notifySubmission(app) {
     to: { email: u.email, phone: u.phone, whatsapp: u.phone },
     template: 'application.submitted',
     payload: {
-      applicantName: `${full.first_name} ${full.last_name}`,
+      applicantName: formatPersonName(full.first_name, full.last_name),
+      applicationDisplayId: applicationDisplayId(app.id),
       tournamentName: full.tournament_name,
       slaHours: config.workflow.reviewSlaHours,
     },
   });
 }
 
-module.exports = { create, updateDraft, submit, uploadDocument, listDocuments, getById, listForMe, requestCancel, assertCanView, assertCanEdit };
+module.exports = { create, updateDraft, submit, reapply, uploadDocument, listDocuments, getById, listForMe, requestCancel, assertCanView, assertCanEdit };

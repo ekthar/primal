@@ -4,6 +4,7 @@ const { write: auditWrite } = require('../audit');
 const { validateIndiaAddress } = require('../indiaLocations');
 const { query } = require('../db');
 const bracketService = require('./bracket.service');
+const { resolveAvatarUrl } = require('./avatar.service');
 
 const WEIGHT_CLASSES = {
   male: [
@@ -66,13 +67,33 @@ async function upsertMyProfile(userId, data, ctx = {}) {
 }
 
 async function getMyProfile(userId) {
-  return profilesRepo.findByUserId(userId) || null;
+  const profile = await profilesRepo.findByUserId(userId);
+  if (!profile) return null;
+  return {
+    ...profile,
+    avatar_url: resolveAvatarUrl({
+      explicitAvatarUrl: null,
+      photoAvatarUrl: null,
+      name: `${profile.first_name || ''} ${profile.last_name || ''}`.trim(),
+      key: profile.id || userId,
+      audience: 'external',
+    }),
+  };
 }
 
 async function getProfileById(id) {
   const p = await profilesRepo.findById(id);
   if (!p) throw ApiError.notFound();
-  return p;
+  return {
+    ...p,
+    avatar_url: resolveAvatarUrl({
+      explicitAvatarUrl: null,
+      photoAvatarUrl: null,
+      name: `${p.first_name || ''} ${p.last_name || ''}`.trim(),
+      key: p.id || id,
+      audience: 'internal',
+    }),
+  };
 }
 
 async function listForAdminReweigh(actor, query = {}) {

@@ -9,8 +9,12 @@ const router = Router();
 router.use(requireAuth);
 
 router.get('/summary', requireRole('admin', 'reviewer'), ah(async (_req, res) => {
-  const [sla, workload] = await Promise.all([queue.slaSummary(), queue.reviewerWorkload()]);
-  res.json({ sla, workload });
+  const [sla, workload, production] = await Promise.all([
+    queue.slaSummary(),
+    queue.reviewerWorkload(),
+    reportService.productionDiagnostics(),
+  ]);
+  res.json({ sla, workload, production });
 }));
 
 router.get('/approved.xlsx', requireRole('admin', 'reviewer'), ah(async (req, res) => {
@@ -24,6 +28,37 @@ router.get('/participants', requireRole('admin'), ah(async (req, res) => {
 
 router.get('/participants.xlsx', requireRole('admin'), ah(async (req, res) => {
   await exporter.approvedParticipantsToExcel(res, { tournamentId: req.query.tournamentId });
+}));
+
+router.get('/analytics', requireRole('admin'), ah(async (req, res) => {
+  const report = await reportService.groupedApplicationReport({
+    tournamentId: req.query.tournamentId,
+    discipline: req.query.discipline,
+  });
+  res.json(report);
+}));
+
+router.get('/analytics.xlsx', requireRole('admin'), ah(async (req, res) => {
+  await exporter.groupedAnalyticsToExcel(res, {
+    tournamentId: req.query.tournamentId,
+    discipline: req.query.discipline,
+  });
+}));
+
+router.get('/analytics.pdf', requireRole('admin'), ah(async (req, res) => {
+  await exporter.groupedAnalyticsToPdf(res, req.user, {
+    tournamentId: req.query.tournamentId,
+    discipline: req.query.discipline,
+  }, { ip: req.ip });
+}));
+
+router.get('/seasons/:id', requireRole('admin'), ah(async (req, res) => {
+  const report = await reportService.seasonalTournamentReport({ tournamentId: req.params.id });
+  res.json(report);
+}));
+
+router.get('/seasons/:id.pdf', requireRole('admin'), ah(async (req, res) => {
+  await exporter.seasonalReportToPdf(res, req.user, req.params.id, { ip: req.ip });
 }));
 
 router.get('/applications/:id.pdf', ah(async (req, res) => {

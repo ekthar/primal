@@ -1,11 +1,20 @@
 const { applications: appsRepo } = require('../repositories');
 const { query } = require('../db');
 const { STATUS } = require('../statusMachine');
+const { formatPersonName, applicationDisplayId, reviewerDisplayId } = require('./identity.service');
 
 async function board(filters = {}) {
   const items = await appsRepo.query(filters);
   const counts = await appsRepo.counts();
-  return { items, counts };
+  return {
+    items: items.map((item) => ({
+      ...item,
+      applicant_display_name: formatPersonName(item.first_name, item.last_name),
+      application_display_id: applicationDisplayId(item.id),
+      reviewer_display_id: item.reviewer_id ? reviewerDisplayId(item.reviewer_id) : null,
+    })),
+    counts,
+  };
 }
 
 async function slaSummary() {
@@ -50,7 +59,9 @@ async function reviewerWorkload() {
     GROUP BY u.id ORDER BY open DESC
   `);
   return rows.map((r) => ({
-    id: r.id, name: r.name,
+    id: r.id,
+    name: r.name,
+    reviewerDisplayId: reviewerDisplayId(r.id),
     open: parseInt(r.open, 10),
     approved7d: parseInt(r.approved_7d, 10),
     rejected7d: parseInt(r.rejected_7d, 10),

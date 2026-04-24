@@ -61,7 +61,7 @@ const schemas = {
   profile: {
     upsert: Joi.object({
       firstName: Joi.string().min(1).max(120).required(),
-      lastName: Joi.string().min(1).max(120).required(),
+      lastName: Joi.string().max(120).allow('').required(),
       dateOfBirth: Joi.date().iso().less('now').allow(null),
       gender: Joi.string().max(30).allow(null, ''),
       nationality: Joi.string().valid(INDIA).required(),
@@ -94,6 +94,7 @@ const schemas = {
   tournament: {
     adminList: Joi.object({
       q: Joi.string().max(200).allow(''),
+      includeArchived: Joi.boolean().default(false),
       limit: Joi.number().integer().min(1).max(500).default(200),
       offset: Joi.number().integer().min(0).default(0),
     }),
@@ -228,6 +229,9 @@ const schemas = {
     }),
     cancelRequest: Joi.object({
       reason: Joi.string().min(10).max(2000).required(),
+    }),
+    reapply: Joi.object({
+      tournamentId: uuid.required(),
     }),
   },
 

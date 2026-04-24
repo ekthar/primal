@@ -8,6 +8,8 @@ const { schemas } = require('../validators');
 const { verifySignatureForApplication } = require('../pdfSignature');
 const { config } = require('../config');
 const { getIndiaStates, getDistrictsByState, getCanonicalStateName, lookupPincode } = require('../indiaLocations');
+const { write: auditWrite } = require('../audit');
+const { formatPersonName, applicationDisplayId } = require('../services/identity.service');
 
 const router = Router();
 
@@ -83,13 +85,26 @@ router.get('/verify/application-signature', ah(async (req, res) => {
   const verification = verifySignatureForApplication(req.query, app);
   const issuedAtMs = Number(req.query.iat) * 1000;
   const issuedAt = Number.isFinite(issuedAtMs) ? new Date(issuedAtMs) : null;
+  await auditWrite({
+    actorUserId: null,
+    actorRole: 'public',
+    action: verification.valid ? 'qr.verify' : 'qr.verify.failed',
+    entityType: 'application',
+    entityId: app.id,
+    payload: {
+      reason: verification.reason,
+      digest: req.query.dig || null,
+    },
+    requestIp: req.ip,
+  });
   res.status(verification.valid ? 200 : 400).json({
     valid: verification.valid,
     reason: verification.reason,
     brand: config.pdf?.brandName || 'Primal',
     application: {
       id: app.id,
-      applicant: `${app.first_name || ''} ${app.last_name || ''}`.trim(),
+      displayId: applicationDisplayId(app.id),
+      applicant: formatPersonName(app.first_name, app.last_name),
       tournament: app.tournament_name || null,
       status: app.status,
       updatedAt: app.updated_at,

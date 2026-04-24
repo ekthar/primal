@@ -41,13 +41,20 @@ function signParts({ aid, dig, iat }) {
   return hmacHex(`${aid}.${dig}.${iat}`);
 }
 
+function normalizeVerifyBaseUrl(value) {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return `${config.appBaseUrl}/api/public/verify/application-signature`;
+  const normalized = trimmed.replace(/^(https?:\/\/)(https?:\/\/)/i, '$2');
+  return normalized.replace(/\/+$/, '');
+}
+
 function buildSignatureForApplication(app) {
   const aid = app.id;
   const dig = digestApplication(app);
   const iat = Math.floor(Date.now() / 1000);
   const sig = signParts({ aid, dig, iat });
 
-  const verifyBase = (config.pdf?.verifyBaseUrl || `${config.appBaseUrl}/api/public/verify/application-signature`).replace(/\/+$/, '');
+  const verifyBase = normalizeVerifyBaseUrl(config.pdf?.verifyBaseUrl || `${config.appBaseUrl}/api/public/verify/application-signature`);
   const url = `${verifyBase}?aid=${encodeURIComponent(aid)}&dig=${encodeURIComponent(dig)}&iat=${iat}&sig=${encodeURIComponent(sig)}`;
 
   return { aid, dig, iat, sig, url };

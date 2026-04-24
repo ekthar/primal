@@ -6,6 +6,8 @@ const { write: auditWrite } = require('../audit');
 const { dispatch: notify } = require('../notifications');
 const { createHash } = require('crypto');
 const tournamentService = require('./tournament.service');
+const { resolveAvatarUrl } = require('./avatar.service');
+const { formatPersonName } = require('./identity.service');
 
 function passwordHashFingerprint(passwordHash) {
   return createHash('sha256').update(String(passwordHash || '')).digest('hex').slice(0, 24);
@@ -132,9 +134,16 @@ async function issueTokens(user, ctx = {}) {
 }
 
 function publicUser(user) {
+  const resolvedAvatarUrl = resolveAvatarUrl({
+    explicitAvatarUrl: user.avatar_url,
+    photoAvatarUrl: null,
+    name: user.name || formatPersonName(user.first_name, user.last_name) || user.email,
+    key: user.id || user.email,
+    audience: 'external',
+  });
   return {
     id: user.id, email: user.email, role: user.role, name: user.name,
-    locale: user.locale, avatarUrl: user.avatar_url, emailVerified: user.email_verified,
+    locale: user.locale, avatarUrl: resolvedAvatarUrl, emailVerified: user.email_verified,
   };
 }
 

@@ -1,6 +1,7 @@
 // PDF + Excel export helpers. Streamed to response.
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
+const QRCode = require('qrcode');
 const path = require('path');
 const fs = require('fs');
 const {
@@ -13,10 +14,12 @@ const { assertCanView } = require('./application.service');
 const { query } = require('../db');
 const { write: auditWrite } = require('../audit');
 const { config } = require('../config');
-const { approvedParticipantReport } = require('./report.service');
+const { approvedParticipantReport, groupedApplicationReport, seasonalTournamentReport } = require('./report.service');
 const bracketService = require('./bracket.service');
 const matchService = require('./match.service');
 const documentStorage = require('./documentStorage.service');
+const { buildSignatureForApplication } = require('../pdfSignature');
+const { formatPersonName, applicationDisplayId, reviewerDisplayId } = require('./identity.service');
 
 function formatDateTime(value) {
   if (!value) return '—';
@@ -42,6 +45,11 @@ function statusLabel(status) {
 
 function asText(value) {
   if (value === null || value === undefined || value === '') return '—';
+  return String(value);
+}
+
+function displayText(value, fallback = '—') {
+  if (value === null || value === undefined || value === '') return fallback;
   return String(value);
 }
 
@@ -124,6 +132,20 @@ async function loadRenderableDocumentImages(documents) {
   return renderableImages.filter(Boolean);
 }
 
+async function buildExportSignatureArtifacts(app) {
+  const signature = buildSignatureForApplication(app);
+  const qrBuffer = await QRCode.toBuffer(signature.url, {
+    errorCorrectionLevel: 'M',
+    margin: 0,
+    width: 180,
+  });
+
+  return {
+    signature,
+    qrBuffer,
+  };
+}
+
 function resolvePdfFonts(doc) {
   const fonts = {
     body: 'Helvetica',
@@ -134,8 +156,6 @@ function resolvePdfFonts(doc) {
 
   const hasInterTight = registerFontIfPresent(doc, 'InterTightBody', config.pdf?.fontBodyPath);
   const hasInterTightBold = registerFontIfPresent(doc, 'InterTightBodyBold', config.pdf?.fontBodyBoldPath);
-  const hasManrope = registerFontIfPresent(doc, 'ManropeHeading', config.pdf?.fontHeadingPath);
-  const hasManropeBold = registerFontIfPresent(doc, 'ManropeHeadingBold', config.pdf?.fontHeadingBoldPath);
 
   if (hasInterTight) fonts.body = 'InterTightBody';
   if (hasInterTightBold) {
@@ -143,13 +163,8 @@ function resolvePdfFonts(doc) {
   } else if (hasInterTight) {
     fonts.bodyBold = 'InterTightBody';
   }
-
-  if (hasManrope) fonts.heading = 'ManropeHeading';
-  if (hasManropeBold) {
-    fonts.headingBold = 'ManropeHeadingBold';
-  } else if (hasManrope) {
-    fonts.headingBold = 'ManropeHeading';
-  }
+  fonts.heading = fonts.bodyBold;
+  fonts.headingBold = fonts.bodyBold;
 
   return fonts;
 }
@@ -433,6 +448,382 @@ async function approvedParticipantsToExcel(res, { tournamentId } = {}) {
   res.end();
 }
 
+function addGroupedAnalyticsWorksheet(worksheet, rows) {
+  worksheet.columns = [
+    { header: 'Label', key: 'label', width: 34 },
+    { header: 'Draft', key: 'draft', width: 12 },
+    { header: 'Submitted', key: 'submitted', width: 12 },
+    { header: 'Under Review', key: 'under_review', width: 14 },
+    { header: 'Needs Correction', key: 'needs_correction', width: 16 },
+    { header: 'Season Closed', key: 'season_closed', width: 16 },
+    { header: 'Approved', key: 'approved', width: 12 },
+    { header: 'Rejected', key: 'rejected', width: 12 },
+    { header: 'Total', key: 'total', width: 12 },
+  ];
+  rows.forEach((row) => {
+    worksheet.addRow({
+      label: row.label,
+      ...row.statuses,
+    });
+  });
+  worksheet.getRow(1).font = { bold: true };
+}
+
+async function groupedAnalyticsToExcel(res, { tournamentId, discipline } = {}) {
+  const report = await groupedApplicationReport({ tournamentId, discipline });
+  const wb = new ExcelJS.Workbook();
+  const wsDiscipline = wb.addWorksheet('By Discipline');
+  const wsWeight = wb.addWorksheet('By Weight');
+  const wsCategory = wb.addWorksheet('By Category');
+
+  addGroupedAnalyticsWorksheet(wsDiscipline, report.disciplineGroups);
+  addGroupedAnalyticsWorksheet(wsWeight, report.weightClassGroups);
+  addGroupedAnalyticsWorksheet(wsCategory, report.categoryGroups.map((row) => ({
+    label: `${row.label} / ${row.discipline} / ${row.weightClass}`,
+    statuses: row.statuses,
+  })));
+
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="application-analytics.xlsx"');
+  await wb.xlsx.write(res);
+  res.end();
+}
+
+function drawAnalyticsTable(doc, title, rows, palette, fonts) {
+  const x = doc.page.margins.left;
+  const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const columns = [
+    { key: 'label', label: title, width: 190 },
+    { key: 'submitted', label: 'Submitted', width: 60 },
+    { key: 'under_review', label: 'Review', width: 56 },
+    { key: 'needs_correction', label: 'Correction', width: 64 },
+    { key: 'season_closed', label: 'Season Closed', width: 68 },
+    { key: 'approved', label: 'Approved', width: 60 },
+    { key: 'rejected', label: 'Rejected', width: 60 },
+    { key: 'total', label: 'Total', width: 52 },
+  ];
+
+  ensureSpace(doc, 36);
+  doc.fillColor(palette.text).font(fonts.headingBold).fontSize(13).text(title);
+  doc.moveDown(0.3);
+
+  const headerY = doc.y;
+  doc.save();
+  doc.roundedRect(x, headerY, width, 22, 6).fill('#ece6dc');
+  doc.restore();
+
+  let headerX = x;
+  columns.forEach((column) => {
+    doc.fillColor(palette.text).font(fonts.bodyBold).fontSize(8)
+      .text(column.label.toUpperCase(), headerX + 6, headerY + 7, { width: column.width - 12, ellipsis: true });
+    headerX += column.width;
+  });
+
+  doc.y = headerY + 26;
+  if (!rows.length) {
+    doc.fillColor(palette.textMuted).font(fonts.body).fontSize(9).text('No grouped rows found for the selected filters.');
+    doc.moveDown(1);
+    return;
+  }
+
+  rows.forEach((row, index) => {
+    ensureSpace(doc, 22);
+    const rowY = doc.y;
+    if (index % 2 === 0) {
+      doc.save();
+      doc.roundedRect(x, rowY, width, 20, 4).fill('#fbfaf7');
+      doc.restore();
+    }
+
+    const values = {
+      label: row.label,
+      submitted: row.statuses.submitted,
+      under_review: row.statuses.under_review,
+      needs_correction: row.statuses.needs_correction,
+      season_closed: row.statuses.season_closed,
+      approved: row.statuses.approved,
+      rejected: row.statuses.rejected,
+      total: row.statuses.total,
+    };
+
+    let valueX = x;
+    columns.forEach((column) => {
+      doc.fillColor(palette.text).font(fonts.body).fontSize(8.5)
+        .text(String(values[column.key]), valueX + 6, rowY + 6, { width: column.width - 12, ellipsis: true });
+      valueX += column.width;
+    });
+    doc.y = rowY + 22;
+  });
+
+  doc.moveDown(0.8);
+}
+
+async function groupedAnalyticsToPdf(res, actor, { tournamentId, discipline } = {}, ctx = {}) {
+  const report = await groupedApplicationReport({ tournamentId, discipline });
+  const brandName = config.pdf?.brandName || 'Primal';
+  const palette = {
+    primary: '#8c6a43',
+    text: '#1f2937',
+    textMuted: '#5f6773',
+    line: '#2f3742',
+  };
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', 'attachment; filename="application-analytics.pdf"');
+  const doc = new PDFDocument({
+    size: 'A4',
+    layout: 'landscape',
+    margins: { top: 28, bottom: 28, left: 28, right: 28 },
+    info: {
+      Title: 'Application analytics export',
+      Author: brandName,
+      Subject: 'Grouped application analytics',
+    },
+  });
+  doc.pipe(res);
+  const fonts = resolvePdfFonts(doc);
+
+  doc.save();
+  doc.rect(0, 0, doc.page.width, doc.page.height).fill('#f4f1ea');
+  doc.restore();
+
+  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  drawPanel(doc, {
+    x: doc.page.margins.left,
+    y: doc.page.margins.top,
+    width: pageWidth,
+    height: 84,
+    fill: '#fbfaf7',
+    stroke: '#2f3742',
+    radius: 16,
+  });
+
+  doc.fillColor(palette.primary).font(fonts.bodyBold).fontSize(9)
+    .text('GROUPED APPLICATION ANALYTICS', doc.page.margins.left + 18, doc.page.margins.top + 16);
+  doc.fillColor(palette.text).font(fonts.headingBold).fontSize(24)
+    .text(brandName, doc.page.margins.left + 18, doc.page.margins.top + 30);
+  doc.fillColor(palette.textMuted).font(fonts.body).fontSize(9)
+    .text(`Generated ${formatDateTime(report.generatedAt)} / Tournament ${displayText(report.filters.tournamentId, 'All')} / Discipline ${displayText(report.filters.discipline, 'All')}`, doc.page.margins.left + 18, doc.page.margins.top + 58);
+
+  const kpiY = doc.page.margins.top + 104;
+  const kpiW = (pageWidth - 24) / 4;
+  [
+    ['All applications', report.totals.total],
+    ['Approved', report.totals.approved],
+    ['Pending', report.totals.submitted + report.totals.under_review + report.totals.needs_correction],
+    ['Rejected', report.totals.rejected],
+  ].forEach(([label, value], index) => {
+    drawMetricChip(doc, {
+      x: doc.page.margins.left + index * (kpiW + 8),
+      y: kpiY,
+      width: kpiW,
+      height: 54,
+      label,
+      value: String(value),
+      palette,
+      fonts,
+      tone: '#fbfaf7',
+    });
+  });
+
+  doc.y = kpiY + 72;
+  drawAnalyticsTable(doc, 'By discipline', report.disciplineGroups, palette, fonts);
+  drawAnalyticsTable(doc, 'By weight class', report.weightClassGroups, palette, fonts);
+  drawAnalyticsTable(doc, 'By category', report.categoryGroups.map((row) => ({
+    ...row,
+    label: `${row.label} / ${row.discipline} / ${row.weightClass}`,
+  })), palette, fonts);
+
+  doc.end();
+
+  await auditWrite({
+    actorUserId: actor?.id,
+    actorRole: actor?.role,
+    action: 'export.analytics_pdf',
+    entityType: 'report',
+    entityId: tournamentId || 'all',
+    payload: { tournamentId: tournamentId || null, discipline: discipline || null },
+    requestIp: ctx.ip,
+  });
+}
+
+async function seasonalReportToPdf(res, actor, tournamentId, ctx = {}) {
+  const report = await seasonalTournamentReport({ tournamentId });
+  const brandName = config.pdf?.brandName || 'Primal';
+  const palette = {
+    primary: '#8c6a43',
+    text: '#1f2937',
+    textMuted: '#5f6773',
+    line: '#2f3742',
+  };
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="season-${report.tournament.id}.pdf"`);
+  const doc = new PDFDocument({
+    size: 'A4',
+    layout: 'portrait',
+    margins: { top: 24, bottom: 24, left: 24, right: 24 },
+    info: {
+      Title: `${report.tournament.name} seasonal report`,
+      Author: brandName,
+      Subject: 'Season archive report',
+    },
+  });
+  doc.pipe(res);
+  const fonts = resolvePdfFonts(doc);
+
+  doc.save();
+  doc.rect(0, 0, doc.page.width, doc.page.height).fill('#f4f1ea');
+  doc.restore();
+
+  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  drawPanel(doc, {
+    x: doc.page.margins.left,
+    y: doc.page.margins.top,
+    width: pageWidth,
+    height: 88,
+    fill: '#fbfaf7',
+    stroke: '#2f3742',
+    radius: 16,
+  });
+  doc.fillColor(palette.primary).font(fonts.bodyBold).fontSize(9)
+    .text('SEASON ARCHIVE REPORT', doc.page.margins.left + 18, doc.page.margins.top + 16);
+  doc.fillColor(palette.text).font(fonts.headingBold).fontSize(22)
+    .text(report.tournament.name, doc.page.margins.left + 18, doc.page.margins.top + 30);
+  doc.fillColor(palette.textMuted).font(fonts.body).fontSize(9)
+    .text(`Season ${displayText(report.tournament.season, 'N/A')} / Archived ${displayText(formatDateOnly(report.tournament.archivedAt), 'Active')} / Generated ${formatDateTime(report.generatedAt)}`, doc.page.margins.left + 18, doc.page.margins.top + 58);
+
+  const kpiY = doc.page.margins.top + 104;
+  const kpiW = (pageWidth - 8) / 2;
+  [
+    ['Registered', report.totals.total],
+    ['Approved', report.totals.approved],
+    ['Divisions', report.divisions.length],
+    ['Matches', report.matches.filter((row) => row.matchId).length],
+  ].forEach(([label, value], index) => {
+    const row = Math.floor(index / 2);
+    const col = index % 2;
+    drawMetricChip(doc, {
+      x: doc.page.margins.left + col * (kpiW + 8),
+      y: kpiY + row * 60,
+      width: kpiW,
+      height: 52,
+      label,
+      value: String(value),
+      palette,
+      fonts,
+      tone: '#fbfaf7',
+    });
+  });
+
+  doc.y = kpiY + 128;
+  drawSeasonRegistrationTable(doc, report.registrations, palette, fonts);
+  drawSeasonDivisionTable(doc, report.divisions, palette, fonts);
+  drawSeasonMatchesTable(doc, report.matches, palette, fonts);
+
+  doc.end();
+  await auditWrite({
+    actorUserId: actor?.id,
+    actorRole: actor?.role,
+    action: 'export.season_pdf',
+    entityType: 'tournament',
+    entityId: tournamentId,
+    payload: {},
+    requestIp: ctx.ip,
+  });
+}
+
+function drawSeasonRegistrationTable(doc, rows, palette, fonts) {
+  const columns = [
+    { key: 'applicationDisplayId', label: 'App ID', width: 54 },
+    { key: 'participantName', label: 'Participant', width: 104 },
+    { key: 'discipline', label: 'Discipline', width: 68 },
+    { key: 'weightClass', label: 'Wt Class', width: 54 },
+    { key: 'weightKg', label: 'Kg', width: 34 },
+    { key: 'status', label: 'Status', width: 64 },
+    { key: 'category', label: 'Category', width: 118 },
+    { key: 'bracketState', label: 'Bracket', width: 70 },
+  ];
+  drawWideTable(doc, 'Registered participants by category', rows, columns, palette, fonts);
+}
+
+function drawSeasonDivisionTable(doc, rows, palette, fonts) {
+  const columns = [
+    { key: 'discipline_name', label: 'Discipline', width: 82 },
+    { key: 'label', label: 'Division', width: 170 },
+    { key: 'fighter_count', label: 'Fighters', width: 48 },
+    { key: 'match_count', label: 'Matches', width: 48 },
+    { key: 'champion_name', label: 'Winner', width: 110 },
+    { key: 'champion_club_name', label: 'Club', width: 86 },
+  ];
+  drawWideTable(doc, 'Division winners and category summary', rows, columns, palette, fonts);
+}
+
+function drawSeasonMatchesTable(doc, rows, palette, fonts) {
+  const columns = [
+    { key: 'divisionLabel', label: 'Division', width: 154 },
+    { key: 'roundNumber', label: 'Rnd', width: 34 },
+    { key: 'matchNumber', label: 'Bout', width: 34 },
+    { key: 'redName', label: 'Red', width: 84 },
+    { key: 'blueName', label: 'Blue', width: 84 },
+    { key: 'winnerName', label: 'Winner', width: 84 },
+    { key: 'status', label: 'Status', width: 58 },
+  ];
+  drawWideTable(doc, 'Bracket and match ledger', rows.filter((row) => row.matchId), columns, palette, fonts);
+}
+
+function drawWideTable(doc, title, rows, columns, palette, fonts) {
+  ensureSpace(doc, 36);
+  doc.fillColor(palette.text).font(fonts.headingBold).fontSize(13).text(title);
+  doc.moveDown(0.3);
+  const x = doc.page.margins.left;
+  const width = columns.reduce((sum, column) => sum + column.width, 0);
+
+  const drawHeader = () => {
+    const headerY = doc.y;
+    doc.save();
+    doc.roundedRect(x, headerY, width, 22, 6).fill('#ece6dc');
+    doc.restore();
+
+    let currentX = x;
+    columns.forEach((column) => {
+      doc.fillColor(palette.text).font(fonts.bodyBold).fontSize(7.2)
+        .text(column.label.toUpperCase(), currentX + 4, headerY + 7, { width: column.width - 8, ellipsis: true });
+      currentX += column.width;
+    });
+    doc.y = headerY + 26;
+  };
+
+  drawHeader();
+  if (!rows.length) {
+    doc.fillColor(palette.textMuted).font(fonts.body).fontSize(9).text('No rows found.');
+    doc.moveDown(0.8);
+    return;
+  }
+
+  rows.forEach((row, index) => {
+    if (doc.y + 20 > doc.page.height - doc.page.margins.bottom) {
+      doc.addPage();
+      drawHeader();
+    }
+    const rowY = doc.y;
+    if (index % 2 === 0) {
+      doc.save();
+      doc.roundedRect(x, rowY, width, 19, 4).fill('#fbfaf7');
+      doc.restore();
+    }
+    let rowX = x;
+    columns.forEach((column) => {
+      doc.fillColor(palette.text).font(fonts.body).fontSize(7.2)
+        .text(displayText(row[column.key], ''), rowX + 4, rowY + 6, { width: column.width - 8, ellipsis: true });
+      rowX += column.width;
+    });
+    doc.y = rowY + 21;
+  });
+
+  doc.moveDown(0.8);
+}
+
 // ─── Grid layout helpers ──────────────────────────────────────────────────────
 
 const GRID = {
@@ -524,6 +915,7 @@ function statusPillLabel(status) {
     needs_correction: 'CORRECTION',
     pending: 'PENDING',
     under_review: 'UNDER REVIEW',
+    season_closed: 'SEASON CLOSED',
   };
 
   return labels[status] || String(statusLabel(status)).toUpperCase();
@@ -531,16 +923,20 @@ function statusPillLabel(status) {
 
 function buildApplicationExportViewModel(app, documents, statusEvents, renderableImages, brandName, palette) {
   const appliedDisciplines = collectAppliedDisciplines(app);
+  const applicantName = formatPersonName(app.first_name, app.last_name);
+  const applicationDisplayCode = applicationDisplayId(app.id);
+  const reviewerDisplayCode = app.reviewer_id ? reviewerDisplayId(app.reviewer_id) : null;
   const address = app.metadata && typeof app.metadata === 'object' ? app.metadata.address : null;
   const primaryImage = renderableImages.find((documentRow) => documentRow.kind === 'photo_id') || null;
   const metricChips = [
-    { label: 'Discipline', value: asText(app.discipline || 'Open') },
+    { label: 'Disciplines', value: displayText(appliedDisciplines.length ? appliedDisciplines.join(' / ') : 'Open') },
     { label: 'Weight Class', value: asText(app.weight_class || 'Open') },
     { label: 'Entry Type', value: app.club_name ? 'Club Entry' : 'Individual' },
     { label: 'Status', value: statusLabel(app.status) },
   ];
   const identityRows = [
-    ['Full Name', `${asText(app.first_name)} ${asText(app.last_name)}`],
+    ['Full Name', displayText(applicantName)],
+    ['Application ID', applicationDisplayCode],
     ['Email', asText(app.email)],
     ['Phone', asText(app.phone)],
     ['Date of Birth', formatDateOnly(app.date_of_birth)],
@@ -572,10 +968,7 @@ function buildApplicationExportViewModel(app, documents, statusEvents, renderabl
     size: documentRow.size_bytes ? `${Math.round(documentRow.size_bytes / 1024)} KB` : '-',
     uploaded: formatDateOnly(documentRow.created_at),
   }));
-  const attachmentRows = renderableImages.slice(0, 4).map((documentRow) => ({
-    name: asText(documentRow.original_filename || documentRow.storage_key),
-    kind: asText(documentRow.kind),
-  }));
+  const attachmentRows = [];
   const timelineRows = statusEvents.map((eventRow) => ({
     transition: `${statusLabel(eventRow.from_status)} -> ${statusLabel(eventRow.to_status)}`,
     createdAt: formatDateTime(eventRow.created_at),
@@ -587,13 +980,15 @@ function buildApplicationExportViewModel(app, documents, statusEvents, renderabl
     palette,
     generatedAt: formatDateTime(new Date()),
     applicationId: asText(app.id),
+    applicationDisplayId: applicationDisplayCode,
     tournamentName: asText(app.tournament_name),
     status: app.status,
     statusLabel: statusLabel(app.status),
     statusPillLabel: statusPillLabel(app.status),
     reviewerId: asText(app.reviewer_id),
+    reviewerDisplayId: reviewerDisplayCode,
     decidedAt: formatDateTime(app.decided_at),
-    applicantName: `${asText(app.first_name)} ${asText(app.last_name)}`,
+    applicantName: displayText(applicantName),
     appliedDisciplines,
     metricChips,
     identityRows,
@@ -633,6 +1028,7 @@ async function loadApplicationExportViewModel(applicationId, actor) {
     eventsRepo.listForApplication(app.id),
   ]);
   const renderableImages = await loadRenderableDocumentImages(documents);
+  const signatureArtifacts = await buildExportSignatureArtifacts(app);
   const viewModel = buildApplicationExportViewModel(app, documents, statusEvents, renderableImages, brandName, palette);
 
   return {
@@ -642,6 +1038,7 @@ async function loadApplicationExportViewModel(applicationId, actor) {
     documents,
     statusEvents,
     renderableImages,
+    signatureArtifacts,
     viewModel,
   };
 }
@@ -649,7 +1046,7 @@ async function loadApplicationExportViewModel(applicationId, actor) {
 function renderKeyValueRowsHtml(rows) {
   return rows.map((row, index) => `
     <div style="display: flex; align-items: center; min-height: 32px; background: ${index % 2 === 0 ? '#ede7dc' : '#fbfaf7'}; border: 1px solid #2f3742; border-radius: 8px; padding: 0 12px; gap: 12px;" layer-name="Identity Row">
-      <div style="width: 112px; color: #5f6773; font-size: 10px; font-family: 'Manrope', sans-serif; font-weight: 700; text-transform: uppercase;">${escapeHtml(row[0])}</div>
+      <div style="width: 112px; color: #5f6773; font-size: 10px; font-family: 'Inter Tight', sans-serif; font-weight: 700; text-transform: uppercase;">${escapeHtml(row[0])}</div>
       <div style="flex: 1; color: #1f2937; font-size: 11px; font-family: 'Inter Tight', sans-serif;">${escapeHtml(row[1])}</div>
     </div>
   `).join('');
@@ -658,7 +1055,7 @@ function renderKeyValueRowsHtml(rows) {
 function renderMicroCardsHtml(rows, columns) {
   const items = rows.map((row) => `
     <div style="display: flex; flex-direction: column; width: calc((100% - ${(columns - 1) * 10}px) / ${columns}); min-height: 56px; border: 1px solid #2f3742; border-radius: 8px; background: #fbfaf7; padding: 8px; gap: 6px;" layer-name="Micro Card">
-      <div style="color: #5f6773; font-size: 9px; font-family: 'Manrope', sans-serif; font-weight: 700; text-transform: uppercase;">${escapeHtml(row[0])}</div>
+      <div style="color: #5f6773; font-size: 9px; font-family: 'Inter Tight', sans-serif; font-weight: 700; text-transform: uppercase;">${escapeHtml(row[0])}</div>
       <div style="color: #1f2937; font-size: 11px; font-family: 'Inter Tight', sans-serif;">${escapeHtml(row[1])}</div>
     </div>
   `).join('');
@@ -673,11 +1070,11 @@ function renderTableRowsHtml(rows) {
 
   const header = `
     <div style="display: flex; align-items: center; border: 1px solid #2f3742; border-radius: 8px; background: #8c6a43; min-height: 30px; padding: 0 8px;" layer-name="Table Header">
-      <div style="width: 80px; color: #f8f5ef; font-size: 10px; font-family: 'Manrope', sans-serif; font-weight: 700; text-transform: uppercase;">Kind</div>
-      <div style="width: 200px; color: #f8f5ef; font-size: 10px; font-family: 'Manrope', sans-serif; font-weight: 700; text-transform: uppercase;">File Name</div>
-      <div style="width: 98px; color: #f8f5ef; font-size: 10px; font-family: 'Manrope', sans-serif; font-weight: 700; text-transform: uppercase;">Mime Type</div>
-      <div style="width: 56px; color: #f8f5ef; font-size: 10px; font-family: 'Manrope', sans-serif; font-weight: 700; text-transform: uppercase;">Size</div>
-      <div style="flex: 1; color: #f8f5ef; font-size: 10px; font-family: 'Manrope', sans-serif; font-weight: 700; text-transform: uppercase;">Uploaded</div>
+      <div style="width: 80px; color: #f8f5ef; font-size: 10px; font-family: 'Inter Tight', sans-serif; font-weight: 700; text-transform: uppercase;">Kind</div>
+      <div style="width: 200px; color: #f8f5ef; font-size: 10px; font-family: 'Inter Tight', sans-serif; font-weight: 700; text-transform: uppercase;">File Name</div>
+      <div style="width: 98px; color: #f8f5ef; font-size: 10px; font-family: 'Inter Tight', sans-serif; font-weight: 700; text-transform: uppercase;">Mime Type</div>
+      <div style="width: 56px; color: #f8f5ef; font-size: 10px; font-family: 'Inter Tight', sans-serif; font-weight: 700; text-transform: uppercase;">Size</div>
+      <div style="flex: 1; color: #f8f5ef; font-size: 10px; font-family: 'Inter Tight', sans-serif; font-weight: 700; text-transform: uppercase;">Uploaded</div>
     </div>
   `;
 
@@ -701,7 +1098,7 @@ function renderAttachmentCardsHtml(rows) {
     <div style="display: flex; flex-wrap: wrap; gap: 12px; width: 100%;" layer-name="Supporting Attachments">
       ${rows.map((row) => `
         <div style="display: flex; flex-direction: column; width: calc((100% - 12px) / 2); gap: 6px;" layer-name="Attachment Card">
-          <div style="display: flex; align-items: center; justify-content: center; height: 130px; border: 1px solid #2f3742; border-radius: 8px; background: #ede7dc; color: #5f6773; font-size: 11px; font-family: 'Manrope', sans-serif; text-transform: uppercase;">${escapeHtml(row.kind)}</div>
+          <div style="display: flex; align-items: center; justify-content: center; height: 130px; border: 1px solid #2f3742; border-radius: 8px; background: #ede7dc; color: #5f6773; font-size: 11px; font-family: 'Inter Tight', sans-serif; text-transform: uppercase;">${escapeHtml(row.kind)}</div>
           <div style="color: #1f2937; font-size: 10px; font-family: 'Inter Tight', sans-serif;">${escapeHtml(row.name)}</div>
         </div>
       `).join('')}
@@ -717,7 +1114,7 @@ function renderTimelineRowsHtml(rows) {
   return rows.map((row) => `
     <div style="display: flex; flex-direction: column; border: 1px solid #2f3742; border-radius: 8px; background: #fbfaf7; padding: 10px 12px; gap: 6px;" layer-name="Timeline Row">
       <div style="display: flex; justify-content: space-between; gap: 12px;">
-        <div style="color: #1f2937; font-size: 11px; font-family: 'Manrope', sans-serif; font-weight: 700;">${escapeHtml(row.transition)}</div>
+        <div style="color: #1f2937; font-size: 11px; font-family: 'Inter Tight', sans-serif; font-weight: 700;">${escapeHtml(row.transition)}</div>
         <div style="color: #5f6773; font-size: 10px; font-family: 'Inter Tight', sans-serif;">${escapeHtml(row.createdAt)}</div>
       </div>
       ${row.reason ? `<div style="color: #5f6773; font-size: 10px; font-family: 'Inter Tight', sans-serif;">${escapeHtml(row.reason)}</div>` : ''}
@@ -727,9 +1124,9 @@ function renderTimelineRowsHtml(rows) {
 
 function renderApplicationPaperHtml(viewModel) {
   const chipsHtml = viewModel.metricChips.map((chip) => `
-    <div style="display: flex; flex-direction: column; width: calc((100% - 24px) / 4); min-height: 54px; border: 1px solid #2f3742; border-radius: 8px; background: #fbfaf7; padding: 10px; gap: 6px;" layer-name="Metric Chip">
-      <div style="color: #5f6773; font-size: 9px; font-family: 'Manrope', sans-serif; font-weight: 700; text-transform: uppercase;">${escapeHtml(chip.label)}</div>
-      <div style="color: #1f2937; font-size: 12px; font-family: 'Inter Tight', sans-serif; font-weight: 700;">${escapeHtml(chip.value)}</div>
+    <div style="display: flex; flex-direction: column; width: calc((100% - 24px) / 4); min-height: 64px; border: 1px solid #2f3742; border-radius: 8px; background: #fbfaf7; padding: 10px; gap: 6px;" layer-name="Metric Chip">
+      <div style="color: #5f6773; font-size: 9px; font-family: 'Inter Tight', sans-serif; font-weight: 700; text-transform: uppercase;">${escapeHtml(chip.label)}</div>
+      <div style="color: #1f2937; font-size: 12px; line-height: 1.35; font-family: 'Inter Tight', sans-serif; font-weight: 700;">${escapeHtml(chip.value)}</div>
     </div>
   `).join('');
 
@@ -742,7 +1139,7 @@ function renderApplicationPaperHtml(viewModel) {
             <div style="display: flex; flex-direction: column; gap: 5px;">
               <div style="color: #f8f5ef; font-size: 22px; font-weight: 700;">${escapeHtml(viewModel.brandName)}</div>
               <div style="color: #ece6dc; font-size: 10px;">${escapeHtml(viewModel.tournamentName)}</div>
-              <div style="color: #e4d7c6; font-size: 9px;">Application ${escapeHtml(viewModel.applicationId)} / ${escapeHtml(viewModel.generatedAt)}</div>
+              <div style="color: #e4d7c6; font-size: 9px;">Application ${escapeHtml(viewModel.applicationDisplayId)} / ${escapeHtml(viewModel.generatedAt)}</div>
             </div>
           </div>
           <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 10px;">
@@ -754,8 +1151,8 @@ function renderApplicationPaperHtml(viewModel) {
       <div layer-name="Content" style="display: flex; flex-direction: column; width: 100%; padding: 24px 32px 32px 32px; gap: 14px;">
         <div style="display: flex; gap: 8px; width: 100%;">${chipsHtml}</div>
         <div style="display: flex; flex-direction: column; border: 1px solid #2f3742; border-radius: 10px; background: #fbfaf7; padding: 12px 14px; gap: 8px;">
-          <div style="color: #5f6773; font-size: 9px; font-weight: 700; text-transform: uppercase;">Applied Disciplines</div>
-          <div style="color: #1f2937; font-size: 14px; font-weight: 700;">${escapeHtml(viewModel.appliedDisciplines.length ? viewModel.appliedDisciplines.join(' / ') : 'Open')}</div>
+          <div style="color: #5f6773; font-size: 9px; font-weight: 700; text-transform: uppercase;">Discipline Breakdown</div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">${viewModel.appliedDisciplines.length ? viewModel.appliedDisciplines.map((discipline) => `<div style="display:flex;align-items:center;height:28px;padding:0 12px;border:1px solid #b5aa99;border-radius:999px;background:#f4f1ea;color:#1f2937;font-size:11px;font-weight:700;">${escapeHtml(discipline)}</div>`).join('') : `<div style="color: #1f2937; font-size: 14px; font-weight: 700;">Open</div>`}</div>
         </div>
         <div style="display: flex; width: 100%; gap: 8px; align-items: stretch;">
           <div style="display: flex; flex-direction: column; width: 57.5%; border: 1px solid #2f3742; border-radius: 10px; background: #fbfaf7; padding: 12px 14px; gap: 8px;" layer-name="Applicant Identity">
@@ -763,31 +1160,37 @@ function renderApplicationPaperHtml(viewModel) {
             <div style="height: 1px; background: #2f3742; width: 100%;"></div>
             ${renderKeyValueRowsHtml(viewModel.identityRows)}
           </div>
-          <div style="display: flex; flex-direction: column; width: calc(42.5% - 8px); border: 1px solid #2f3742; border-radius: 10px; background: #fbfaf7; padding: 12px; gap: 10px;" layer-name="Verification Panel">
-            <div style="display: flex; gap: 10px;">
-              <div style="display: flex; flex-direction: column; gap: 6px; width: 80px;">
+          <div style="display: flex; flex-direction: column; width: calc(42.5% - 8px); border: 1px solid #2f3742; border-radius: 10px; background: #fbfaf7; padding: 12px; gap: 12px;" layer-name="Verification Panel">
+            <div style="display: flex; gap: 12px; align-items: flex-start;">
+              <div style="display: flex; flex-direction: column; gap: 6px; width: 80px; flex-shrink: 0;">
                 <div style="display: flex; align-items: center; justify-content: center; width: 80px; height: 104px; border: 1px solid #2f3742; border-radius: 8px; background: #e7e0d5; color: #5f6773; font-size: 10px; text-transform: uppercase;">${viewModel.primaryImageName ? 'Photo ID' : 'No Photo'}</div>
                 <div style="color: #5f6773; font-size: 9px; font-weight: 700; text-transform: uppercase;">${escapeHtml(viewModel.primaryImageName || 'No photo uploaded')}</div>
               </div>
-              <div style="display: flex; flex-direction: column; flex: 1; gap: 8px;">
+              <div style="display: flex; flex-direction: column; flex: 1; gap: 10px; min-width: 0;">
                 <div style="color: #1f2937; font-size: 11px; font-weight: 700;">${escapeHtml(viewModel.applicantName)}</div>
                 <div style="display: flex; flex-direction: column; gap: 2px;">
-                  <div style="color: #5f6773; font-size: 9px; font-weight: 700; text-transform: uppercase;">Reviewer</div>
-                  <div style="color: #1f2937; font-size: 10px;">${escapeHtml(viewModel.reviewerId)}</div>
+                  <div style="color: #5f6773; font-size: 9px; font-weight: 700; text-transform: uppercase;">Reviewer ID</div>
+                  <div style="color: #1f2937; font-size: 10px;">${escapeHtml(viewModel.reviewerDisplayId || 'Unassigned')}</div>
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 2px;">
                   <div style="color: #5f6773; font-size: 9px; font-weight: 700; text-transform: uppercase;">Decided</div>
                   <div style="color: #1f2937; font-size: 10px;">${escapeHtml(viewModel.decidedAt)}</div>
                 </div>
-                <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="display: flex; align-items: center; gap: 10px; min-height: 48px;">
                   <div style="display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 2px; background: ${escapeHtml(viewModel.palette.primary)}; color: #f8f5ef; font-size: 9px; font-weight: 700;">OK</div>
                   <div style="display: flex; flex-direction: column; gap: 2px;">
                     <div style="color: #1f2937; font-size: 10px; font-weight: 700;">Digitally Verified</div>
                     <div style="color: #5f6773; font-size: 9px;">Signed record / internal reference copy</div>
-                    <div style="color: #5f6773; font-size: 9px;">Verified copy of the submitted participant record</div>
                   </div>
                 </div>
               </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:6px;border-top:1px solid #d7d0c5;">
+              <div style="display:flex;flex-direction:column;gap:4px;max-width:150px;">
+                <div style="color:#1f2937;font-size:10px;font-weight:700;">Scan to verify</div>
+                <div style="color:#5f6773;font-size:9px;line-height:1.4;">Printed QR opens the signed verification record.</div>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:center;width:72px;height:72px;border:1px solid #2f3742;border-radius:8px;background:#fff;padding:6px;"><img src="${escapeHtml(viewModel.qrDataUrl || '')}" alt="Verification QR" style="width:100%;height:100%;object-fit:contain;" /></div>
             </div>
           </div>
         </div>
@@ -837,17 +1240,24 @@ function renderApplicationPaperHtml(viewModel) {
 }
 
 async function applicationToPaper(applicationId, actor) {
-  const { viewModel } = await loadApplicationExportViewModel(applicationId, actor);
+  const { viewModel, signatureArtifacts } = await loadApplicationExportViewModel(applicationId, actor);
+  const paperViewModel = {
+    ...viewModel,
+    qrDataUrl: `data:image/png;base64,${signatureArtifacts.qrBuffer.toString('base64')}`,
+  };
 
   return {
     artboard: {
-      name: `Participant Application ${viewModel.applicationId}`,
+      name: `Participant Application ${viewModel.applicationDisplayId}`,
       width: 794,
       height: 'fit-content',
       backgroundColor: '#f4f1ea',
     },
-    html: renderApplicationPaperHtml(viewModel),
-    data: viewModel,
+    html: renderApplicationPaperHtml(paperViewModel),
+    data: {
+      ...paperViewModel,
+      verificationUrl: signatureArtifacts.signature.url,
+    },
   };
 }
 
@@ -861,6 +1271,7 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
     documents,
     statusEvents,
     renderableImages,
+    signatureArtifacts,
     viewModel,
   } = await loadApplicationExportViewModel(applicationId, actor);
   const primaryImage = renderableImages.find((d) => d.kind === 'photo_id') || null;
@@ -914,7 +1325,7 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
   doc.fillColor('#ece6dc').font(fonts.body).fontSize(8.5)
     .text(asText(app.tournament_name), PX + LOGO_SIZE + 14, PY + 33);
   doc.fillColor('#e4d7c6').font(fonts.body).fontSize(7.5)
-    .text(`Application  ${app.id}   /   ${formatDateTime(new Date())}`, PX + LOGO_SIZE + 14, PY + 47);
+    .text(`Application  ${viewModel.applicationDisplayId}   /   ${formatDateTime(new Date())}`, PX + LOGO_SIZE + 14, PY + 47);
 
   // Status pill + ID (right-aligned)
   const pillX = PX + CW - 130;
@@ -926,10 +1337,10 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
   doc.y = PY + HEADER_H + 10;
 
   // ── ROW 1: 4 metric chips ─────────────────────────────────────────────
-  const CHIP_H = 46;
+  const CHIP_H = 58;
   const CHIP_W = (CW - GRID.gap * 3) / 4;
   const chips = [
-    { label: 'Discipline',   value: asText(app.discipline   || 'Open')   },
+    { label: 'Disciplines',  value: displayText(appliedDisciplines.length ? appliedDisciplines.join(' / ') : 'Open') },
     { label: 'Weight Class', value: asText(app.weight_class || 'Open')   },
     { label: 'Entry Type',   value: app.club_name ? 'Club Entry' : 'Individual' },
     { label: 'Status',       value: statusLabel(app.status)              },
@@ -940,14 +1351,14 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
     gridCard(doc, cx, chipY, CHIP_W, CHIP_H, { fill: '#fbfaf7', stroke: palette.cardBorder, radius: 8 });
     microLabel(doc, chip.label, cx + 10, chipY + 8, CHIP_W - 20, palette, fonts);
     doc.fillColor(palette.text).font(fonts.headingBold).fontSize(11)
-      .text(chip.value, cx + 10, chipY + 20, { width: CHIP_W - 20, ellipsis: true });
+      .text(chip.value, cx + 10, chipY + 18, { width: CHIP_W - 20, height: CHIP_H - 22, ellipsis: true });
   });
   doc.y = chipY + CHIP_H + 10;
 
   const disciplinesY = doc.y;
-  const disciplinesH = 58;
+  const disciplinesH = 66;
   gridCard(doc, PX, disciplinesY, CW, disciplinesH, { fill: '#fbfaf7', stroke: palette.cardBorder, radius: 8, accentColor: palette.primary, accentW: 4 });
-  microLabel(doc, 'Applied Disciplines', PX + 14, disciplinesY + 10, CW - 28, palette, fonts);
+  microLabel(doc, 'Discipline Breakdown', PX + 14, disciplinesY + 10, CW - 28, palette, fonts);
   doc.fillColor(palette.text).font(fonts.headingBold).fontSize(12)
     .text(appliedDisciplines.length ? appliedDisciplines.join(' / ') : 'Open', PX + 14, disciplinesY + 24, { width: CW - 28, ellipsis: true });
   doc.y = disciplinesY + disciplinesH + 10;
@@ -960,7 +1371,8 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
 
   // LEFT: identity grid card
   const ID_ROWS = [
-    ['Full Name',    `${asText(app.first_name)} ${asText(app.last_name)}`],
+    ['Full Name',    displayText(viewModel.applicantName)],
+    ['Application ID', viewModel.applicationDisplayId],
     ['Email',        asText(app.email)],
     ['Phone',        asText(app.phone)],
     ['Date of Birth', formatDateOnly(app.date_of_birth)],
@@ -988,7 +1400,7 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
   });
 
   // RIGHT: photo + digital approval stacked
-  const PHOTO_CARD_H = 160;
+  const PHOTO_CARD_H = 214;
   gridCard(doc, RIGHT_X, ROW2_Y, RIGHT_W, PHOTO_CARD_H, { fill: '#fbfaf7', stroke: palette.cardBorder, radius: 8 });
 
   const PHOTO_W = 80;
@@ -1020,10 +1432,10 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
   const VX = PHOTO_X + PHOTO_W + 10;
   const VW = RIGHT_W - PHOTO_W - 34;
   doc.fillColor(palette.text).font(fonts.headingBold).fontSize(8.5)
-    .text(`${asText(app.first_name)} ${asText(app.last_name)}`, VX, PHOTO_Y, { width: VW, ellipsis: true });
-  microLabel(doc, 'Reviewer', VX, PHOTO_Y + 14, VW, palette, fonts);
+    .text(viewModel.applicantName, VX, PHOTO_Y, { width: VW, ellipsis: true });
+  microLabel(doc, 'Reviewer ID', VX, PHOTO_Y + 14, VW, palette, fonts);
   doc.fillColor(palette.text).font(fonts.body).fontSize(8)
-    .text(asText(app.reviewer_id), VX, PHOTO_Y + 22, { width: VW, ellipsis: true });
+    .text(displayText(viewModel.reviewerDisplayId, 'Unassigned'), VX, PHOTO_Y + 22, { width: VW, ellipsis: true });
   microLabel(doc, 'Decided', VX, PHOTO_Y + 36, VW, palette, fonts);
   doc.fillColor(palette.text).font(fonts.body).fontSize(8)
     .text(formatDateTime(app.decided_at), VX, PHOTO_Y + 44, { width: VW });
@@ -1036,9 +1448,25 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
   doc.fillColor('#1f2937').font(fonts.bodyBold).fontSize(8.5)
     .text('DIGITALLY VERIFIED', VX + 28, PHOTO_Y + 70, { width: VW - 28, ellipsis: true });
   doc.fillColor(palette.textMuted).font(fonts.bodyBold).fontSize(7.2)
-    .text('SIGNED RECORD / INTERNAL REFERENCE COPY', VX, PHOTO_Y + 84, { width: VW, align: 'left' });
+    .text('SIGNED RECORD / INTERNAL REFERENCE COPY', VX, PHOTO_Y + 84, { width: VW - 6, align: 'left' });
   doc.fillColor(palette.textMuted).font(fonts.body).fontSize(7.2)
-    .text('VERIFIED COPY OF THE SUBMITTED PARTICIPANT RECORD', VX, PHOTO_Y + 104, { width: VW, align: 'left' });
+    .text('Verified copy of the submitted participant record.', VX, PHOTO_Y + 98, { width: VW - 6, align: 'left' });
+
+  const qrSectionY = ROW2_Y + PHOTO_CARD_H - 76;
+  doc.save();
+  doc.roundedRect(RIGHT_X + 12, qrSectionY, RIGHT_W - 24, 60, 8).fill('#f4f1ea');
+  doc.restore();
+  const qrBoxSize = 52;
+  const qrX = RIGHT_X + RIGHT_W - qrBoxSize - 20;
+  const qrY = qrSectionY + 4;
+  doc.save();
+  doc.roundedRect(qrX - 106, qrY, 86, qrBoxSize, 8).fill('#ede7dc');
+  doc.restore();
+  doc.image(signatureArtifacts.qrBuffer, qrX, qrY, { fit: [qrBoxSize, qrBoxSize] });
+  doc.fillColor(palette.textMuted).font(fonts.bodyBold).fontSize(6.5)
+    .text('SCAN TO VERIFY', qrX - 98, qrY + 10, { width: 72, align: 'right' });
+  doc.fillColor(palette.textMuted).font(fonts.body).fontSize(5.6)
+    .text('Printed QR opens the signed verification record.', qrX - 112, qrY + 22, { width: 94, align: 'right' });
 
   doc.y = Math.max(ROW2_Y + ID_CARD_H, ROW2_Y + PHOTO_CARD_H) + 12;
 
@@ -1498,11 +1926,37 @@ async function divisionBracketToPdf(res, divisionId, actor, ctx = {}) {
   });
 }
 
+async function applicationExportSmoke(applicationId, actor) {
+  const { app, palette, renderableImages, signatureArtifacts } = await loadApplicationExportViewModel(applicationId, actor);
+  const doc = new PDFDocument({ autoFirstPage: false });
+  const fonts = resolvePdfFonts(doc);
+  const visualDocumentKinds = renderableImages
+    .filter((row) => row.kind === 'photo_id')
+    .map((row) => row.kind);
+
+  return {
+    applicationId: app.id,
+    palette,
+    fonts,
+    verificationUrl: signatureArtifacts.signature.url,
+    checks: {
+      usesInterTightBody: fonts.body !== 'Helvetica',
+      usesInterTightHeading: fonts.heading === fonts.bodyBold,
+      onlyPhotoIdVisual: visualDocumentKinds.every((kind) => kind === 'photo_id'),
+      hasVerificationUrl: signatureArtifacts.signature.url.includes('/api/public/verify/application-signature'),
+    },
+  };
+}
+
 module.exports = {
   approvedToExcel,
   approvedParticipantsToExcel,
+  groupedAnalyticsToExcel,
+  groupedAnalyticsToPdf,
+  seasonalReportToPdf,
   applicationToPaper,
   applicationToPdf,
+  applicationExportSmoke,
   auditToExcel,
   bracketToPdf,
   divisionBracketToPdf,

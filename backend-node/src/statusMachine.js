@@ -8,6 +8,7 @@ const STATUS = Object.freeze({
   NEEDS_CORRECTION: 'needs_correction',
   APPROVED: 'approved',
   REJECTED: 'rejected',
+  SEASON_CLOSED: 'season_closed',
 });
 
 const ALL_STATUSES = Object.freeze(Object.values(STATUS));
@@ -21,6 +22,7 @@ const TRANSITIONS = Object.freeze({
   [STATUS.NEEDS_CORRECTION]: new Set([STATUS.SUBMITTED]), // club resubmits
   [STATUS.APPROVED]:         new Set([STATUS.UNDER_REVIEW]), // only via appeal / audit override
   [STATUS.REJECTED]:         new Set([STATUS.UNDER_REVIEW]), // reopen (appeal granted)
+  [STATUS.SEASON_CLOSED]:    new Set([]),
 });
 
 /** Who is allowed to cause which transition. */

@@ -2,6 +2,7 @@
 // Each repo is a set of composable pure functions taking a client or using pool.
 
 const { query } = require('./db');
+const { STATUS } = require('./statusMachine');
 
 const ACTIVE = 'deleted_at IS NULL';
 
@@ -176,6 +177,7 @@ const profiles = {
 const tournaments = {
   listPublic: async () => (await query(`SELECT * FROM tournaments WHERE is_public = TRUE AND ${ACTIVE} ORDER BY starts_on DESC`)).rows,
   findById: async (id) => (await query(`SELECT * FROM tournaments WHERE id=$1 AND ${ACTIVE}`, [id])).rows[0],
+  findByIdAny: async (id) => (await query(`SELECT * FROM tournaments WHERE id=$1`, [id])).rows[0],
   createAdmin: async ({ slug, name, season = null, startsOn = null, endsOn = null, registrationOpenAt = null, registrationCloseAt = null, correctionWindowHours = null, isPublic = true }) => {
     const { rows } = await query(
       `INSERT INTO tournaments (slug, name, season, starts_on, ends_on, registration_open_at, registration_close_at, correction_window_hours, is_public)
@@ -185,8 +187,8 @@ const tournaments = {
     );
     return rows[0];
   },
-  listAdmin: async ({ q, limit = 200, offset = 0 } = {}) => {
-    const where = [`${ACTIVE}`];
+  listAdmin: async ({ q, includeArchived = false, limit = 200, offset = 0 } = {}) => {
+    const where = includeArchived ? ['1=1'] : [`${ACTIVE}`];
     const args = [];
     if (q) {
       args.push(`%${q}%`);
@@ -235,6 +237,10 @@ const applications = {
     return rows[0];
   },
   findById: async (id) => (await query(`SELECT * FROM applications WHERE id=$1 AND ${ACTIVE}`, [id])).rows[0],
+  findByProfileAndTournament: async (profileId, tournamentId) => (await query(
+    `SELECT * FROM applications WHERE profile_id = $1 AND tournament_id = $2 AND ${ACTIVE} ORDER BY created_at DESC LIMIT 1`,
+    [profileId, tournamentId]
+  )).rows[0],
   findFullById: async (id) => (await query(
       `SELECT a.*, p.user_id, p.first_name, p.last_name, p.date_of_birth, p.gender, p.nationality,
         p.weight_class, p.weight_kg, p.discipline, p.record_wins, p.record_losses, p.record_draws,
@@ -256,6 +262,39 @@ const applications = {
     const { rows } = await query(
       `UPDATE applications SET ${fields.join(', ')} WHERE id = $${args.length} RETURNING *`, args);
     return rows[0];
+  },
+  closeUnfinishedForOtherTournaments: async ({ activeTournamentId, actorUserId }) => {
+    const statuses = [STATUS.DRAFT, STATUS.SUBMITTED, STATUS.UNDER_REVIEW, STATUS.NEEDS_CORRECTION];
+    const { rows } = await query(
+      `WITH prior AS (
+         SELECT id, status
+         FROM applications
+         WHERE deleted_at IS NULL
+           AND tournament_id <> $2
+           AND status = ANY($4::text[])
+       )
+       UPDATE applications
+       SET status = $1,
+           correction_due_at = NULL,
+           review_due_at = NULL,
+           updated_at = NOW(),
+           decided_at = COALESCE(decided_at, NOW()),
+           reopen_reason = NULL,
+           rejection_reason = COALESCE(rejection_reason, 'Season closed'),
+           form_data = COALESCE(form_data, '{}'::jsonb) || jsonb_build_object(
+             'seasonClosure',
+             jsonb_build_object(
+               'closedAt', NOW(),
+               'closedBy', $3,
+               'reason', 'Season rollover'
+             )
+           )
+       FROM prior
+       WHERE applications.id = prior.id
+       RETURNING applications.*, prior.status AS previous_status`,
+      [STATUS.SEASON_CLOSED, activeTournamentId, actorUserId || null, statuses]
+    );
+    return rows;
   },
   query: async (filters = {}) => {
     const { status, tournamentId, clubId, reviewerId, overdue, dueSoon, q, limit = 50, offset = 0 } = filters;

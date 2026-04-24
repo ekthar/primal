@@ -6,6 +6,7 @@ const { validateIndiaAddress } = require('../indiaLocations');
 const { issuePasswordResetForUser, publicUser } = require('./auth.service');
 const { randomBytes } = require('crypto');
 const { customAlphabet } = require('nanoid');
+const { splitPersonName } = require('./identity.service');
 
 const createCode = customAlphabet('ABCDEFGHJKLMNPQRSTUVWXYZ23456789', 10);
 
@@ -103,8 +104,7 @@ async function createParticipant(user, clubId, payload, ctx = {}) {
   const club = await assertClubAccess(user, clubId);
   const email = String(payload.email || '').trim().toLowerCase();
   const fullName = String(payload.fullName || '').trim();
-  const [firstName, ...rest] = fullName.split(/\s+/).filter(Boolean);
-  const lastName = rest.join(' ') || firstName;
+  const { firstName, lastName } = splitPersonName(fullName);
   const addressValidation = validateIndiaAddress(payload.address);
   if (!addressValidation.valid) {
     throw ApiError.badRequest('Invalid India address', {

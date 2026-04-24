@@ -7,6 +7,8 @@ const { config } = require('../config');
 const { write: auditWrite } = require('../audit');
 const { dispatch: notify } = require('../notifications');
 const bracketService = require('./bracket.service');
+const { formatPersonName, applicationDisplayId } = require('./identity.service');
+const { logger } = require('../logger');
 
 const HOUR = 60 * 60 * 1000;
 
@@ -46,6 +48,13 @@ async function decide(actor, applicationId, { action, reason, fields }, ctx = {}
   if (!['admin', 'reviewer'].includes(actor.role)) throw ApiError.forbidden();
   const app = await appsRepo.findById(applicationId);
   if (!app) throw ApiError.notFound();
+  if (![STATUS.SUBMITTED, STATUS.UNDER_REVIEW].includes(app.status)) {
+    throw ApiError.conflict('Only submitted or under-review applications can be decided', {
+      applicationId,
+      currentStatus: app.status,
+      action,
+    });
+  }
 
   let toStatus;
   const patch = { decided_at: new Date() };
@@ -57,6 +66,17 @@ async function decide(actor, applicationId, { action, reason, fields }, ctx = {}
     patch.correction_fields = fields || [];
     patch.correction_due_at = new Date(Date.now() + config.workflow.correctionWindowHours * HOUR);
   } else throw ApiError.badRequest('Unknown action');
+
+  logger.info({
+    applicationId,
+    currentStatus: app.status,
+    nextStatus: toStatus,
+    actorRole: actor.role,
+    actorUserId: actor.id,
+    action,
+    reason,
+    fields,
+  }, 'review.decision.requested');
 
   assertTransition(app.status, toStatus, actor.role);
   patch.status = toStatus;
@@ -91,6 +111,19 @@ async function reopen(actor, applicationId, { reason }, ctx = {}) {
   if (actor.role !== 'admin') throw ApiError.forbidden();
   const app = await appsRepo.findById(applicationId);
   if (!app) throw ApiError.notFound();
+  if (![STATUS.APPROVED, STATUS.REJECTED].includes(app.status)) {
+    throw ApiError.conflict('Only approved or rejected applications can be reopened', {
+      applicationId,
+      currentStatus: app.status,
+    });
+  }
+  logger.info({
+    applicationId,
+    currentStatus: app.status,
+    actorRole: actor.role,
+    actorUserId: actor.id,
+    reason,
+  }, 'review.reopen.requested');
   assertTransition(app.status, STATUS.UNDER_REVIEW, actor.role);
   const updated = await appsRepo.setStatus(applicationId, {
     status: STATUS.UNDER_REVIEW,
@@ -123,7 +156,8 @@ async function notifyDecision(app, toStatus, reason) {
     to: { email: user.email, phone: user.phone, whatsapp: user.phone },
     template,
     payload: {
-      applicantName: `${full.first_name} ${full.last_name}`,
+      applicantName: formatPersonName(full.first_name, full.last_name),
+      applicationDisplayId: applicationDisplayId(app.id),
       tournamentName: full.tournament_name,
       reason,
       dueAt: app.correction_due_at,

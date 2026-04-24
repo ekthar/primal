@@ -35,6 +35,7 @@ const config = {
   notifications: {
     resendKey: process.env.RESEND_API_KEY || '',
     resendFrom: process.env.RESEND_FROM || 'Primal <no-reply@primalfight.io>',
+    resendRetries: parseInt(process.env.RESEND_RETRIES || '2', 10),
     twilioSid: process.env.TWILIO_ACCOUNT_SID || '',
     twilioToken: process.env.TWILIO_AUTH_TOKEN || '',
     smsFrom: process.env.TWILIO_SMS_FROM || '',
@@ -69,4 +70,54 @@ const config = {
   },
 };
 
-module.exports = { config };
+function getProductionReadiness() {
+  const checks = [
+    {
+      key: 'jwtSecret',
+      ok: config.jwt.secret && config.jwt.secret !== 'dev-only-change-me',
+      message: 'JWT secret configured',
+    },
+    {
+      key: 'appBaseUrl',
+      ok: /^https?:\/\//.test(config.appBaseUrl),
+      message: 'App base URL configured',
+    },
+    {
+      key: 'webBaseUrl',
+      ok: /^https?:\/\//.test(config.webBaseUrl),
+      message: 'Web base URL configured',
+    },
+    {
+      key: 'resend',
+      ok: Boolean(config.notifications.resendKey && config.notifications.resendFrom),
+      message: 'Resend email provider configured',
+    },
+    {
+      key: 'pdfSignature',
+      ok: Boolean(config.pdf.signatureSecret),
+      message: 'PDF signature secret configured',
+    },
+    {
+      key: 'pdfVerifyUrl',
+      ok: Boolean(config.pdf.verifyBaseUrl),
+      message: 'PDF verification URL configured',
+    },
+  ];
+
+  return {
+    ok: checks.every((check) => check.ok),
+    checks,
+  };
+}
+
+function validateProductionConfig() {
+  if (config.env !== 'production') return;
+  const readiness = getProductionReadiness();
+  const failedChecks = readiness.checks.filter((check) => !check.ok);
+  if (!failedChecks.length) return;
+  const error = new Error(`Missing production configuration: ${failedChecks.map((check) => check.key).join(', ')}`);
+  error.code = 'INVALID_PRODUCTION_CONFIG';
+  throw error;
+}
+
+module.exports = { config, getProductionReadiness, validateProductionConfig };

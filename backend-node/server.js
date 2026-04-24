@@ -5,7 +5,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
-const { config } = require('./src/config');
+const { config, validateProductionConfig } = require('./src/config');
 const { logger } = require('./src/logger');
 const { errorHandler, notFound } = require('./src/middleware');
 
@@ -27,6 +27,8 @@ const divisionRoutes = require('./src/routes/division.routes');
 const matchRoutes = require('./src/routes/match.routes');
 
 const app = express();
+
+validateProductionConfig();
 
 app.set('trust proxy', 1);
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));

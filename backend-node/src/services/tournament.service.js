@@ -1,6 +1,7 @@
-const { tournaments: tournamentsRepo } = require('../repositories');
+const { applications: applicationsRepo, statusEvents: statusEventsRepo, tournaments: tournamentsRepo } = require('../repositories');
 const { ApiError } = require('../apiError');
 const { write: auditWrite } = require('../audit');
+const { STATUS } = require('../statusMachine');
 
 function getRegistrationState(tournament) {
   if (!tournament) {
@@ -46,6 +47,34 @@ async function hasOpenPublicRegistration() {
   return tournaments.some((tournament) => tournament.registrationOpen);
 }
 
+async function closePriorSeasonApplications(actor, tournament) {
+  const state = getRegistrationState(tournament);
+  if (!tournament?.is_public || !state.registrationOpen) return [];
+
+  const closedApplications = await applicationsRepo.closeUnfinishedForOtherTournaments({
+    activeTournamentId: tournament.id,
+    actorUserId: actor?.id || null,
+  });
+
+  if (!closedApplications.length) return [];
+
+  await Promise.all(closedApplications.map((applicationRow) => statusEventsRepo.add({
+    applicationId: applicationRow.id,
+    fromStatus: applicationRow.previous_status || null,
+    toStatus: STATUS.SEASON_CLOSED,
+    reason: `Season closed because ${tournament.name} opened for registration`,
+    metadata: {
+      kind: 'season_rollover',
+      activeTournamentId: tournament.id,
+      activeTournamentName: tournament.name,
+    },
+    actorUserId: actor?.id || null,
+    actorRole: actor?.role || 'system',
+  })));
+
+  return closedApplications;
+}
+
 async function listAdmin(actor, query = {}) {
   if (actor.role !== 'admin') throw ApiError.forbidden();
   return tournamentsRepo.listAdmin(query);
@@ -58,13 +87,17 @@ async function createAdmin(actor, payload, ctx = {}) {
     throw ApiError.conflict('Tournament slug already exists', { field: 'slug' });
   }
   const tournament = await tournamentsRepo.createAdmin(payload);
+  const rolledOver = await closePriorSeasonApplications(actor, tournament);
   await auditWrite({
     actorUserId: actor.id,
     actorRole: actor.role,
     action: 'tournament.create',
     entityType: 'tournament',
     entityId: tournament.id,
-    payload,
+    payload: {
+      ...payload,
+      closedApplicationCount: rolledOver.length,
+    },
     requestIp: ctx.ip,
   });
   return tournament;
@@ -72,17 +105,21 @@ async function createAdmin(actor, payload, ctx = {}) {
 
 async function updateAdmin(actor, tournamentId, patch, ctx = {}) {
   if (actor.role !== 'admin') throw ApiError.forbidden();
-  const existing = await tournamentsRepo.findById(tournamentId);
+  const existing = await tournamentsRepo.findByIdAny(tournamentId);
   if (!existing) throw ApiError.notFound('Tournament not found');
 
   const next = await tournamentsRepo.updateAdmin(tournamentId, patch);
+  const rolledOver = await closePriorSeasonApplications(actor, next);
   await auditWrite({
     actorUserId: actor.id,
     actorRole: actor.role,
     action: 'tournament.update',
     entityType: 'tournament',
     entityId: tournamentId,
-    payload: patch,
+    payload: {
+      ...patch,
+      closedApplicationCount: rolledOver.length,
+    },
     requestIp: ctx.ip,
   });
   return next;
@@ -90,7 +127,7 @@ async function updateAdmin(actor, tournamentId, patch, ctx = {}) {
 
 async function archiveAdmin(actor, tournamentId, ctx = {}) {
   if (actor.role !== 'admin') throw ApiError.forbidden();
-  const existing = await tournamentsRepo.findById(tournamentId);
+  const existing = await tournamentsRepo.findByIdAny(tournamentId);
   if (!existing) throw ApiError.notFound('Tournament not found');
   const next = await tournamentsRepo.softDelete(tournamentId);
   await auditWrite({
