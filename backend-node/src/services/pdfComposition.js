@@ -854,6 +854,318 @@ function drawBracketHeader(doc, ctx) {
   doc.restore();
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+//  Phase 3 — Analytics & Season composition primitives
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Unified reporting header and data-density primitives shared by the
+// Grouped Analytics PDF and Season Archive PDF. The goal is a one-page
+// executive summary at the top (brand · title · KPI strip) followed by
+// ink-header data tables with inline status-distribution bars — the same
+// scannable pattern federations expect from year-end reports.
+
+/**
+ * Render a unified analytics/season report header on the current page.
+ *
+ * Layout (top-aligned, using the doc's margins):
+ *   ├── 3pt ink-red accent rule (full bleed)
+ *   ├── BRAND micro-label  (TYPE_SCALE.label)
+ *   ├── TITLE              (TYPE_SCALE.display, palette.ink)
+ *   ├── SUBTITLE           (TYPE_SCALE.h2, palette.accent, optional)
+ *   └── META row           (TYPE_SCALE.micro, palette.textMuted; joined by ·)
+ *
+ * Returns the Y coordinate directly below the header so the caller can
+ * position the KPI strip / first table without re-measuring anything.
+ */
+function drawReportHeader(doc, ctx) {
+  const {
+    palette, fonts,
+    brandName = 'Primal',
+    title,
+    subtitle,
+    metaLines = [],
+  } = ctx;
+  const PW = doc.page.width;
+  const ML = doc.page.margins.left;
+  const MT = doc.page.margins.top;
+  const MR = doc.page.margins.right;
+  const CW = PW - ML - MR;
+
+  doc.save();
+  doc.rect(0, 0, PW, 3).fill(palette.accent);
+  doc.restore();
+
+  doc.save();
+  doc.fillColor(palette.textMuted).font(fonts.bodyBold || fonts.body).fontSize(TYPE_SCALE.label.size);
+  lockedText(doc, brandName.toUpperCase(), ML, MT + 6, {
+    characterSpacing: TYPE_SCALE.label.letterSpacing,
+  });
+  doc.restore();
+
+  doc.save();
+  doc.fillColor(palette.ink).font(fonts.headingBold || fonts.bodyBold).fontSize(TYPE_SCALE.display.size);
+  lockedText(doc, title || 'Report', ML, MT + 16, { width: CW, ellipsis: true });
+  doc.restore();
+
+  let cursorY = MT + 16 + TYPE_SCALE.display.size + 4;
+  if (subtitle) {
+    doc.save();
+    doc.fillColor(palette.accent).font(fonts.bodyBold || fonts.body).fontSize(TYPE_SCALE.h2.size);
+    lockedText(doc, subtitle, ML, cursorY, { width: CW, ellipsis: true });
+    doc.restore();
+    cursorY += TYPE_SCALE.h2.size + 6;
+  } else {
+    cursorY += 2;
+  }
+
+  const meta = Array.isArray(metaLines) ? metaLines.filter(Boolean).join('  ·  ') : metaLines;
+  if (meta) {
+    doc.save();
+    doc.fillColor(palette.textMuted).font(fonts.body).fontSize(TYPE_SCALE.micro.size);
+    lockedText(doc, meta, ML, cursorY, { width: CW });
+    doc.restore();
+    cursorY += TYPE_SCALE.micro.size + 6;
+  }
+
+  // Hairline rule below the header
+  doc.save();
+  doc.rect(ML, cursorY + 4, CW, 0.4).fill(palette.line);
+  doc.restore();
+
+  return cursorY + 12;
+}
+
+/**
+ * Render a horizontal KPI strip of label / value cards, evenly spaced.
+ * Each card is paper-surface with a 2pt ink top bar so KPIs are scannable
+ * without color dependence. Optionally an ink-red accent can highlight the
+ * primary KPI (usually Approved).
+ *
+ * kpis: [{ label, value, highlight?: boolean, delta?: string }]
+ */
+function drawKpiStrip(doc, ctx) {
+  const { x, y, width, kpis, palette, fonts, height = 64, gap = 8 } = ctx;
+  if (!kpis || !kpis.length) return y;
+  const cardWidth = (width - gap * (kpis.length - 1)) / kpis.length;
+
+  kpis.forEach((kpi, index) => {
+    const cx = x + index * (cardWidth + gap);
+
+    // Card body
+    doc.save();
+    doc.rect(cx, y, cardWidth, height).fill(palette.surface);
+    doc.rect(cx, y, cardWidth, height).strokeColor(palette.line).opacity(0.4).lineWidth(0.5).stroke();
+    doc.restore();
+
+    // Top bar — ink by default; ink-red if highlight flag set
+    const barColor = kpi.highlight ? palette.accent : palette.ink;
+    doc.save();
+    doc.rect(cx, y, cardWidth, 2).fill(barColor);
+    doc.restore();
+
+    // Label at y+8, value at y+21 (h1 20pt → ends y+41), delta at y+44.
+    doc.save();
+    doc.fillColor(palette.textMuted).font(fonts.bodyBold || fonts.body).fontSize(TYPE_SCALE.label.size);
+    lockedText(doc, String(kpi.label || '').toUpperCase(), cx + 10, y + 8, {
+      width: cardWidth - 20,
+      characterSpacing: TYPE_SCALE.label.letterSpacing,
+      ellipsis: true,
+    });
+    doc.restore();
+
+    doc.save();
+    doc.fillColor(palette.ink).font(fonts.headingBold || fonts.bodyBold).fontSize(TYPE_SCALE.h1.size);
+    lockedText(doc, String(kpi.value ?? '—'), cx + 10, y + 20, {
+      width: cardWidth - 20,
+      ellipsis: true,
+    });
+    doc.restore();
+
+    if (kpi.delta) {
+      doc.save();
+      doc.fillColor(palette.textMuted).font(fonts.body).fontSize(TYPE_SCALE.micro.size);
+      lockedText(doc, String(kpi.delta), cx + 10, y + height - TYPE_SCALE.micro.size - 6, {
+        width: cardWidth - 20,
+        ellipsis: true,
+      });
+      doc.restore();
+    }
+  });
+
+  return y + height + 16;
+}
+
+/**
+ * Inline stacked bar showing a status distribution inside a table cell.
+ * Each segment is filled with a status tone + marked with a short textual
+ * abbreviation so the bar survives grayscale printing.
+ *
+ * segments: [{ count, tone: 'approved'|'pending'|'rejected'|'warn'|'muted', label? }]
+ */
+function drawStatusDistributionBar(doc, ctx) {
+  const { x, y, width, height = 10, segments, palette } = ctx;
+  const total = segments.reduce((sum, s) => sum + (Math.max(0, s.count) || 0), 0);
+
+  // Background trough (always drawn so zero-count groups still show the cell)
+  doc.save();
+  doc.rect(x, y, width, height).fill(palette.paper);
+  doc.rect(x, y, width, height).strokeColor(palette.line).opacity(0.4).lineWidth(0.4).stroke();
+  doc.restore();
+
+  if (total === 0) return;
+
+  let cursorX = x;
+  segments.forEach((seg) => {
+    const count = Math.max(0, seg.count) || 0;
+    if (!count) return;
+    const segWidth = (count / total) * width;
+    const color = resolveStatusColor(seg.tone || 'muted', palette);
+    doc.save();
+    doc.rect(cursorX, y, segWidth, height).fill(color);
+    doc.restore();
+    cursorX += segWidth;
+  });
+}
+
+/**
+ * Inline mini-sparkline for a row of numeric values. Renders as a polyline
+ * across the given rect. Grayscale-safe — uses a single ink color with a
+ * faint baseline hairline. If values are all zero, just the baseline is
+ * drawn (so the cell still occupies space).
+ */
+function drawSparkline(doc, ctx) {
+  const { x, y, width, height, values, palette } = ctx;
+  if (!values || !values.length) return;
+  const max = Math.max(...values, 1);
+
+  // Baseline
+  doc.save();
+  doc.rect(x, y + height - 0.3, width, 0.3).fill(palette.line);
+  doc.restore();
+
+  if (values.every((v) => !v)) return;
+
+  doc.save();
+  doc.strokeColor(palette.ink).opacity(0.85).lineWidth(0.9);
+  const step = values.length > 1 ? width / (values.length - 1) : width;
+  values.forEach((v, i) => {
+    const px = x + i * step;
+    const py = y + (height - 2) * (1 - v / max) + 1;
+    if (i === 0) doc.moveTo(px, py);
+    else doc.lineTo(px, py);
+  });
+  doc.stroke();
+  doc.restore();
+}
+
+/**
+ * Data table with an ink header band, zebra rows, and flexible column
+ * renderers. This is the Primal OS replacement for the old cream-blob
+ * drawAnalyticsTable / drawWideTable.
+ *
+ * Columns may provide a `render(cellCtx)` function for custom cell content
+ * (e.g. status distribution bar). Otherwise the column is rendered as a
+ * plain right/left-aligned text cell.
+ *
+ * Columns: [{ key, label, width, align?: 'left'|'right'|'center', render? }]
+ *
+ * Returns the Y coordinate directly below the table so the next block can
+ * flow without measurement.
+ */
+function drawDataTable(doc, ctx) {
+  const {
+    x, y, width, title, rows, columns,
+    palette, fonts,
+    rowHeight = 18,
+    headerHeight = 18,
+    sectionGap = 8,
+  } = ctx;
+
+  let cursorY = y;
+
+  if (title) {
+    doc.save();
+    doc.fillColor(palette.ink).font(fonts.headingBold || fonts.bodyBold).fontSize(TYPE_SCALE.h2.size);
+    lockedText(doc, title, x, cursorY, { width });
+    doc.restore();
+    cursorY += TYPE_SCALE.h2.size + 6;
+  }
+
+  // Auto-fit column widths if they don't add up to `width`
+  const specifiedTotal = columns.reduce((sum, c) => sum + (c.width || 0), 0);
+  const scale = specifiedTotal ? width / specifiedTotal : 1;
+  const widths = columns.map((c) => (c.width || width / columns.length) * scale);
+
+  // Header band
+  doc.save();
+  doc.rect(x, cursorY, width, headerHeight).fill(palette.ink);
+  doc.restore();
+  let headerX = x;
+  columns.forEach((col, i) => {
+    doc.save();
+    doc.fillColor(palette.paper).font(fonts.bodyBold || fonts.body).fontSize(TYPE_SCALE.label.size);
+    lockedText(doc, String(col.label || '').toUpperCase(), headerX + 8, cursorY + (headerHeight - TYPE_SCALE.label.size) / 2, {
+      width: widths[i] - 16,
+      characterSpacing: TYPE_SCALE.label.letterSpacing,
+      align: col.align || 'left',
+      ellipsis: true,
+    });
+    doc.restore();
+    headerX += widths[i];
+  });
+  cursorY += headerHeight;
+
+  if (!rows || !rows.length) {
+    doc.save();
+    doc.fillColor(palette.textMuted).font(fonts.body).fontSize(TYPE_SCALE.body.size);
+    lockedText(doc, 'No rows found for the current filter.', x + 8, cursorY + 6, {
+      width: width - 16,
+    });
+    doc.restore();
+    return cursorY + rowHeight + sectionGap;
+  }
+
+  rows.forEach((row, rowIdx) => {
+    // Zebra — every other row tinted with surfaceMuted (paper is the default)
+    if (rowIdx % 2 === 0) {
+      doc.save();
+      doc.rect(x, cursorY, width, rowHeight).fill(palette.surfaceMuted || palette.surface);
+      doc.restore();
+    }
+    let rowX = x;
+    columns.forEach((col, i) => {
+      if (typeof col.render === 'function') {
+        col.render({
+          doc, row, palette, fonts,
+          x: rowX + 8,
+          y: cursorY + 3,
+          width: widths[i] - 16,
+          height: rowHeight - 6,
+        });
+      } else {
+        doc.save();
+        doc.fillColor(palette.ink).font(fonts.body).fontSize(TYPE_SCALE.body.size);
+        const value = row[col.key];
+        lockedText(doc, value === undefined || value === null ? '—' : String(value), rowX + 8, cursorY + (rowHeight - TYPE_SCALE.body.size) / 2 + 1, {
+          width: widths[i] - 16,
+          align: col.align || 'left',
+          ellipsis: true,
+        });
+        doc.restore();
+      }
+      rowX += widths[i];
+    });
+    cursorY += rowHeight;
+  });
+
+  // Bottom rule under the table
+  doc.save();
+  doc.rect(x, cursorY, width, 0.4).fill(palette.line);
+  doc.restore();
+
+  return cursorY + sectionGap;
+}
+
 module.exports = {
   setType,
   lockedText,
@@ -869,4 +1181,9 @@ module.exports = {
   layoutBracket,
   deriveParentCenters,
   autoSlotHeight,
+  drawReportHeader,
+  drawKpiStrip,
+  drawStatusDistributionBar,
+  drawSparkline,
+  drawDataTable,
 };

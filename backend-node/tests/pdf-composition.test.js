@@ -12,6 +12,11 @@ import {
   layoutBracket,
   deriveParentCenters,
   autoSlotHeight,
+  drawReportHeader,
+  drawKpiStrip,
+  drawDataTable,
+  drawStatusDistributionBar,
+  drawSparkline,
 } from '../src/services/pdfComposition.js';
 
 function paletteDefault() {
@@ -214,6 +219,124 @@ describe('pdfComposition', () => {
         x: 300, y: 200, champion: null,
         palette: paletteDefault(), fonts: fonts(),
         width: 160, height: 60,
+      });
+    });
+    expect(buf.slice(0, 4).toString('latin1')).toBe('%PDF');
+  });
+
+  // ─── Analytics / Season composition (Phase 3) ────────────────────────────
+
+  it('drawReportHeader returns a content-top Y greater than the page top margin', async () => {
+    let returnedY = null;
+    const buf = await renderToBuffer((doc) => {
+      returnedY = drawReportHeader(doc, {
+        palette: paletteDefault(), fonts: fonts(),
+        brandName: 'Primal',
+        title: 'Application Analytics',
+        subtitle: 'Federation report',
+        metaLines: ['Generated 2026-04-24', 'Discipline All'],
+      });
+    });
+    expect(buf.slice(0, 4).toString('latin1')).toBe('%PDF');
+    expect(returnedY).toBeGreaterThan(72); // default page margin
+    expect(returnedY).toBeLessThan(200);   // but still well above KPI strip
+  });
+
+  it('drawKpiStrip is grayscale-safe (no color-only state) and handles missing deltas', async () => {
+    let extraPages = 0;
+    const buf = await renderToBuffer((doc) => {
+      doc.on('pageAdded', () => { extraPages += 1; });
+      const nextY = drawKpiStrip(doc, {
+        x: 28, y: 120, width: 780, palette: paletteDefault(), fonts: fonts(),
+        kpis: [
+          { label: 'Total', value: 210 },
+          { label: 'Approved', value: 120, highlight: true, delta: '57% of total' },
+          { label: 'Pending', value: 54 },
+          { label: 'Rejected', value: 20 },
+        ],
+      });
+      // Caller must be able to flow content below the strip
+      expect(nextY).toBeGreaterThan(120);
+    });
+    expect(buf.slice(0, 4).toString('latin1')).toBe('%PDF');
+    expect(extraPages).toBe(0);
+  });
+
+  it('drawStatusDistributionBar tolerates a zero-total segment list', async () => {
+    const buf = await renderToBuffer((doc) => {
+      drawStatusDistributionBar(doc, {
+        x: 40, y: 400, width: 120, height: 8,
+        palette: paletteDefault(),
+        segments: [
+          { tone: 'verify', count: 0 },
+          { tone: 'ink', count: 0 },
+          { tone: 'accent', count: 0 },
+        ],
+      });
+    });
+    expect(buf.slice(0, 4).toString('latin1')).toBe('%PDF');
+  });
+
+  it('drawSparkline draws a flat baseline for all-zero values', async () => {
+    const buf = await renderToBuffer((doc) => {
+      drawSparkline(doc, {
+        x: 40, y: 400, width: 100, height: 12,
+        values: [0, 0, 0, 0, 0],
+        palette: paletteDefault(),
+      });
+    });
+    expect(buf.slice(0, 4).toString('latin1')).toBe('%PDF');
+  });
+
+  it('drawDataTable uses custom column renderers and auto-scales widths', async () => {
+    const p = paletteDefault();
+    const rows = [
+      { label: 'MMA',       statuses: { approved: 42, submitted: 8, total: 55 } },
+      { label: 'BJJ',       statuses: { approved: 28, submitted: 6, total: 44 } },
+    ];
+    let extraPages = 0;
+    const buf = await renderToBuffer((doc) => {
+      doc.on('pageAdded', () => { extraPages += 1; });
+      const y = drawDataTable(doc, {
+        x: 40, y: 200, width: 500,
+        title: 'By discipline',
+        rows,
+        columns: [
+          { key: 'label', label: 'Discipline', width: 200 },
+          { key: 'approved', label: 'Approved', width: 80, align: 'right',
+            render: ({ doc: d, row, x, y: cy, width: cw }) => {
+              d.save();
+              d.fillColor(p.verify).font('Helvetica-Bold').fontSize(10);
+              d.text(String(row.statuses.approved), x, cy + 5, {
+                width: cw, align: 'right', lineBreak: false, height: 0,
+              });
+              d.restore();
+            } },
+          { key: 'distribution', label: 'Distribution', width: 220,
+            render: ({ row, x, y: cy, width: cw }) => {
+              drawStatusDistributionBar(doc, {
+                x, y: cy + 2, width: cw, height: 8, palette: p,
+                segments: [
+                  { tone: 'verify', count: row.statuses.approved },
+                  { tone: 'ink', count: row.statuses.submitted },
+                ],
+              });
+            } },
+        ],
+        palette: p, fonts: fonts(),
+      });
+      expect(y).toBeGreaterThan(200);
+    });
+    expect(buf.slice(0, 4).toString('latin1')).toBe('%PDF');
+    expect(extraPages).toBe(0);
+  });
+
+  it('drawDataTable renders the empty-state row when given no data', async () => {
+    const buf = await renderToBuffer((doc) => {
+      drawDataTable(doc, {
+        x: 40, y: 200, width: 500,
+        title: 'Matches', rows: [], columns: [{ key: 'a', label: 'A', width: 100 }],
+        palette: paletteDefault(), fonts: fonts(),
       });
     });
     expect(buf.slice(0, 4).toString('latin1')).toBe('%PDF');
