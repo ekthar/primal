@@ -470,6 +470,8 @@ async function approvedParticipantsToExcel(res, { tournamentId } = {}) {
     { header: 'Age (today)', key: 'ageToday', width: 12 },
     { header: 'Sex', key: 'sex', width: 14 },
     { header: 'Discipline', key: 'discipline', width: 22 },
+    { header: 'Weight (kg)', key: 'weightKg', width: 14 },
+    { header: 'Weight category', key: 'weightClass', width: 18 },
     { header: 'Club', key: 'clubName', width: 28 },
     { header: 'Tournament', key: 'tournamentName', width: 30 },
     { header: 'Approved At', key: 'approvedAt', width: 24 },
@@ -831,6 +833,170 @@ async function seasonalReportToPdf(res, actor, tournamentId, ctx = {}) {
     entityType: 'tournament',
     entityId: tournamentId,
     payload: {},
+    requestIp: ctx.ip,
+  });
+}
+
+async function approvedParticipantsToPdf(res, actor, { tournamentId } = {}, ctx = {}) {
+  const report = await approvedParticipantReport({ tournamentId });
+  const brandName = config.pdf?.brandName || 'Primal';
+  const palette = createPalette(config);
+
+  const tournamentName = report.clubParticipants[0]?.tournamentName
+    || report.individualParticipants[0]?.tournamentName
+    || 'All tournaments';
+
+  const filename = buildExportFilename({
+    type: 'participants',
+    tournamentId: tournamentId || 'all',
+    tournamentName,
+    brand: brandName,
+  });
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  const doc = new PDFDocument({
+    ...baseDocumentOptions({
+      title: `${brandName} / Approved participants roster`,
+      subject: 'Approved participants roster',
+      brand: brandName,
+      keywords: ['participants', 'roster', 'weigh-in'],
+    }),
+    size: 'A4',
+    layout: 'landscape',
+    margins: { top: 28, bottom: 32, left: 28, right: 28 },
+  });
+  doc.pipe(res);
+  const fonts = resolvePdfFonts(doc);
+
+  doc.save();
+  doc.rect(0, 0, doc.page.width, doc.page.height).fill(palette.paper);
+  doc.restore();
+
+  const ML = doc.page.margins.left;
+  const pageWidth = doc.page.width - ML - doc.page.margins.right;
+  const pageBottom = doc.page.height - doc.page.margins.bottom - 32;
+
+  const allRows = [...report.clubParticipants, ...report.individualParticipants];
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const approvedTodayCount = allRows.filter((row) => typeof row.approvedAt === 'string'
+    && row.approvedAt.slice(0, 10) === todayIso).length;
+  const sexCounts = allRows.reduce((acc, row) => {
+    const key = (row.sex || 'unspecified').toLowerCase();
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  const sexSummary = ['male', 'female', 'other', 'unspecified']
+    .filter((key) => sexCounts[key])
+    .map((key) => `${sexCounts[key]} ${key}`)
+    .join(' · ') || '—';
+
+  const cursorY = drawReportHeader(doc, {
+    palette, fonts, brandName,
+    title: 'Approved Participants Roster',
+    subtitle: tournamentName,
+    metaLines: [
+      `Generated ${formatDateTime(report.generatedAt)}`,
+      `Tournament ${displayText(tournamentId, 'All')}`,
+      `${report.totals.approvedApplications} approved participants`,
+    ],
+  });
+
+  let y = drawKpiStrip(doc, {
+    x: ML, y: cursorY, width: pageWidth, height: 52, palette, fonts,
+    kpis: [
+      { label: 'Total approved', value: report.totals.approvedApplications, highlight: true },
+      { label: 'Approved today', value: approvedTodayCount },
+      { label: 'With club', value: report.totals.clubParticipants,
+        delta: report.totals.approvedApplications
+          ? `${Math.round((report.totals.clubParticipants / report.totals.approvedApplications) * 100)}% of total`
+          : undefined },
+      { label: 'Sex mix', value: sexSummary },
+    ],
+  });
+
+  const columns = [
+    { key: 'applicationDisplayId', label: 'App ID', width: 70 },
+    { key: 'participantName', label: 'Name', width: 170 },
+    { key: 'sex', label: 'Sex', width: 55 },
+    { key: 'dateOfBirth', label: 'DOB', width: 70 },
+    { key: 'ageToday', label: 'Age', width: 35, align: 'right' },
+    { key: 'discipline', label: 'Discipline', width: 120 },
+    { key: 'weightKg', label: 'Weight', width: 55, align: 'right',
+      render: ({ doc: d, row, x, y: cy, width: cw }) => {
+        d.save();
+        d.fillColor(palette.ink).font(fonts.body).fontSize(TYPE_SCALE.body.size);
+        const text = row.weightKg === null || row.weightKg === undefined
+          ? '—'
+          : `${Number(row.weightKg).toFixed(1)} kg`;
+        d.text(text, x, cy + 5, { width: cw, align: 'right', lineBreak: false, height: 0 });
+        d.restore();
+      } },
+    { key: 'weightClass', label: 'Category', width: 80 },
+    { key: 'clubName', label: 'Club', width: 140 },
+  ];
+
+  const groups = [];
+  const clubGroups = new Map();
+  for (const row of report.clubParticipants) {
+    const key = row.clubId || row.clubName || '—';
+    if (!clubGroups.has(key)) {
+      clubGroups.set(key, { title: row.clubName || 'Unassigned club', rows: [] });
+    }
+    clubGroups.get(key).rows.push(row);
+  }
+  for (const group of clubGroups.values()) {
+    group.rows.sort((a, b) => String(a.lastName || a.participantName || '')
+      .localeCompare(String(b.lastName || b.participantName || '')));
+    groups.push(group);
+  }
+  if (report.individualParticipants.length) {
+    const individuals = [...report.individualParticipants];
+    individuals.sort((a, b) => String(a.lastName || a.participantName || '')
+      .localeCompare(String(b.lastName || b.participantName || '')));
+    groups.push({ title: 'Individual participants', rows: individuals });
+  }
+
+  if (!groups.length) {
+    y = drawDataTable(doc, {
+      x: ML, y, width: pageWidth,
+      title: 'No approved participants for this tournament',
+      rows: [], columns,
+      palette, fonts,
+    }) + 8;
+  } else {
+    for (const group of groups) {
+      const rowHeight = 18;
+      const estHeight = 28 + 18 + group.rows.length * rowHeight + 8;
+      if (y + estHeight > pageBottom) {
+        doc.addPage();
+        doc.save();
+        doc.rect(0, 0, doc.page.width, doc.page.height).fill(palette.paper);
+        doc.restore();
+        y = doc.page.margins.top;
+      }
+      y = drawDataTable(doc, {
+        x: ML, y, width: pageWidth,
+        title: `${group.title} · ${group.rows.length} ${group.rows.length === 1 ? 'athlete' : 'athletes'}`,
+        rows: group.rows, columns,
+        palette, fonts,
+      }) + 10;
+    }
+  }
+
+  finalizePageRibbons(doc, {
+    palette, fonts, brand: brandName,
+    identifier: `Participants · ${tournamentName}`,
+  });
+  doc.end();
+
+  await auditWrite({
+    actorUserId: actor?.id,
+    actorRole: actor?.role,
+    action: 'export.participants_pdf',
+    entityType: 'report',
+    entityId: tournamentId || 'all',
+    payload: { tournamentId: tournamentId || null, count: report.totals.approvedApplications },
     requestIp: ctx.ip,
   });
 }
@@ -1987,6 +2153,7 @@ async function bulkApprovedParticipantsToZip(res, actor, { tournamentId } = {}, 
 module.exports = {
   approvedToExcel,
   approvedParticipantsToExcel,
+  approvedParticipantsToPdf,
   groupedAnalyticsToExcel,
   groupedAnalyticsToPdf,
   seasonalReportToPdf,
