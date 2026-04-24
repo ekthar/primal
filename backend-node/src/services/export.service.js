@@ -21,12 +21,17 @@ const documentStorage = require('./documentStorage.service');
 const { buildSignatureForApplication } = require('../pdfSignature');
 const { formatPersonName, applicationDisplayId, reviewerDisplayId } = require('./identity.service');
 const {
+  TYPE_SCALE,
   createPalette,
   baseDocumentOptions,
   buildExportFilename,
   finalizePageRibbons,
   shortSignatureId,
 } = require('./pdfTokens');
+const {
+  drawApplicationCoverPage,
+  drawRunningHeader,
+} = require('./pdfComposition');
 
 function formatDateTime(value) {
   if (!value) return '—';
@@ -252,19 +257,24 @@ function drawDocumentTable(doc, documents, palette, fonts) {
   ensureSpace(doc, 22);
   const headerY = doc.y;
   doc.save();
-  doc.roundedRect(x, headerY, width, 18, 4).fill(palette.primary);
+  doc.rect(x, headerY, width, 20).fill(palette.ink);
   doc.restore();
 
   let colX = x;
   columns.forEach((c) => {
-    doc.fillColor('#111111').font(fonts.headingBold).fontSize(8)
-      .text(String(c.label).toUpperCase(), colX + 4, headerY + 5, { width: c.w - 8 });
+    doc.fillColor(palette.paper).font(fonts.headingBold).fontSize(TYPE_SCALE.label.size)
+      .text(String(c.label).toUpperCase(), colX + 6, headerY + 6, {
+        width: c.w - 12,
+        characterSpacing: TYPE_SCALE.label.letterSpacing,
+        lineBreak: false,
+      });
     colX += c.w;
   });
 
-  doc.y = headerY + 22;
+  doc.y = headerY + 24;
   if (!documents.length) {
-    doc.fillColor(palette.textMuted).font(fonts.body).fontSize(9).text('No uploaded documents.');
+    doc.fillColor(palette.textMuted).font(fonts.body).fontSize(TYPE_SCALE.body.size)
+      .text('No uploaded documents.');
     return;
   }
 
@@ -277,22 +287,27 @@ function drawDocumentTable(doc, documents, palette, fonts) {
       uploaded: formatDateOnly(d.created_at),
     };
 
-    const rowHeight = 18;
+    const rowHeight = 20;
     ensureSpace(doc, rowHeight + 2);
     const rowY = doc.y;
     if (idx % 2 === 0) {
       doc.save();
-      doc.roundedRect(x, rowY, width, rowHeight, 3).fill('#fff8f1');
+      doc.rect(x, rowY, width, rowHeight).fill(palette.surfaceMuted);
       doc.restore();
     }
+    // Thin hairline between rows
+    doc.save();
+    doc.strokeColor(palette.line).opacity(0.1).lineWidth(0.5);
+    doc.moveTo(x, rowY + rowHeight).lineTo(x + width, rowY + rowHeight).stroke();
+    doc.restore();
 
     let vx = x;
     columns.forEach((c) => {
-      doc.fillColor(palette.text).font(fonts.body).fontSize(8)
-        .text(String(values[c.key]).toUpperCase ? values[c.key] : values[c.key], vx + 4, rowY + 5, { width: c.w - 8, ellipsis: true });
+      doc.fillColor(palette.text).font(fonts.body).fontSize(TYPE_SCALE.body.size)
+        .text(values[c.key], vx + 6, rowY + 6, { width: c.w - 12, ellipsis: true, lineBreak: false });
       vx += c.w;
     });
-    doc.y = rowY + rowHeight + 2;
+    doc.y = rowY + rowHeight;
   });
 }
 
@@ -384,19 +399,29 @@ function drawTimelineCards(doc, events, options) {
     return;
   }
 
-  events.forEach((ev) => {
-    ensureSpace(doc, 44);
+  events.forEach((ev, idx) => {
+    ensureSpace(doc, 40);
     const y = doc.y;
-    drawPanel(doc, { x, y, width, height: 38, fill: '#fffdf9', stroke: palette.line, radius: 2 });
-    doc.fillColor(palette.text).font(fonts.headingBold).fontSize(8.5)
-      .text(`${statusLabel(ev.from_status)} -> ${statusLabel(ev.to_status)}`, x + 12, y + 8, { width: width - 150, ellipsis: true });
-    doc.fillColor(palette.textMuted).font(fonts.body).fontSize(7.8)
-      .text(formatDateTime(ev.created_at), x + width - 128, y + 8, { width: 116, align: 'right' });
-    if (ev.reason) {
-      doc.fillColor(palette.textMuted).font(fonts.body).fontSize(7.8)
-        .text(ev.reason, x + 12, y + 20, { width: width - 24, ellipsis: true });
+    // Zebra stripe on the paper; no blobby rounded card.
+    if (idx % 2 === 0) {
+      doc.save();
+      doc.rect(x, y, width, 34).fill(palette.surfaceMuted);
+      doc.restore();
     }
-    doc.y = y + 44;
+    // Left ink bar indicates workflow advance
+    doc.save();
+    doc.rect(x, y, 2, 34).fill(palette.ink);
+    doc.restore();
+
+    doc.fillColor(palette.text).font(fonts.headingBold).fontSize(TYPE_SCALE.body.size)
+      .text(`${statusLabel(ev.from_status)} → ${statusLabel(ev.to_status)}`, x + 10, y + 6, { width: width - 150, ellipsis: true, lineBreak: false });
+    doc.fillColor(palette.textMuted).font(fonts.body).fontSize(TYPE_SCALE.micro.size)
+      .text(formatDateTime(ev.created_at), x + width - 128, y + 8, { width: 120, align: 'right', lineBreak: false });
+    if (ev.reason) {
+      doc.fillColor(palette.textMuted).font(fonts.body).fontSize(TYPE_SCALE.micro.size)
+        .text(ev.reason, x + 10, y + 20, { width: width - 20, ellipsis: true, lineBreak: false });
+    }
+    doc.y = y + 38;
   });
 }
 
@@ -1345,177 +1370,97 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
   const CW   = doc.page.width  - PX - doc.page.margins.right;                  // content width  (~531)
   const COL  = (CW - GRID.gap * 11) / 12;                                      // column unit
 
-  // ── Page background ──────────────────────────────────────────────────────
-  doc.save();
-  doc.rect(0, 0, doc.page.width, doc.page.height).fill(palette.paper);
-  doc.restore();
-
-  // ── HEADER BAND ──────────────────────────────────────────────────────────
-  const HEADER_H = 80;
-  doc.save();
-  doc.rect(0, 0, doc.page.width, HEADER_H + 32).fill(palette.primary);
-  doc.restore();
-
-  // Logo mark
-  const LOGO_SIZE = 54;
-  const logo = resolveLogoPath(config.pdf?.logoPath);
-  if (logo) {
-    doc.image(logo, PX, PY + 2, { fit: [LOGO_SIZE, LOGO_SIZE], align: 'center', valign: 'center' });
-  } else {
-    doc.fillColor('#ffffff').font(fonts.headingBold).fontSize(14)
-      .text(brandInitials(brandName), PX, PY + 19, { width: LOGO_SIZE, align: 'center' });
-  }
-
-  // Brand + tournament
-  doc.fillColor('#ffffff').font(fonts.headingBold).fontSize(18)
-    .text(brandName, PX + LOGO_SIZE + 14, PY + 10);
-  doc.fillColor('#ece6dc').font(fonts.body).fontSize(8.5)
-    .text(asText(app.tournament_name), PX + LOGO_SIZE + 14, PY + 33);
-  doc.fillColor('#e4d7c6').font(fonts.body).fontSize(7.5)
-    .text(`Application  ${viewModel.applicationDisplayId}   /   ${formatDateTime(new Date())}`, PX + LOGO_SIZE + 14, PY + 47);
-
-  // Status pill + ID (right-aligned)
-  const pillX = PX + CW - 130;
-  statusPill(doc, app.status, pillX, PY + 14, fonts);
-  doc.fillColor('#ece6dc').font(fonts.body).fontSize(7)
-    .text('PARTICIPANT REGISTRATION EXPORT', pillX - 34, PY + 40, { width: 170, align: 'right' });
-
-  // Divider below header
-  doc.y = PY + HEADER_H + 10;
-
-  // ── ROW 1: 4 metric chips ─────────────────────────────────────────────
-  const CHIP_H = 58;
-  const CHIP_W = (CW - GRID.gap * 3) / 4;
-  const chips = [
-    { label: 'Disciplines',  value: displayText(appliedDisciplines.length ? appliedDisciplines.join(' / ') : 'Open') },
-    { label: 'Weight Class', value: asText(app.weight_class || 'Open')   },
-    { label: 'Entry Type',   value: app.club_name ? 'Club Entry' : 'Individual' },
-    { label: 'Status',       value: statusLabel(app.status)              },
+  // ── Cover page ──────────────────────────────────────────────────────────
+  // Phase 1: every application export opens with a credential-style cover
+  // page holding the hero portrait, participant name, status, the 4-block
+  // identity grid, the issuing authority block, and the verify QR/fingerprint.
+  const identityBlocks = [
+    { label: 'Full Name',      value: displayText(viewModel.applicantName) },
+    { label: 'Application ID', value: viewModel.applicationDisplayId || app.id },
+    { label: 'Date of Birth',  value: formatDateOnly(app.date_of_birth) },
+    { label: 'Nationality',    value: asText(app.nationality) },
   ];
-  const chipY = doc.y;
-  chips.forEach((chip, i) => {
-    const cx = PX + i * (CHIP_W + GRID.gap);
-    gridCard(doc, cx, chipY, CHIP_W, CHIP_H, { fill: '#fbfaf7', stroke: palette.cardBorder, radius: 8 });
-    microLabel(doc, chip.label, cx + 10, chipY + 8, CHIP_W - 20, palette, fonts);
-    doc.fillColor(palette.text).font(fonts.headingBold).fontSize(11)
-      .text(chip.value, cx + 10, chipY + 18, { width: CHIP_W - 20, height: CHIP_H - 22, ellipsis: true });
+  const categoryLine = [
+    appliedDisciplines.length ? appliedDisciplines.join(' / ') : null,
+    app.weight_class || null,
+    app.weight_kg ? `${app.weight_kg} kg` : null,
+  ].filter(Boolean).join('  ·  ') || '—';
+
+  drawApplicationCoverPage(doc, {
+    palette,
+    fonts,
+    brandName,
+    tournamentName: asText(app.tournament_name),
+    applicationDisplayId: viewModel.applicationDisplayId || app.id,
+    applicantName: viewModel.applicantName,
+    clubName: app.club_name || 'Individual',
+    categoryLine,
+    status: app.status,
+    identityBlocks,
+    photoBuffer: primaryImage ? primaryImage.imageBuffer : null,
+    qrBuffer: signatureArtifacts.qrBuffer,
+    verifyUrl: signatureArtifacts.signature && signatureArtifacts.signature.url,
+    signatureShortId: shortSignatureId(signatureArtifacts.signature),
+    issuingAuthority: brandName,
+    issuedAt: formatDateTime(new Date()),
   });
-  doc.y = chipY + CHIP_H + 10;
 
-  const disciplinesY = doc.y;
-  const disciplinesH = 66;
-  gridCard(doc, PX, disciplinesY, CW, disciplinesH, { fill: '#fbfaf7', stroke: palette.cardBorder, radius: 8, accentColor: palette.primary, accentW: 4 });
-  microLabel(doc, 'Discipline Breakdown', PX + 14, disciplinesY + 10, CW - 28, palette, fonts);
-  doc.fillColor(palette.text).font(fonts.headingBold).fontSize(12)
-    .text(appliedDisciplines.length ? appliedDisciplines.join(' / ') : 'Open', PX + 14, disciplinesY + 24, { width: CW - 28, ellipsis: true });
-  doc.y = disciplinesY + disciplinesH + 10;
+  // ── Detail pages ───────────────────────────────────────────────────────
+  // Register a running-header listener so every subsequent page carries
+  // brand, app id, and the grayscale-safe status badge. Never draws on page 1.
+  doc.on('pageAdded', () => {
+    drawRunningHeader(doc, {
+      palette,
+      fonts,
+      brandName,
+      applicationDisplayId: viewModel.applicationDisplayId || app.id,
+      tournamentName: asText(app.tournament_name),
+      status: app.status,
+    });
+    doc.save();
+    doc.rect(0, 0, doc.page.width, doc.page.height).fill(palette.paper);
+    doc.restore();
+    doc.y = doc.page.margins.top + 16;
+  });
 
-  // ── ROW 2: Identity card (left 7 cols) + Photo/Verify panel (right 5 cols) ──
-  const ROW2_Y = doc.y;
-  const LEFT_W  = Math.floor(CW * 0.575);
-  const RIGHT_W = CW - LEFT_W - GRID.gap;
-  const RIGHT_X = PX + LEFT_W + GRID.gap;
+  doc.addPage();
 
-  // LEFT: identity grid card
-  const ID_ROWS = [
-    ['Full Name',    displayText(viewModel.applicantName)],
-    ['Application ID', viewModel.applicationDisplayId],
+  // Section header for detail content
+  doc.fillColor(palette.ink).font(fonts.headingBold).fontSize(TYPE_SCALE.h1.size)
+    .text('Participant record', PX, doc.y);
+  doc.fillColor(palette.textMuted).font(fonts.body).fontSize(TYPE_SCALE.body.size)
+    .text('Full declaration, submitted documents, and workflow events for this registration.', PX, doc.y + 24, { width: CW });
+  doc.y += 28;
+
+  // ── Contact & additional identity details (moved from cover to page 2) ──
+  const DETAILS_ROWS = [
     ['Email',        asText(app.email)],
     ['Phone',        asText(app.phone)],
-    ['Date of Birth', formatDateOnly(app.date_of_birth)],
     ['Gender',       asText(app.gender)],
-    ['Nationality',  asText(app.nationality)],
     ['Club / Team',  asText(app.club_name || 'Individual')],
     ['Fight Record', `${app.record_wins || 0}W – ${app.record_losses || 0}L – ${app.record_draws || 0}D`],
-    ['Weight',       app.weight_kg ? `${app.weight_kg} kg` : '—'],
     ['Experience',   asText(app.form_data?.experienceLevel)],
   ];
-  const ID_CARD_H = ID_ROWS.length * 22 + 36;
-  gridCard(doc, PX, ROW2_Y, LEFT_W, ID_CARD_H, { fill: '#fbfaf7', stroke: palette.cardBorder, radius: 8, accentColor: palette.primary, accentW: 4 });
-
-  doc.fillColor(palette.text).font(fonts.headingBold).fontSize(10)
-    .text('Applicant Identity', PX + 14, ROW2_Y + 12);
-  gridRule(doc, PX + 14, ROW2_Y + 28, LEFT_W - 28, palette.line);
-
-  ID_ROWS.forEach((row, i) => {
-    const ry = ROW2_Y + 36 + i * 22;
-    const bgFill = i % 2 === 0 ? '#ede7dc' : '#fbfaf7';
-    doc.save();
-    doc.rect(PX + 14, ry, LEFT_W - 28, 20).fill(bgFill);
-    doc.restore();
-    kvRow(doc, row[0], row[1], PX + 18, ry + 6, LEFT_W - 36, palette, fonts, 82);
-  });
-
-  // RIGHT: photo + digital approval stacked
-  const PHOTO_CARD_H = 214;
-  gridCard(doc, RIGHT_X, ROW2_Y, RIGHT_W, PHOTO_CARD_H, { fill: '#fbfaf7', stroke: palette.cardBorder, radius: 8 });
-
-  const PHOTO_W = 80;
-  const PHOTO_H = 104;
-  const PHOTO_X = RIGHT_X + 12;
-  const PHOTO_Y = ROW2_Y + 16;
-  doc.save();
-  doc.roundedRect(PHOTO_X, PHOTO_Y, PHOTO_W, PHOTO_H, 8).fill('#e7e0d5');
-  doc.roundedRect(PHOTO_X, PHOTO_Y, PHOTO_W, PHOTO_H, 8).strokeColor('#2f3742').lineWidth(0.75).stroke();
-  doc.restore();
-
-  if (primaryImage) {
-    doc.save();
-    doc.roundedRect(PHOTO_X + 2, PHOTO_Y + 2, PHOTO_W - 4, PHOTO_H - 4, 7).clip();
-    doc.image(primaryImage.imageBuffer, PHOTO_X + 2, PHOTO_Y + 2, {
-      fit: [PHOTO_W - 4, PHOTO_H - 4],
-      align: 'center',
-      valign: 'center',
-    });
-    doc.restore();
-  } else {
-    doc.fillColor(palette.textMuted).font(fonts.body).fontSize(7.5)
-      .text('No photo\nuploaded', PHOTO_X, PHOTO_Y + 42, { width: PHOTO_W, align: 'center' });
+  const DETAILS_COLS = 3;
+  const DETAILS_CW = (CW - GRID.gap * (DETAILS_COLS - 1)) / DETAILS_COLS;
+  microLabel(doc, 'Contact & Profile', PX, doc.y, CW, palette, fonts);
+  gridRule(doc, PX, doc.y + 13, CW, palette.line);
+  doc.y += 18;
+  for (let i = 0; i < DETAILS_ROWS.length; i += DETAILS_COLS) {
+    ensureSpace(doc, 40);
+    const rowY = doc.y;
+    for (let c = 0; c < DETAILS_COLS; c += 1) {
+      const idx = i + c;
+      if (idx >= DETAILS_ROWS.length) break;
+      const cx = PX + c * (DETAILS_CW + GRID.gap);
+      gridCard(doc, cx, rowY, DETAILS_CW, 32, { fill: palette.surface, stroke: palette.cardBorder, radius: 4 });
+      microLabel(doc, DETAILS_ROWS[idx][0], cx + 8, rowY + 5, DETAILS_CW - 16, palette, fonts);
+      doc.fillColor(palette.text).font(fonts.body).fontSize(TYPE_SCALE.body.size)
+        .text(asText(DETAILS_ROWS[idx][1]), cx + 8, rowY + 16, { width: DETAILS_CW - 16, ellipsis: true });
+    }
+    doc.y = rowY + 36;
   }
-
-  microLabel(doc, 'Photo ID', PHOTO_X, PHOTO_Y + PHOTO_H + 5, PHOTO_W, palette, fonts);
-
-  // Approval block to the right of photo
-  const VX = PHOTO_X + PHOTO_W + 10;
-  const VW = RIGHT_W - PHOTO_W - 34;
-  doc.fillColor(palette.text).font(fonts.headingBold).fontSize(8.5)
-    .text(viewModel.applicantName, VX, PHOTO_Y, { width: VW, ellipsis: true });
-  microLabel(doc, 'Reviewer ID', VX, PHOTO_Y + 14, VW, palette, fonts);
-  doc.fillColor(palette.text).font(fonts.body).fontSize(8)
-    .text(displayText(viewModel.reviewerDisplayId, 'Unassigned'), VX, PHOTO_Y + 22, { width: VW, ellipsis: true });
-  microLabel(doc, 'Decided', VX, PHOTO_Y + 36, VW, palette, fonts);
-  doc.fillColor(palette.text).font(fonts.body).fontSize(8)
-    .text(formatDateTime(app.decided_at), VX, PHOTO_Y + 44, { width: VW });
-
-  doc.save();
-  doc.circle(VX + 12, PHOTO_Y + 78, 11).fill(palette.primary);
-  doc.lineWidth(2).lineCap('round').strokeColor('#ffffff');
-  doc.moveTo(VX + 7, PHOTO_Y + 78).lineTo(VX + 11, PHOTO_Y + 82).lineTo(VX + 18, PHOTO_Y + 73).stroke();
-  doc.restore();
-  doc.fillColor('#1f2937').font(fonts.bodyBold).fontSize(8.5)
-    .text('DIGITALLY VERIFIED', VX + 28, PHOTO_Y + 70, { width: VW - 28, ellipsis: true });
-  doc.fillColor(palette.textMuted).font(fonts.bodyBold).fontSize(7.2)
-    .text('SIGNED RECORD / INTERNAL REFERENCE COPY', VX, PHOTO_Y + 84, { width: VW - 6, align: 'left' });
-  doc.fillColor(palette.textMuted).font(fonts.body).fontSize(7.2)
-    .text('Verified copy of the submitted participant record.', VX, PHOTO_Y + 98, { width: VW - 6, align: 'left' });
-
-  const qrSectionY = ROW2_Y + PHOTO_CARD_H - 76;
-  doc.save();
-  doc.roundedRect(RIGHT_X + 12, qrSectionY, RIGHT_W - 24, 60, 8).fill('#f4f1ea');
-  doc.restore();
-  const qrBoxSize = 52;
-  const qrX = RIGHT_X + RIGHT_W - qrBoxSize - 20;
-  const qrY = qrSectionY + 4;
-  doc.save();
-  doc.roundedRect(qrX - 106, qrY, 86, qrBoxSize, 8).fill('#ede7dc');
-  doc.restore();
-  doc.image(signatureArtifacts.qrBuffer, qrX, qrY, { fit: [qrBoxSize, qrBoxSize] });
-  doc.fillColor(palette.textMuted).font(fonts.bodyBold).fontSize(6.5)
-    .text('SCAN TO VERIFY', qrX - 98, qrY + 10, { width: 72, align: 'right' });
-  doc.fillColor(palette.textMuted).font(fonts.body).fontSize(5.6)
-    .text('Printed QR opens the signed verification record.', qrX - 112, qrY + 22, { width: 94, align: 'right' });
-
-  doc.y = Math.max(ROW2_Y + ID_CARD_H, ROW2_Y + PHOTO_CARD_H) + 12;
+  doc.y += 6;
 
   // ── ROW 3: Competition Declaration (full width 3-col grid) ────────────────
   ensureSpace(doc, 20);
@@ -1561,9 +1506,9 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
       const idx = i + c;
       if (idx >= declRows.length) break;
       const cx = PX + c * (DECL_CW + GRID.gap);
-      gridCard(doc, cx, rowY, DECL_CW, DECL_CARD_H, { fill: '#fbfaf7', stroke: palette.cardBorder, radius: 6 });
+      gridCard(doc, cx, rowY, DECL_CW, DECL_CARD_H, { fill: palette.surface, stroke: palette.cardBorder, radius: 4 });
       microLabel(doc, declRows[idx][0], cx + 8, rowY + 5, DECL_CW - 16, palette, fonts);
-      doc.fillColor(palette.text).font(fonts.body).fontSize(8)
+      doc.fillColor(palette.text).font(fonts.body).fontSize(TYPE_SCALE.body.size)
         .text(asText(declRows[idx][1]), cx + 8, rowY + 15, { width: DECL_CW - 16, ellipsis: true });
     }
     doc.y = rowY + DECL_CARD_H + 5;
@@ -1573,10 +1518,10 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
   if (address) {
     ensureSpace(doc, DECL_CARD_H + 5);
     const addrY = doc.y;
-    gridCard(doc, PX, addrY, CW, DECL_CARD_H, { fill: '#fbfaf7', stroke: palette.cardBorder, radius: 6 });
+    gridCard(doc, PX, addrY, CW, DECL_CARD_H, { fill: palette.surface, stroke: palette.cardBorder, radius: 4 });
     microLabel(doc, 'Address', PX + 8, addrY + 5, CW - 16, palette, fonts);
     const addrStr = `${asText(address.line1)}, ${asText(address.line2)}, ${asText(address.district)}, ${asText(address.state)}, ${asText(address.country)} ${asText(address.postalCode)}`;
-    doc.fillColor(palette.text).font(fonts.body).fontSize(8)
+    doc.fillColor(palette.text).font(fonts.body).fontSize(TYPE_SCALE.body.size)
       .text(addrStr, PX + 8, addrY + 15, { width: CW - 16, ellipsis: true });
     doc.y = addrY + DECL_CARD_H + 5;
   }
