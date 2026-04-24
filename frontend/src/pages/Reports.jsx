@@ -206,28 +206,18 @@ export default function Reports() {
       return;
     }
 
-    if (allApprovedApplicationRows.length > 250) {
-      const ok = window.confirm(`This will download ${allApprovedApplicationRows.length} individual PDF files. Continue?`);
-      if (!ok) return;
-    }
-
     setDownloadingAllPdfs(true);
-    let success = 0;
-    let failed = 0;
-
-    for (const row of allApprovedApplicationRows) {
-      // Sequential downloads keep API load stable and avoid browser throttling bursts.
-      const { error } = await api.downloadApplicationPdf(row.applicationId);
-      if (error) failed += 1;
-      else success += 1;
-    }
-
+    // Server-side streams a single ZIP bundle of every approved PDF plus a
+    // human-readable manifest, replacing the old sequential per-row loop.
+    const { error } = await api.downloadApprovedParticipantsZip(
+      selectedTournamentId ? { tournamentId: selectedTournamentId } : undefined,
+    );
     setDownloadingAllPdfs(false);
-    if (failed) {
-      toast.warning(`Downloaded ${success} PDFs, ${failed} failed`);
+    if (error) {
+      toast.error(error.message || "Failed to download participant bundle");
       return;
     }
-    toast.success(`Downloaded ${success} approved participant PDFs`);
+    toast.success(`Downloaded bundle of ${allApprovedApplicationRows.length} approved participants`);
   }
 
   return (
@@ -477,9 +467,9 @@ export default function Reports() {
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <Button variant="outline" size="sm" disabled={downloadingAllPdfs || loadingParticipants} onClick={handleDownloadAllParticipantPdfs}>
-                    <InlineLoadingLabel loading={downloadingAllPdfs} loadingText="Downloading PDFs...">
+                    <InlineLoadingLabel loading={downloadingAllPdfs} loadingText="Preparing ZIP...">
                       <>
-                        <Download className="size-4" /> Print/download all participant PDFs
+                        <Download className="size-4" /> Download all participants (ZIP)
                       </>
                     </InlineLoadingLabel>
                   </Button>
