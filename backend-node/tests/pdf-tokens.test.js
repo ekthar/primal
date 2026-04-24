@@ -8,6 +8,8 @@ import {
   finalizePageRibbons,
   shortSignatureId,
   slug,
+  contrastRatio,
+  auditPaletteContrast,
 } from '../src/services/pdfTokens.js';
 
 describe('pdfTokens', () => {
@@ -176,6 +178,29 @@ describe('pdfTokens', () => {
       expect(addedPages - pagesBeforeRibbon).toBe(0);
       const buf = Buffer.concat(chunks);
       expect(buf.slice(0, 4).toString('latin1')).toBe('%PDF');
+    });
+  });
+
+  describe('WCAG 2.1 contrast audit', () => {
+    it('computes the reference ink-on-paper ratio at AAA (>= 7.0)', () => {
+      const ratio = contrastRatio('#0A0A0A', '#FAFAF7');
+      expect(ratio).toBeGreaterThanOrEqual(7.0);
+      expect(ratio).toBeGreaterThan(18); // sanity: very deep black on very light paper
+    });
+
+    it('every critical Primal OS palette pair meets AA body text contrast (>= 4.5)', () => {
+      const palette = createPalette({ pdf: {} });
+      const audit = auditPaletteContrast(palette);
+      for (const row of audit) {
+        expect(row.aaBody, `${row.name} should meet WCAG AA (4.5) but got ${row.ratio.toFixed(2)}`).toBe(true);
+      }
+    });
+
+    it('the ink-red accent hits AAA on paper (>= 7.0)', () => {
+      const palette = createPalette({ pdf: {} });
+      const row = auditPaletteContrast(palette).find((r) => r.name === 'accent-on-paper');
+      expect(row).toBeTruthy();
+      expect(row.aaaBody, `accent-on-paper must be AAA; got ${row.ratio.toFixed(2)}`).toBe(true);
     });
   });
 });
