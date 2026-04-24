@@ -319,8 +319,9 @@ export default function AppShell({ children }) {
 
   return (
     <div className="flex min-h-[100dvh] items-start overflow-x-clip bg-[radial-gradient(circle_at_top,hsla(var(--surface-muted),0.9),transparent_48%),hsl(var(--background))]">
+      <a href="#main-content" className="skip-to-main">Skip to main content</a>
       <DesktopSidebar />
-      <main className="flex min-w-0 flex-1 flex-col">
+      <main id="main-content" className="flex min-w-0 flex-1 flex-col" tabIndex={-1}>
         <MobileTopbar nav={nav} />
         <DesktopTopbar nav={nav} />
         <div className="flex-1 min-w-0 app-shell-safe-bottom md:pb-0">{children}</div>

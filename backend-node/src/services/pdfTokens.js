@@ -77,6 +77,67 @@ function normalizeHex(input, fallback) {
 }
 
 /**
+ * WCAG 2.1 relative luminance for a hex color.
+ *
+ * Used by `contrastRatio()` to produce the ratio against another color.
+ * Formula per WCAG 2.1 § 1.4.3:
+ *   L = 0.2126 * R + 0.7152 * G + 0.0722 * B
+ *   where each channel is linearized from sRGB.
+ */
+function relativeLuminance(hex) {
+  const normalized = /^#([0-9a-fA-F]{3})$/.test(hex)
+    ? `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`
+    : hex;
+  const r = parseInt(normalized.slice(1, 3), 16) / 255;
+  const g = parseInt(normalized.slice(3, 5), 16) / 255;
+  const b = parseInt(normalized.slice(5, 7), 16) / 255;
+  const linearize = (c) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+  return 0.2126 * linearize(r) + 0.7152 * linearize(g) + 0.0722 * linearize(b);
+}
+
+/**
+ * WCAG 2.1 contrast ratio between two hex colors. Result ranges 1..21.
+ *
+ *   contrastRatio('#0A0A0A', '#FAFAF7')  // ≈ 18.5  (AAA body text)
+ *   contrastRatio('#7A1E22', '#FAFAF7')  // ≈ 9.3   (AAA accent on paper)
+ *
+ * Use `assertPaletteContrast(palette)` in tests to guarantee the Primal OS
+ * palette never regresses below AA thresholds (4.5 for body, 3 for large).
+ */
+function contrastRatio(fgHex, bgHex) {
+  const fg = relativeLuminance(fgHex);
+  const bg = relativeLuminance(bgHex);
+  const lighter = Math.max(fg, bg);
+  const darker = Math.min(fg, bg);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+/**
+ * Returns the WCAG 2.1 AA/AAA pass matrix for Primal's critical text/bg
+ * combinations. Exposed so a single unit test can fail fast if anyone
+ * retunes the palette into an inaccessible state.
+ */
+function auditPaletteContrast(palette) {
+  const pairs = [
+    { name: 'ink-on-paper',    fg: palette.ink,       bg: palette.paper },
+    { name: 'ink-on-surface',  fg: palette.ink,       bg: palette.surface },
+    { name: 'accent-on-paper', fg: palette.accent,    bg: palette.paper },
+    { name: 'verify-on-paper', fg: palette.verify,    bg: palette.paper },
+    { name: 'muted-on-paper',  fg: palette.textMuted, bg: palette.paper },
+  ];
+  return pairs.map((pair) => {
+    const ratio = contrastRatio(pair.fg, pair.bg);
+    return {
+      ...pair,
+      ratio,
+      aaBody:  ratio >= 4.5,
+      aaLarge: ratio >= 3.0,
+      aaaBody: ratio >= 7.0,
+    };
+  });
+}
+
+/**
  * Build the unified palette used across every PDF export.
  *
  * Respects optional env overrides (PDF_BRAND_PRIMARY, PDF_BRAND_ACCENT,
@@ -322,4 +383,7 @@ module.exports = {
   slug,
   getStatusSpec,
   resolveStatusColor,
+  relativeLuminance,
+  contrastRatio,
+  auditPaletteContrast,
 };
