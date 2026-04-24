@@ -113,9 +113,11 @@ export default function CommandPalette() {
     router.push("/login");
   }
 
+  const platformKey = typeof navigator !== "undefined" && /mac/i.test(navigator.platform) ? "⌘" : "Ctrl";
+
   return (
     <CommandDialog open={open} onOpenChange={setOpen}>
-      <CommandInput placeholder="Search commands, pages, exports…" />
+      <CommandInput placeholder={`Search commands, pages, exports — ${platformKey} K`} />
       <CommandList>
         <CommandEmpty>No commands match.</CommandEmpty>
 
