@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/api";
+import { splitPersonName } from "@/lib/person";
 import { DISCIPLINE_DEFINITIONS, EXPERIENCE_LEVELS, GENDER_OPTIONS, createPreviewEntries } from "@/lib/tournamentWorkflow";
 import { HERO_IMAGE } from "@/lib/mockData";
 
@@ -310,8 +311,7 @@ export default function Register() {
       return;
     }
     setLoading(true);
-    const [firstName, ...rest] = form.fullName.trim().split(" ");
-    const lastName = rest.join(" ") || firstName;
+    const { firstName, lastName } = splitPersonName(form.fullName);
 
     let selectedTournamentId = tournamentId;
     if (!isClubTrack && !selectedTournamentId) {

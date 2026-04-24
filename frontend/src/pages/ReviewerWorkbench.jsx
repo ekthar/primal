@@ -23,7 +23,8 @@ import EmptyState from "@/components/shared/EmptyState";
 import { SectionLoader } from "@/components/shared/PrimalLoader";
 import { StickyActionBar } from "@/components/shared/ResponsivePrimitives";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import api from "@/lib/api";
+import api, { isApiLive } from "@/lib/api";
+import { formatPersonName } from "@/lib/person";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 
@@ -44,6 +45,7 @@ export default function ReviewerWorkbench() {
   const [scannerError, setScannerError] = useState("");
   const [scannerResult, setScannerResult] = useState(null);
   const [scannedValue, setScannedValue] = useState("");
+  const [reviewDialog, setReviewDialog] = useState({ open: false, action: null, reason: "", fields: "" });
   const videoRef = useRef(null);
   const fileInputRef = useRef(null);
   const streamRef = useRef(null);
@@ -82,6 +84,14 @@ export default function ReviewerWorkbench() {
   useEffect(() => {
     const supported = typeof window !== "undefined" && "BarcodeDetector" in window && typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
     setScannerSupported(supported);
+  }, []);
+
+  useEffect(() => {
+    isApiLive().then((live) => {
+      if (!live) {
+        toast.error("Backend API is not reachable. Review actions will fail until the API is back online.");
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -268,23 +278,34 @@ export default function ReviewerWorkbench() {
     refreshAll();
   }
 
-  async function handleDecision(action) {
+  function openReviewDialog(action) {
+    if (action === "approve") {
+      handleDecision("approve");
+      return;
+    }
+
+    setReviewDialog({
+      open: true,
+      action,
+        reason: action === "reject" ? "Eligibility criteria not met" : action === "request_correction" ? "Please update the flagged fields" : "Appeal granted",
+      fields: action === "request_correction" ? "medical,weight_class" : "",
+    });
+  }
+
+  function closeReviewDialog() {
+    setReviewDialog({ open: false, action: null, reason: "", fields: "" });
+  }
+
+  async function handleDecision(action, reviewInput) {
     if (!activeId) return;
-    let reason;
-    let fields;
+    let reason = reviewInput?.reason;
+    let fields = reviewInput?.fields || [];
 
     if (action === "reject") {
-      reason = window.prompt("Rejection reason", "Eligibility criteria not met");
       if (!reason) return;
     }
     if (action === "request_correction") {
-      reason = window.prompt("Correction reason", "Please update required fields");
       if (!reason) return;
-      const fieldInput = window.prompt("Fields to correct (comma separated)", "medical,weight_class");
-      fields = (fieldInput || "")
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean);
       if (!fields.length) {
         toast.error("At least one correction field is required");
         return;
@@ -302,9 +323,8 @@ export default function ReviewerWorkbench() {
     refreshAll();
   }
 
-  async function handleReopen() {
+  async function handleReopen(reason) {
     if (!activeId) return;
-    const reason = window.prompt("Reopen reason", "Appeal granted");
     if (!reason) return;
     setActionBusy(true);
     const { error } = await api.reopen(activeId, reason);
@@ -315,6 +335,22 @@ export default function ReviewerWorkbench() {
     }
     toast.success("Application reopened to under review");
     refreshAll();
+  }
+
+  async function handleConfirmReviewDialog() {
+    const reason = reviewDialog.reason.trim();
+    const fields = reviewDialog.action === "request_correction"
+      ? reviewDialog.fields.split(",").map((item) => item.trim()).filter(Boolean)
+      : [];
+
+    if (reviewDialog.action === "reopen") {
+      await handleReopen(reason);
+      closeReviewDialog();
+      return;
+    }
+
+    await handleDecision(reviewDialog.action, { reason, fields });
+    closeReviewDialog();
   }
 
   const requiredKinds = ["medical", "photo_id", "consent"];
@@ -368,9 +404,9 @@ export default function ReviewerWorkbench() {
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-sm font-medium truncate">{entry.first_name} {entry.last_name}</div>
+                  <div className="text-sm font-medium truncate">{entry.applicant_display_name || formatPersonName(entry.first_name, entry.last_name)}</div>
                   <div className="text-[11px] text-tertiary mt-1 truncate">
-                    {entry.first_name} {entry.last_name} · {entry.tournament_name}
+                    {(entry.application_display_id || entry.id)} · {entry.tournament_name}
                   </div>
                 </div>
                 <StatusPill status={entry.status} size="xs" />
@@ -397,12 +433,12 @@ export default function ReviewerWorkbench() {
           <div className="px-6 py-5 flex items-center gap-4 flex-wrap">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 text-xs text-tertiary">
-                <span className="font-mono">{activeApplication.id}</span>
+                <span className="font-mono">{activeApplication.application_display_id || activeApplication.id}</span>
                 <ChevronRight className="size-3" />
                 <span>{activeApplication.tournament_name}</span>
               </div>
               <h2 className="font-display text-2xl font-semibold tracking-tight mt-1">
-                {activeApplication.first_name} {activeApplication.last_name}
+                {activeApplication.applicant_display_name || formatPersonName(activeApplication.first_name, activeApplication.last_name)}
               </h2>
               <div className="mt-2 flex items-center gap-3 flex-wrap">
                 <StatusPill status={activeApplication.status} />
@@ -416,22 +452,22 @@ export default function ReviewerWorkbench() {
                 </Button>
               )}
               {canDecide && (
-                <Button variant="outline" disabled={actionBusy} onClick={() => handleDecision("request_correction")}>
+                <Button variant="outline" disabled={actionBusy} onClick={() => openReviewDialog("request_correction")}>
                   <FileWarning className="size-4 mr-1.5" /> Correction
                 </Button>
               )}
               {canDecide && (
-                <Button variant="outline" disabled={actionBusy} onClick={() => handleDecision("reject")}>
+                <Button variant="outline" disabled={actionBusy} onClick={() => openReviewDialog("reject")}>
                   <XCircle className="size-4 mr-1.5" /> Reject
                 </Button>
               )}
               {canDecide && (
-                <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" disabled={actionBusy} onClick={() => handleDecision("approve")}>
+                <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" disabled={actionBusy} onClick={() => openReviewDialog("approve")}>
                   <CheckCircle2 className="size-4 mr-1.5" /> Approve
                 </Button>
               )}
               {canReopen && (
-                <Button variant="outline" disabled={actionBusy} onClick={handleReopen}>
+                <Button variant="outline" disabled={actionBusy} onClick={() => openReviewDialog("reopen")}>
                   <Undo2 className="size-4 mr-1.5" /> Reopen
                 </Button>
               )}
@@ -469,9 +505,9 @@ export default function ReviewerWorkbench() {
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <div className="text-sm font-medium truncate">{entry.first_name} {entry.last_name}</div>
+                            <div className="text-sm font-medium truncate">{entry.applicant_display_name || formatPersonName(entry.first_name, entry.last_name)}</div>
                             <div className="text-[11px] text-tertiary mt-1 truncate">
-                              {entry.tournament_name}
+                              {(entry.application_display_id || entry.id)} · {entry.tournament_name}
                             </div>
                           </div>
                           <StatusPill status={entry.status} size="xs" />
@@ -500,10 +536,11 @@ export default function ReviewerWorkbench() {
               <Separator className="my-4" />
               <div className="grid sm:grid-cols-2 gap-4 text-sm">
                 <Detail label="Discipline" value={activeApplication.discipline || "-"} />
+                <Detail label="Selected disciplines" value={activeApplication.form_data?.selectedDisciplines?.join(", ") || activeApplication.discipline || "-"} />
                 <Detail label="Tournament" value={activeApplication.tournament_name || "-"} />
                 <Detail label="Weight class" value={activeApplication.weight_class || "-"} />
                 <Detail label="Weight" value={activeApplication.weight_kg ? `${activeApplication.weight_kg} kg` : "-"} />
-                <Detail label="Reviewer" value={activeApplication.reviewer_id || "Unassigned"} />
+                <Detail label="Reviewer" value={activeApplication.reviewer_display_id || "Unassigned"} />
                 <Detail label="Submitted" value={activeApplication.submitted_at ? new Date(activeApplication.submitted_at).toLocaleString() : "-"} />
               </div>
             </section>
@@ -539,7 +576,8 @@ export default function ReviewerWorkbench() {
               <Separator className="my-4" />
               <div className="space-y-3 text-sm">
                 <Detail label="Club" value={activeApplication.club_name || "Individual"} />
-                <Detail label="Applicant" value={`${activeApplication.first_name} ${activeApplication.last_name}`} />
+                <Detail label="Applicant" value={activeApplication.applicant_display_name || formatPersonName(activeApplication.first_name, activeApplication.last_name)} />
+                <Detail label="Application ID" value={activeApplication.application_display_id || activeApplication.id} />
                 <Detail label="Correction due" value={activeApplication.correction_due_at ? new Date(activeApplication.correction_due_at).toLocaleString() : "-"} />
                 <Detail label="Rejection reason" value={activeApplication.rejection_reason || "-"} />
                 <Detail label="Reopen reason" value={activeApplication.reopen_reason || "-"} />
@@ -586,22 +624,22 @@ export default function ReviewerWorkbench() {
             </Button>
           )}
           {canDecide && (
-            <Button variant="outline" className="flex-1" disabled={actionBusy} onClick={() => handleDecision("request_correction")}>
+            <Button variant="outline" className="flex-1" disabled={actionBusy} onClick={() => openReviewDialog("request_correction")}>
               <FileWarning className="size-4 mr-1.5" /> Correction
             </Button>
           )}
           {canDecide && (
-            <Button variant="outline" className="flex-1" disabled={actionBusy} onClick={() => handleDecision("reject")}>
+            <Button variant="outline" className="flex-1" disabled={actionBusy} onClick={() => openReviewDialog("reject")}>
               <XCircle className="size-4 mr-1.5" /> Reject
             </Button>
           )}
           {canDecide && (
-            <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white" disabled={actionBusy} onClick={() => handleDecision("approve")}>
+            <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white" disabled={actionBusy} onClick={() => openReviewDialog("approve")}>
               <CheckCircle2 className="size-4 mr-1.5" /> Approve
             </Button>
           )}
           {canReopen && (
-            <Button variant="outline" className="flex-1" disabled={actionBusy} onClick={handleReopen}>
+            <Button variant="outline" className="flex-1" disabled={actionBusy} onClick={() => openReviewDialog("reopen")}>
               <Undo2 className="size-4 mr-1.5" /> Reopen
             </Button>
           )}
@@ -666,6 +704,7 @@ export default function ReviewerWorkbench() {
                   <div className="mt-3 space-y-1">
                     <div>{scannerResult.application.applicant}</div>
                     <div className="text-secondary-muted">{scannerResult.application.tournament}</div>
+                    <div className="text-secondary-muted">Record: {scannerResult.application.displayId || scannerResult.application.id}</div>
                     <div className="text-secondary-muted">Status: {scannerResult.application.status}</div>
                   </div>
                 ) : null}
@@ -676,6 +715,54 @@ export default function ReviewerWorkbench() {
                 ) : null}
               </div>
             ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={reviewDialog.open} onOpenChange={(open) => !open && closeReviewDialog()}>
+        <DialogContent className="max-w-lg rounded-3xl border-border">
+          <DialogHeader>
+            <DialogTitle>
+              {reviewDialog.action === "reopen"
+                ? "Reopen application"
+                : reviewDialog.action === "request_correction"
+                  ? "Request correction"
+                  : "Reject application"}
+            </DialogTitle>
+            <DialogDescription>
+              {reviewDialog.action === "reopen"
+                ? "Provide the reopen reason before moving this record back to under review."
+                : reviewDialog.action === "request_correction"
+                  ? "Record the correction reason and the fields the applicant must update."
+                  : "Record the rejection reason for the audit log and notification trail."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-tertiary">Reason</div>
+              <Input
+                value={reviewDialog.reason}
+                onChange={(event) => setReviewDialog((current) => ({ ...current, reason: event.target.value }))}
+                className="bg-surface"
+                placeholder="Enter reason"
+              />
+            </div>
+            {reviewDialog.action === "request_correction" ? (
+              <div className="space-y-2">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-tertiary">Fields to correct</div>
+                <Input
+                  value={reviewDialog.fields}
+                  onChange={(event) => setReviewDialog((current) => ({ ...current, fields: event.target.value }))}
+                  className="bg-surface"
+                  placeholder="medical,weight_class"
+                />
+              </div>
+            ) : null}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={closeReviewDialog}>Cancel</Button>
+              <Button onClick={handleConfirmReviewDialog} disabled={actionBusy || !reviewDialog.reason.trim()}>
+                {reviewDialog.action === "reopen" ? "Reopen" : reviewDialog.action === "request_correction" ? "Send correction" : "Reject"}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

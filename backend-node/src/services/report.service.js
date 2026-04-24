@@ -109,6 +109,11 @@ function normalizeGroupRows(groupMap) {
   return Array.from(groupMap.values()).sort((left, right) => left.label.localeCompare(right.label));
 }
 
+function appendUniqueName(list, value) {
+  if (!value) return;
+  if (!list.includes(value)) list.push(value);
+}
+
 async function groupedApplicationReport(filters = {}) {
   const args = [];
   const where = [`a.deleted_at IS NULL`];
@@ -156,6 +161,8 @@ async function groupedApplicationReport(filters = {}) {
   const categoryGroups = new Map();
 
   rows.forEach((row) => {
+    const participantName = formatPersonName(row.first_name, row.last_name);
+    const participantDetail = `${participantName}${row.application_id ? ` · ${applicationDisplayId(row.application_id)}` : ''}${row.club_name ? ` · ${row.club_name}` : ''}`;
     const disciplineKey = row.discipline_label || 'Open';
     const weightKey = row.weight_class_label || 'Open';
     const categoryId = row.category_id || 'ungrouped';
@@ -183,13 +190,18 @@ async function groupedApplicationReport(filters = {}) {
       categoryGroups.set(categoryId, {
         id: categoryId,
         label: categoryLabel,
-        applicantName: formatPersonName(row.first_name, row.last_name),
+        applicantName: participantName,
+        participantNames: [],
+        participantDetails: [],
         sampleApplicationDisplayId: applicationDisplayId(row.application_id),
         discipline: disciplineKey,
         weightClass: weightKey,
         statuses: emptyStatusTotals(),
       });
     }
+
+    appendUniqueName(categoryGroups.get(categoryId).participantNames, participantName);
+    appendUniqueName(categoryGroups.get(categoryId).participantDetails, participantDetail);
 
     disciplineGroups.get(disciplineKey).statuses = incrementStatusBucket(disciplineGroups.get(disciplineKey).statuses, row.status);
     weightGroups.get(weightKey).statuses = incrementStatusBucket(weightGroups.get(weightKey).statuses, row.status);
@@ -205,7 +217,11 @@ async function groupedApplicationReport(filters = {}) {
     totals: rows.reduce((accumulator, row) => incrementStatusBucket(accumulator, row.status), emptyStatusTotals()),
     disciplineGroups: normalizeGroupRows(disciplineGroups),
     weightClassGroups: normalizeGroupRows(weightGroups),
-    categoryGroups: normalizeGroupRows(categoryGroups),
+    categoryGroups: normalizeGroupRows(categoryGroups).map((row) => ({
+      ...row,
+      participantNames: row.participantNames.slice().sort((left, right) => left.localeCompare(right)),
+      participantDetails: row.participantDetails.slice().sort((left, right) => left.localeCompare(right)),
+    })),
   };
 }
 

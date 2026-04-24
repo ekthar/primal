@@ -8,6 +8,7 @@ import EmptyState from "@/components/shared/EmptyState";
 import { InlineLoadingLabel, SectionLoader } from "@/components/shared/PrimalLoader";
 import { ResponsivePageShell, StickyActionBar } from "@/components/shared/ResponsivePrimitives";
 import api from "@/lib/api";
+import { formatPersonName } from "@/lib/person";
 import { toast } from "sonner";
 
 function getAccessMessage(application) {
@@ -20,6 +21,9 @@ function getAccessMessage(application) {
       return `Correction access stays open until ${new Date(application.correction_due_at).toLocaleString()}.`;
     }
     return "Correction access stays tied to the correction window set by admin.";
+  }
+  if (application.status === "season_closed") {
+    return "This record is archived because the season has ended. Reapply from an open season card to create a new draft with your saved details.";
   }
   return "Submitted applications remain viewable after registration closes, even when they are no longer editable.";
 }
@@ -167,6 +171,23 @@ export default function ApplicantDashboard() {
     }
   }
 
+  async function reapplyFromPreviousSeason(sourceApplication, tournament) {
+    setStartingSeasonId(tournament.id);
+    const { data, error } = await api.reapplyApplication(sourceApplication.id, { tournamentId: tournament.id });
+    setStartingSeasonId(null);
+
+    if (error) {
+      toast.error(error.message || "Failed to reapply for the new season");
+      return;
+    }
+
+    const nextApplication = data?.application;
+    if (nextApplication) {
+      setApplications((current) => [nextApplication, ...current]);
+      toast.success(`Reapplied into ${tournament.name}`);
+    }
+  }
+
   function setDraftFile(applicationId, kind, file) {
     setDraftUploads((current) => ({
       ...current,
@@ -222,6 +243,10 @@ export default function ApplicantDashboard() {
     () => publicTournaments.filter((tournament) => tournament.registrationOpen),
     [publicTournaments]
   );
+  const latestReusableApplication = useMemo(
+    () => applications.find((application) => ["season_closed", "approved", "rejected"].includes(application.status)) || null,
+    [applications]
+  );
   const applicationsByTournament = useMemo(
     () => Object.fromEntries(applications.map((application) => [application.tournament_id, application])),
     [applications]
@@ -254,7 +279,7 @@ export default function ApplicantDashboard() {
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div className="min-w-0">
               <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">My application</div>
-              <h1 className="font-display text-3xl font-semibold tracking-tight mt-1">{profile.first_name} {profile.last_name}</h1>
+              <h1 className="font-display text-3xl font-semibold tracking-tight mt-1">{formatPersonName(profile.first_name, profile.last_name)}</h1>
               <p className="text-sm text-secondary-muted mt-2 max-w-2xl">
                 Your reusable profile is saved once and reused across tournaments. Each submission enters the review queue with full status history.
               </p>
@@ -285,7 +310,7 @@ export default function ApplicantDashboard() {
         <div className="border-t border-border px-6 sm:px-8 py-5 bg-surface-muted/30 flex items-center gap-2 text-sm">
           <FileCheck2 className="size-4 text-primary" />
           <span className="font-medium">Workflow:</span>
-          <span className="text-secondary-muted">draft to submitted to under review to correction loop to approved or rejected</span>
+          <span className="text-secondary-muted">draft to submitted to under review to correction loop to approved, rejected, or season closed</span>
         </div>
       </div>
 
@@ -320,11 +345,20 @@ export default function ApplicantDashboard() {
                           </InlineLoadingLabel>
                         </Button>
                       ) : (
-                        <Button onClick={() => startSeasonApplication(tournament)} disabled={startingSeasonId === tournament.id}>
-                          <InlineLoadingLabel loading={startingSeasonId === tournament.id} loadingText="Starting...">
-                            Start season application
-                          </InlineLoadingLabel>
-                        </Button>
+                        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                          {latestReusableApplication ? (
+                            <Button onClick={() => reapplyFromPreviousSeason(latestReusableApplication, tournament)} disabled={startingSeasonId === tournament.id}>
+                              <InlineLoadingLabel loading={startingSeasonId === tournament.id} loadingText="Reapplying...">
+                                Reapply from last season
+                              </InlineLoadingLabel>
+                            </Button>
+                          ) : null}
+                          <Button variant={latestReusableApplication ? "outline" : "default"} onClick={() => startSeasonApplication(tournament)} disabled={startingSeasonId === tournament.id}>
+                            <InlineLoadingLabel loading={startingSeasonId === tournament.id} loadingText="Starting...">
+                              Start season application
+                            </InlineLoadingLabel>
+                          </Button>
+                        </div>
                       )}
                     </div>
                   </article>
@@ -357,7 +391,8 @@ export default function ApplicantDashboard() {
                   </div>
                   <div className="grid sm:grid-cols-3 gap-3 mt-4 text-sm">
                     <Detail label="Updated" value={new Date(application.updated_at).toLocaleDateString()} />
-                    <Detail label="Reviewer" value={application.reviewer_id || "Unassigned"} />
+                    <Detail label="Application ID" value={application.application_display_id || application.id} />
+                    <Detail label="Reviewer" value={application.reviewer_display_id || "Unassigned"} />
                     <Detail label="Correction due" value={application.correction_due_at ? new Date(application.correction_due_at).toLocaleDateString() : "-"} />
                   </div>
                   <div className="mt-4 flex justify-end">
@@ -468,6 +503,7 @@ export default function ApplicantDashboard() {
                 <Detail label="Status" value={activeApplicationDetails.status?.replace(/_/g, " ") || "-"} />
                 <Detail label="Tournament" value={activeApplicationDetails.tournament_name || "-"} />
                 <Detail label="Club" value={activeApplicationDetails.club_name || "Individual"} />
+                <Detail label="Phone" value={activeApplicationDetails.phone || profile?.phone || profile?.metadata?.phone || "-"} />
                 <Detail label="Weight class" value={activeApplicationDetails.weight_class || "-"} />
               </div>
 
@@ -496,11 +532,12 @@ export default function ApplicantDashboard() {
           ) : null}
         </div>
 
-        <div className="space-y-5">
+        <div className="space-y-5 lg:sticky lg:top-6 lg:self-start">
           <div className="rounded-3xl border border-border bg-surface elev-card p-6">
             <h2 className="font-display text-xl font-semibold tracking-tight">Profile summary</h2>
             <Separator className="my-4" />
             <dl className="space-y-3 text-sm">
+              <Detail label="Phone" value={profile.phone || profile.metadata?.phone || "-"} />
               <Detail label="Nationality" value={profile.nationality || "-"} />
               <Detail label="State" value={address?.state || "-"} />
               <Detail label="District" value={address?.district || "-"} />

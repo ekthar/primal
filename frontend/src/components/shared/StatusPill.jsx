@@ -7,6 +7,7 @@ const DOT_COLORS = {
   needs_correction: "bg-orange-500",
   approved: "bg-emerald-500",
   rejected: "bg-red-500",
+  season_closed: "bg-slate-500",
   appeal: "bg-fuchsia-500",
 };
 

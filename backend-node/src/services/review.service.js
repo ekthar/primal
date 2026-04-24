@@ -63,7 +63,7 @@ async function decide(actor, applicationId, { action, reason, fields }, ctx = {}
   else if (action === 'request_correction') {
     toStatus = STATUS.NEEDS_CORRECTION;
     patch.correction_reason = reason;
-    patch.correction_fields = fields || [];
+    patch.correction_fields = JSON.stringify(fields || []);
     patch.correction_due_at = new Date(Date.now() + config.workflow.correctionWindowHours * HOUR);
   } else throw ApiError.badRequest('Unknown action');
 

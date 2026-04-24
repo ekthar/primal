@@ -161,6 +161,7 @@ export const api = {
   updateApplication: (id, body) => request("PATCH", `/api/applications/${id}`, { body }),
   submitApplication: (id) => request("POST", `/api/applications/${id}/submit`),
   resubmitApplication: (id) => request("POST", `/api/applications/${id}/resubmit`),
+  reapplyApplication: (id, body) => request("POST", `/api/applications/${id}/reapply`, { body }),
   requestApplicationCancel: (id, body) => request("POST", `/api/applications/${id}/cancel-request`, { body }),
   listApplicationDocuments: (id) => request("GET", `/api/applications/${id}/documents`),
   uploadApplicationDocument: (id, { file, kind, label, expiresOn }) => {
@@ -189,6 +190,8 @@ export const api = {
 
   reportSummary: () => request("GET", "/api/reports/summary"),
   reportParticipants: (query) => request("GET", "/api/reports/participants", { query }),
+  reportAnalytics: (query) => request("GET", "/api/reports/analytics", { query }),
+  reportSeason: (id) => request("GET", `/api/reports/seasons/${id}`),
   exportApprovedXlsx: () => `${BASE_URL}/api/reports/approved.xlsx`,
   exportApplicationPdf: (id) => `${BASE_URL}/api/reports/applications/${id}.pdf`,
   downloadApprovedXlsx: (query) => downloadFile("/api/reports/approved.xlsx", {
@@ -198,6 +201,17 @@ export const api = {
   downloadApprovedParticipantsXlsx: (query) => downloadFile("/api/reports/participants.xlsx", {
     query,
     filename: "primal-approved-participants.xlsx",
+  }),
+  downloadApplicationAnalyticsXlsx: (query) => downloadFile("/api/reports/analytics.xlsx", {
+    query,
+    filename: "primal-application-analytics.xlsx",
+  }),
+  downloadApplicationAnalyticsPdf: (query) => downloadFile("/api/reports/analytics.pdf", {
+    query,
+    filename: "primal-application-analytics.pdf",
+  }),
+  downloadSeasonReportPdf: (id) => downloadFile(`/api/reports/seasons/${id}.pdf`, {
+    filename: `primal-season-${id}.pdf`,
   }),
   downloadApplicationPdf: (id) => downloadFile(`/api/reports/applications/${id}.pdf`, {
     filename: `primal-application-${id}.pdf`,

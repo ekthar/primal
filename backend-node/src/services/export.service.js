@@ -527,11 +527,20 @@ function drawAnalyticsTable(doc, title, rows, palette, fonts) {
   }
 
   rows.forEach((row, index) => {
-    ensureSpace(doc, 22);
+    const participantNames = Array.isArray(row.participantNames) ? row.participantNames.filter(Boolean) : [];
+    const participantDetails = Array.isArray(row.participantDetails) ? row.participantDetails.filter(Boolean) : [];
+    const participantLine = participantDetails.length ? participantDetails.join(' • ') : participantNames.length ? participantNames.join(', ') : '';
+    let rowHeight = 20;
+    if (participantLine) {
+      doc.font(fonts.body).fontSize(7.2);
+      rowHeight = Math.max(28, doc.heightOfString(participantLine, { width: columns[0].width - 12 }) + 18);
+    }
+
+    ensureSpace(doc, rowHeight + 2);
     const rowY = doc.y;
     if (index % 2 === 0) {
       doc.save();
-      doc.roundedRect(x, rowY, width, 20, 4).fill('#fbfaf7');
+      doc.roundedRect(x, rowY, width, rowHeight, 4).fill('#fbfaf7');
       doc.restore();
     }
 
@@ -548,11 +557,20 @@ function drawAnalyticsTable(doc, title, rows, palette, fonts) {
 
     let valueX = x;
     columns.forEach((column) => {
-      doc.fillColor(palette.text).font(fonts.body).fontSize(8.5)
-        .text(String(values[column.key]), valueX + 6, rowY + 6, { width: column.width - 12, ellipsis: true });
+      if (column.key === 'label') {
+        doc.fillColor(palette.text).font(fonts.body).fontSize(8.5)
+          .text(String(values[column.key]), valueX + 6, rowY + 5, { width: column.width - 12, ellipsis: !participantLine });
+        if (participantLine) {
+          doc.fillColor(palette.textMuted).font(fonts.body).fontSize(7.2)
+            .text(participantLine, valueX + 6, rowY + 15, { width: column.width - 12, ellipsis: false });
+        }
+      } else {
+        doc.fillColor(palette.text).font(fonts.body).fontSize(8.5)
+          .text(String(values[column.key]), valueX + 6, rowY + 6, { width: column.width - 12, ellipsis: true });
+      }
       valueX += column.width;
     });
-    doc.y = rowY + 22;
+    doc.y = rowY + rowHeight;
   });
 
   doc.moveDown(0.8);
@@ -1160,14 +1178,14 @@ function renderApplicationPaperHtml(viewModel) {
             <div style="height: 1px; background: #2f3742; width: 100%;"></div>
             ${renderKeyValueRowsHtml(viewModel.identityRows)}
           </div>
-          <div style="display: flex; flex-direction: column; width: calc(42.5% - 8px); border: 1px solid #2f3742; border-radius: 10px; background: #fbfaf7; padding: 12px; gap: 12px;" layer-name="Verification Panel">
-            <div style="display: flex; gap: 12px; align-items: flex-start;">
+          <div style="display: flex; flex-direction: column; width: calc(42.5% - 8px); border: 1px solid #2f3742; border-radius: 10px; background: #fbfaf7; padding: 12px; gap: 14px;" layer-name="Verification Panel">
+            <div style="display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: 12px; align-items: start;">
               <div style="display: flex; flex-direction: column; gap: 6px; width: 80px; flex-shrink: 0;">
                 <div style="display: flex; align-items: center; justify-content: center; width: 80px; height: 104px; border: 1px solid #2f3742; border-radius: 8px; background: #e7e0d5; color: #5f6773; font-size: 10px; text-transform: uppercase;">${viewModel.primaryImageName ? 'Photo ID' : 'No Photo'}</div>
                 <div style="color: #5f6773; font-size: 9px; font-weight: 700; text-transform: uppercase;">${escapeHtml(viewModel.primaryImageName || 'No photo uploaded')}</div>
               </div>
-              <div style="display: flex; flex-direction: column; flex: 1; gap: 10px; min-width: 0;">
-                <div style="color: #1f2937; font-size: 11px; font-weight: 700;">${escapeHtml(viewModel.applicantName)}</div>
+              <div style="display: flex; flex-direction: column; gap: 10px; min-width: 0; padding-top: 1px;">
+                <div style="color: #1f2937; font-size: 11px; font-weight: 700; line-height: 1.35;">${escapeHtml(viewModel.applicantName)}</div>
                 <div style="display: flex; flex-direction: column; gap: 2px;">
                   <div style="color: #5f6773; font-size: 9px; font-weight: 700; text-transform: uppercase;">Reviewer ID</div>
                   <div style="color: #1f2937; font-size: 10px;">${escapeHtml(viewModel.reviewerDisplayId || 'Unassigned')}</div>
@@ -1185,7 +1203,7 @@ function renderApplicationPaperHtml(viewModel) {
                 </div>
               </div>
             </div>
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:6px;border-top:1px solid #d7d0c5;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:8px;border-top:1px solid #d7d0c5;">
               <div style="display:flex;flex-direction:column;gap:4px;max-width:150px;">
                 <div style="color:#1f2937;font-size:10px;font-weight:700;">Scan to verify</div>
                 <div style="color:#5f6773;font-size:9px;line-height:1.4;">Printed QR opens the signed verification record.</div>

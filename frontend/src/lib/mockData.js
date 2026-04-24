@@ -9,6 +9,7 @@ export const STATUS = {
   NEEDS_CORRECTION: "needs_correction",
   APPROVED: "approved",
   REJECTED: "rejected",
+  SEASON_CLOSED: "season_closed",
 };
 
 export const STATUS_LABELS = {
@@ -18,6 +19,7 @@ export const STATUS_LABELS = {
   needs_correction: "Needs Correction",
   approved: "Approved",
   rejected: "Rejected",
+  season_closed: "Season Closed",
 };
 
 export const WEIGHT_CLASSES = [

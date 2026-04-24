@@ -104,6 +104,10 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
   const [participantQuery, setParticipantQuery] = useState("");
   const [participants, setParticipants] = useState([]);
   const [weightDrafts, setWeightDrafts] = useState({});
+  const currentSeasonTournamentId = useMemo(() => {
+    const current = tournaments.find((tournament) => tournament.is_public && !tournament.deleted_at);
+    return current?.id || tournaments[0]?.id || "";
+  }, [tournaments]);
 
   useEffect(() => {
     if (user?.role !== "admin") return;
@@ -114,7 +118,7 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
   useEffect(() => {
     if (user?.role !== "admin") return;
     loadReweighList();
-  }, [user?.role, clubFilter, participantQuery]);
+  }, [user?.role, clubFilter, participantQuery, currentSeasonTournamentId]);
 
   async function loadTournaments() {
     setLoadingTournaments(true);
@@ -162,6 +166,7 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
     const { data, error } = await api.adminReweighList({
       clubId: clubFilter === "all" ? undefined : clubFilter,
       q: participantQuery || undefined,
+      tournamentId: currentSeasonTournamentId || undefined,
       limit: 200,
       offset: 0,
     });

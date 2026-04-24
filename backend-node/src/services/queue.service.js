@@ -6,14 +6,16 @@ const { formatPersonName, applicationDisplayId, reviewerDisplayId } = require('.
 async function board(filters = {}) {
   const items = await appsRepo.query(filters);
   const counts = await appsRepo.counts();
+  const queueCounts = { ...counts };
+  delete queueCounts[STATUS.SEASON_CLOSED];
   return {
-    items: items.map((item) => ({
+    items: items.filter((item) => item.status !== STATUS.SEASON_CLOSED).map((item) => ({
       ...item,
       applicant_display_name: formatPersonName(item.first_name, item.last_name),
       application_display_id: applicationDisplayId(item.id),
       reviewer_display_id: item.reviewer_id ? reviewerDisplayId(item.reviewer_id) : null,
     })),
-    counts,
+    counts: queueCounts,
   };
 }
 

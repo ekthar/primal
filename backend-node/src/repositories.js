@@ -28,6 +28,8 @@ const users = {
     return rows[0];
   },
   touchLogin: (id) => query(`UPDATE users SET last_login_at = NOW() WHERE id = $1`, [id]),
+  updatePhone: async (id, phone) =>
+    (await query(`UPDATE users SET phone = $1, updated_at = NOW() WHERE id = $2 AND ${ACTIVE} RETURNING *`, [phone, id])).rows[0],
   updatePassword: async (id, passwordHash) =>
     (await query(`UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2 RETURNING *`, [passwordHash, id])).rows[0],
   updateNotificationPreferences: async (id, prefs) =>
@@ -136,9 +138,37 @@ const profiles = {
     );
     return rows[0];
   },
-  listForAdminReweigh: async ({ clubId, q, limit = 200, offset = 0 } = {}) => {
+  findLatestApprovedByUser: async (userId, { tournamentId = null } = {}) => {
+    const args = [userId];
+    const where = [`p.user_id = $1`, `a.status = 'approved'`, `a.deleted_at IS NULL`, `p.deleted_at IS NULL`];
+    if (tournamentId) {
+      args.push(tournamentId);
+      where.push(`a.tournament_id = $${args.length}`);
+    }
+    const { rows } = await query(
+      `SELECT DISTINCT ON (p.id)
+        p.*, u.email, u.phone, u.role,
+        a.id AS application_id,
+        a.tournament_id,
+        t.name AS tournament_name,
+        a.decided_at
+       FROM profiles p
+       JOIN users u ON u.id = p.user_id
+       JOIN applications a ON a.profile_id = p.id
+       JOIN tournaments t ON t.id = a.tournament_id
+       WHERE ${where.join(' AND ')}
+       ORDER BY p.id, a.decided_at DESC NULLS LAST, a.created_at DESC`,
+      args
+    );
+    return rows[0];
+  },
+  listForAdminReweigh: async ({ clubId, tournamentId, q, limit = 200, offset = 0 } = {}) => {
     const args = [];
-    const where = [`p.${ACTIVE}`];
+    const where = [`p.${ACTIVE}`, `a.status = 'approved'`, `a.deleted_at IS NULL`];
+    if (tournamentId) {
+      args.push(tournamentId);
+      where.push(`a.tournament_id = $${args.length}`);
+    }
     if (clubId) {
       args.push(clubId);
       where.push(`p.club_id = $${args.length}`);
@@ -150,12 +180,16 @@ const profiles = {
     args.push(limit);
     args.push(offset);
     const sql = `
-      SELECT p.*, u.email, c.name AS club_name
+      SELECT DISTINCT ON (p.id)
+        p.*, u.email, c.name AS club_name,
+        a.tournament_id, t.name AS tournament_name, a.decided_at
       FROM profiles p
       JOIN users u ON u.id = p.user_id
+      JOIN applications a ON a.profile_id = p.id
+      JOIN tournaments t ON t.id = a.tournament_id
       LEFT JOIN clubs c ON c.id = p.club_id
       WHERE ${where.join(' AND ')}
-      ORDER BY c.name NULLS LAST, p.first_name ASC, p.last_name ASC
+      ORDER BY p.id, a.decided_at DESC NULLS LAST, a.created_at DESC
       LIMIT $${args.length - 1} OFFSET $${args.length}`;
     return (await query(sql, args)).rows;
   },

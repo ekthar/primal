@@ -1,4 +1,4 @@
-const { profiles: profilesRepo, clubs: clubsRepo } = require('../repositories');
+const { profiles: profilesRepo, clubs: clubsRepo, users: usersRepo } = require('../repositories');
 const { ApiError } = require('../apiError');
 const { write: auditWrite } = require('../audit');
 const { validateIndiaAddress } = require('../indiaLocations');
@@ -55,22 +55,29 @@ async function upsertMyProfile(userId, data, ctx = {}) {
     });
   }
   payload.metadata.address = addressValidation.normalized;
+  const phone = typeof payload.metadata.phone === 'string' ? payload.metadata.phone.trim() : '';
+  payload.metadata.phone = phone || null;
 
   if (data.clubId) {
     const c = await clubsRepo.findById(data.clubId);
     if (!c) throw ApiError.badRequest('Unknown club', { field: 'clubId' });
   }
   const profile = await profilesRepo.upsertForUser(userId, payload);
+  await usersRepo.updatePhone(userId, payload.metadata.phone);
   await auditWrite({ actorUserId: userId, action: 'profile.upsert', entityType: 'profile',
     entityId: profile.id, payload: { clubId: profile.club_id }, requestIp: ctx.ip });
   return profile;
 }
 
 async function getMyProfile(userId) {
-  const profile = await profilesRepo.findByUserId(userId);
+  const [profile, user] = await Promise.all([
+    profilesRepo.findByUserId(userId),
+    usersRepo.findById(userId),
+  ]);
   if (!profile) return null;
   return {
     ...profile,
+    phone: user?.phone || profile.metadata?.phone || null,
     avatar_url: resolveAvatarUrl({
       explicitAvatarUrl: null,
       photoAvatarUrl: null,

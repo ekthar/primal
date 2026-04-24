@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Download, Timer, AlertTriangle, Users, Gauge, RefreshCcw } from "lucide-react";
+import { Download, Timer, AlertTriangle, Users, Gauge, RefreshCcw, ShieldCheck, QrCode, MailWarning } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { InlineLoadingLabel, SectionLoader } from "@/components/shared/PrimalLoader";
@@ -15,6 +15,12 @@ export default function Reports() {
   const [loading, setLoading] = useState(true);
   const [sla, setSla] = useState(null);
   const [workload, setWorkload] = useState([]);
+  const [production, setProduction] = useState(null);
+  const [analytics, setAnalytics] = useState(null);
+  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
+  const [tournaments, setTournaments] = useState([]);
+  const [selectedTournamentId, setSelectedTournamentId] = useState("");
+  const [selectedDiscipline, setSelectedDiscipline] = useState("");
 
   const [loadingParticipants, setLoadingParticipants] = useState(false);
   const [downloadingAllPdfs, setDownloadingAllPdfs] = useState(false);
@@ -29,7 +35,11 @@ export default function Reports() {
 
   useEffect(() => {
     loadSummary();
-    if (isAdmin) loadParticipantReport();
+    if (isAdmin) {
+      loadParticipantReport();
+      loadAnalytics("");
+      loadTournaments();
+    }
   }, [isAdmin]);
 
   async function loadSummary() {
@@ -42,6 +52,16 @@ export default function Reports() {
     }
     setSla(data.sla || null);
     setWorkload(data.workload || []);
+    setProduction(data.production || null);
+  }
+
+  async function loadTournaments() {
+    const { data, error } = await api.adminTournaments({ includeArchived: true });
+    if (error) {
+      toast.error(error.message || "Failed to load tournaments");
+      return;
+    }
+    setTournaments(data?.tournaments || []);
   }
 
   async function loadParticipantReport() {
@@ -60,6 +80,21 @@ export default function Reports() {
     });
     setClubParticipants(data?.clubParticipants || []);
     setIndividualParticipants(data?.individualParticipants || []);
+  }
+
+  async function loadAnalytics(tournamentIdOverride) {
+    setLoadingAnalytics(true);
+    const tournamentId = tournamentIdOverride !== undefined ? tournamentIdOverride : selectedTournamentId;
+    const { data, error } = await api.reportAnalytics({
+      tournamentId: tournamentId || undefined,
+      discipline: selectedDiscipline || undefined,
+    });
+    setLoadingAnalytics(false);
+    if (error) {
+      toast.error(error.message || "Failed to load grouped analytics");
+      return;
+    }
+    setAnalytics(data);
   }
 
   async function handleApprovedExport() {
@@ -89,6 +124,43 @@ export default function Reports() {
     toast.success("Audit export started");
   }
 
+  async function handleAnalyticsExport() {
+    const { error } = await api.downloadApplicationAnalyticsXlsx({
+      tournamentId: selectedTournamentId || undefined,
+      discipline: selectedDiscipline || undefined,
+    });
+    if (error) {
+      toast.error(error.message || "Failed to export grouped analytics");
+      return;
+    }
+    toast.success("Grouped analytics export started");
+  }
+
+  async function handleAnalyticsPdfExport() {
+    const { error } = await api.downloadApplicationAnalyticsPdf({
+      tournamentId: selectedTournamentId || undefined,
+      discipline: selectedDiscipline || undefined,
+    });
+    if (error) {
+      toast.error(error.message || "Failed to export grouped analytics PDF");
+      return;
+    }
+    toast.success("Grouped analytics PDF export started");
+  }
+
+  async function handleSeasonReportPdf() {
+    if (!selectedTournamentId) {
+      toast.error("Select a tournament first");
+      return;
+    }
+    const { error } = await api.downloadSeasonReportPdf(selectedTournamentId);
+    if (error) {
+      toast.error(error.message || "Failed to export season report");
+      return;
+    }
+    toast.success("Season report PDF export started");
+  }
+
   const queueHealth = useMemo(() => {
     if (!sla) return "-";
     if (Number(sla.overdue || 0) === 0) return "Healthy";
@@ -104,6 +176,10 @@ export default function Reports() {
   const filteredIndividualParticipants = useMemo(
     () => filterParticipantRows(individualParticipants, participantSearch),
     [individualParticipants, participantSearch]
+  );
+  const selectedTournament = useMemo(
+    () => tournaments.find((tournament) => tournament.id === selectedTournamentId) || null,
+    [selectedTournamentId, tournaments]
   );
 
   const allApprovedApplicationRows = useMemo(() => {
@@ -169,6 +245,16 @@ export default function Reports() {
             <Button variant="outline" onClick={handleParticipantsExport}>
               <Download className="size-4" /> Approved participants
             </Button>
+          )}
+          {isAdmin && (
+            <>
+              <Button variant="outline" onClick={handleAnalyticsPdfExport}>
+                <Download className="size-4" /> Analytics PDF
+              </Button>
+              <Button variant="outline" onClick={handleAnalyticsExport}>
+                <Download className="size-4" /> Analytics Excel
+              </Button>
+            </>
           )}
           {isAdmin && (
             <Button className="bg-foreground text-background hover:bg-foreground/90" onClick={handleAuditExport}>
@@ -254,6 +340,138 @@ export default function Reports() {
             <section className="mt-6 rounded-3xl border border-border bg-surface elev-card p-6">
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>
+                  <h2 className="font-display text-2xl font-semibold tracking-tight">Production readiness</h2>
+                  <p className="text-sm text-secondary-muted mt-1">Deploy configuration, notification health, export activity, and QR verification telemetry.</p>
+                </div>
+                <Button variant="outline" size="sm" onClick={loadSummary}>
+                  <RefreshCcw className="size-4" /> Refresh diagnostics
+                </Button>
+              </div>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-4">
+                <Kpi icon={ShieldCheck} label="Readiness" value={production?.readiness?.ok ? "Ready" : "Needs work"} helper="Critical production checks" tone={production?.readiness?.ok ? "emerald" : "amber"} />
+                <Kpi icon={MailWarning} label="Email failures" value={production?.notifications?.recentFailures?.length ?? 0} helper="Most recent failed sends" tone={production?.notifications?.recentFailures?.length ? "red" : "emerald"} />
+                <Kpi icon={Download} label="PDF exports (7d)" value={production?.audit?.exportsLast7d ?? 0} helper="Recent export usage" tone="blue" />
+                <Kpi icon={QrCode} label="QR failures (7d)" value={production?.audit?.qrFailedLast7d ?? 0} helper="Verification errors" tone={Number(production?.audit?.qrFailedLast7d || 0) > 0 ? "amber" : "emerald"} />
+              </div>
+
+              <div className="mt-5 grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
+                <div className="rounded-2xl border border-border bg-background/60 p-4">
+                  <div className="text-sm font-medium">Readiness checks</div>
+                  <div className="mt-3 space-y-2">
+                    {(production?.readiness?.checks || []).map((check) => (
+                      <div key={check.key} className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface px-3 py-3 text-sm">
+                        <div>{check.message}</div>
+                        <span className={check.ok ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}>
+                          {check.ok ? "OK" : "Missing"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-border bg-background/60 p-4">
+                  <div className="text-sm font-medium">Recent notification failures</div>
+                  <div className="mt-3 space-y-2">
+                    {(production?.notifications?.recentFailures || []).map((failure) => (
+                      <div key={failure.id} className="rounded-xl border border-border bg-surface px-3 py-3 text-sm">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="font-medium">{failure.template}</div>
+                          <div className="text-xs text-tertiary">{new Date(failure.created_at).toLocaleString()}</div>
+                        </div>
+                        <div className="mt-1 text-secondary-muted">{failure.channel} / {failure.error || "Unknown provider error"}</div>
+                      </div>
+                    ))}
+                    {!production?.notifications?.recentFailures?.length && (
+                      <div className="rounded-xl border border-border bg-surface px-3 py-3 text-sm text-secondary-muted">
+                        No recent notification failures.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {isAdmin && (
+            <section className="mt-6 rounded-3xl border border-border bg-surface elev-card p-6">
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                  <h2 className="font-display text-2xl font-semibold tracking-tight">Grouped application analytics</h2>
+                  <p className="text-sm text-secondary-muted mt-1">Discipline-wise, weight-wise, and category-wise reporting with status totals.</p>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button variant="outline" size="sm" onClick={() => loadAnalytics("")} disabled={loadingAnalytics}>
+                    <RefreshCcw className="size-4" /> Refresh analytics
+                  </Button>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-border bg-background/60 p-4">
+                <div className="mb-3 rounded-xl border border-border bg-surface px-3 py-2 text-xs text-secondary-muted flex items-center justify-between gap-3 flex-wrap">
+                  <span className="font-medium text-foreground">Season scope</span>
+                  <span>{selectedTournament ? `${selectedTournament.name}${selectedTournament.deleted_at ? " (Archived)" : ""}` : "All tournaments"}</span>
+                </div>
+                <div className="grid gap-3 lg:grid-cols-[1.15fr_1fr_auto_auto]">
+                  <select
+                    value={selectedTournamentId}
+                    onChange={(event) => setSelectedTournamentId(event.target.value)}
+                    className="h-10 rounded-xl border border-border bg-background px-3 text-sm"
+                  >
+                    <option value="">All tournaments</option>
+                    {tournaments.map((tournament) => (
+                      <option key={tournament.id} value={tournament.id}>{tournament.name}{tournament.deleted_at ? " (Archived)" : ""}</option>
+                    ))}
+                  </select>
+                  <Input
+                    value={selectedDiscipline}
+                    onChange={(event) => setSelectedDiscipline(event.target.value)}
+                    className="h-10 bg-background"
+                    placeholder="Filter discipline"
+                  />
+                  <Button variant="outline" onClick={handleAnalyticsPdfExport} disabled={loadingAnalytics}>
+                    <Download className="size-4" /> PDF
+                  </Button>
+                  <Button variant="outline" onClick={handleSeasonReportPdf} disabled={!selectedTournamentId}>
+                    <Download className="size-4" /> Season report
+                  </Button>
+                  <Button onClick={() => loadAnalytics(undefined)} disabled={loadingAnalytics}>
+                    {loadingAnalytics ? "Loading..." : "Apply filters"}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-4">
+                <Kpi icon={Users} label="All applications" value={analytics?.totals?.total ?? 0} helper="Across current filters" tone="default" />
+                <Kpi icon={Users} label="Approved" value={analytics?.totals?.approved ?? 0} helper="Approved rows" tone="emerald" />
+                <Kpi icon={AlertTriangle} label="Pending" value={(analytics?.totals?.submitted ?? 0) + (analytics?.totals?.under_review ?? 0) + (analytics?.totals?.needs_correction ?? 0)} helper="Submitted, review, correction" tone="amber" />
+                <Kpi icon={AlertTriangle} label="Rejected" value={analytics?.totals?.rejected ?? 0} helper="Rejected rows" tone="red" />
+              </div>
+
+              {loadingAnalytics ? (
+                <div className="mt-5">
+                  <SectionLoader
+                    title="Loading grouped analytics"
+                    description="Aggregating applications by discipline, weight class, and generated category."
+                    cards={3}
+                    rows={4}
+                    compact
+                  />
+                </div>
+              ) : (
+                <div className="mt-5 grid gap-5 xl:grid-cols-3 items-start">
+                  <GroupedAnalyticsTable title="By discipline" rows={analytics?.disciplineGroups || []} />
+                  <GroupedAnalyticsTable title="By weight class" rows={analytics?.weightClassGroups || []} />
+                  <GroupedAnalyticsTable title="By category" rows={(analytics?.categoryGroups || []).map((row) => ({ ...row, label: `${row.label} / ${row.discipline} / ${row.weightClass}` }))} />
+                </div>
+              )}
+            </section>
+          )}
+
+          {isAdmin && (
+            <section className="mt-6 rounded-3xl border border-border bg-surface elev-card p-6">
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div>
                   <h2 className="font-display text-2xl font-semibold tracking-tight">Approved participants report</h2>
                   <p className="text-sm text-secondary-muted mt-1">Club-wise and individual participant tables for approved applications.</p>
                 </div>
@@ -331,6 +549,7 @@ function filterParticipantRows(rows, query) {
       row.discipline,
       row.tournamentName,
       row.applicationId,
+      row.applicationDisplayId,
     ].join(" ").toLowerCase();
     return hay.includes(q);
   });
@@ -344,6 +563,7 @@ function ParticipantTable({ title, rows, showClub, onDownloadApplication }) {
         {rows.map((row) => (
           <article key={`${row.applicationId}-${row.profileId}`} className="rounded-2xl border border-border bg-surface p-4">
             <div className="font-medium">{row.participantName}</div>
+            <div className="mt-1 text-[11px] text-tertiary">{row.applicationDisplayId || row.applicationId}</div>
             <div className="mt-1 text-[11px] text-tertiary">{row.tournamentName}</div>
             <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
               <DetailStat label="DOB" value={row.dateOfBirth || "-"} />
@@ -378,6 +598,7 @@ function ParticipantTable({ title, rows, showClub, onDownloadApplication }) {
               <tr key={`${row.applicationId}-${row.profileId}`} className="border-b border-border last:border-b-0">
                 <td className="px-4 py-3 text-sm">
                   <div className="font-medium">{row.participantName}</div>
+                  <div className="text-[11px] text-tertiary mt-1">{row.applicationDisplayId || row.applicationId}</div>
                   <div className="text-[11px] text-tertiary mt-1">{row.tournamentName}</div>
                 </td>
                 <td className="px-4 py-3 text-sm whitespace-nowrap">{row.dateOfBirth || "-"}</td>
@@ -396,6 +617,62 @@ function ParticipantTable({ title, rows, showClub, onDownloadApplication }) {
         </table>
       </div>
       {!rows.length && <div className="px-4 py-4 text-sm text-secondary-muted">No rows found.</div>}
+    </div>
+  );
+}
+
+function GroupedAnalyticsTable({ title, rows }) {
+  const [expanded, setExpanded] = useState(null);
+
+  return (
+    <div className="min-w-0 rounded-2xl border border-border bg-background/50 overflow-hidden">
+      <div className="px-4 py-3 border-b border-border font-medium text-sm">{title}</div>
+      <div className="space-y-3 p-4 max-h-[720px] overflow-y-auto">
+        {rows.map((row) => (
+          <article key={row.id} className="rounded-2xl border border-border bg-surface p-4">
+            <button type="button" onClick={() => setExpanded((current) => (current === row.id ? null : row.id))} className="w-full text-left">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="font-medium">{row.label}</div>
+                  {row.sampleApplicationDisplayId ? <div className="mt-1 text-[11px] text-tertiary">Example record: {row.sampleApplicationDisplayId}</div> : null}
+                </div>
+                <div className="rounded-full border border-border bg-background px-2.5 py-1 text-[11px] text-tertiary">
+                  {row.statuses.total} total
+                </div>
+              </div>
+            </button>
+            {expanded === row.id ? (
+              <>
+                {row.participantDetails?.length ? (
+                  <div className="mt-3 rounded-xl border border-border bg-background/60 p-3 text-[11px] leading-5 text-tertiary">
+                    <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-secondary-muted">Participants</div>
+                    <div className="space-y-1">
+                      {row.participantDetails.map((item) => <div key={item}>{item}</div>)}
+                    </div>
+                  </div>
+                ) : row.participantNames?.length ? (
+                  <div className="mt-3 rounded-xl border border-border bg-background/60 p-3 text-[11px] leading-5 text-tertiary">
+                    <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-secondary-muted">Participants</div>
+                    <div className="space-y-1">
+                      {row.participantNames.map((item) => <div key={item}>{item}</div>)}
+                    </div>
+                  </div>
+                ) : null}
+                <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
+              <DetailStat label="Total" value={row.statuses.total} />
+              <DetailStat label="Approved" value={row.statuses.approved} />
+              <DetailStat label="Rejected" value={row.statuses.rejected} />
+              <DetailStat label="Submitted" value={row.statuses.submitted} />
+              <DetailStat label="Review" value={row.statuses.under_review} />
+              <DetailStat label="Correction" value={row.statuses.needs_correction} />
+              <DetailStat label="Season closed" value={row.statuses.season_closed} />
+                </div>
+              </>
+            ) : null}
+          </article>
+        ))}
+        {!rows.length && <div className="px-1 py-2 text-sm text-secondary-muted">No grouped rows found.</div>}
+      </div>
     </div>
   );
 }

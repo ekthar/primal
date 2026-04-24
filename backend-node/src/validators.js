@@ -81,6 +81,7 @@ const schemas = {
       }).unknown(true).required(),
     }),
     adminReweighList: Joi.object({
+      tournamentId: uuid,
       clubId: uuid,
       q: Joi.string().max(200).allow(''),
       limit: Joi.number().integer().min(1).max(500).default(200),

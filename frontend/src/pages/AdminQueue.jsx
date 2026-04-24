@@ -3,12 +3,14 @@ import { useRouter } from "next/router";
 import { CheckCheck, Download, Filter, Search, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import EmptyState from "@/components/shared/EmptyState";
 import { SectionLoader } from "@/components/shared/PrimalLoader";
 import { PageSectionHeader, ResponsivePageShell, StickyActionBar } from "@/components/shared/ResponsivePrimitives";
 import StatusPill from "@/components/shared/StatusPill";
-import api from "@/lib/api";
+import api, { isApiLive } from "@/lib/api";
+import { formatPersonName } from "@/lib/person";
 import { toast } from "sonner";
 
 const STATUS_FILTERS = [
@@ -30,6 +32,7 @@ export default function AdminQueue() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selected, setSelected] = useState(new Set());
+  const [bulkDialog, setBulkDialog] = useState({ open: false, action: null, reason: "", fields: "" });
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -37,6 +40,14 @@ export default function AdminQueue() {
     }, 250);
     return () => clearTimeout(timer);
   }, [statusFilter, query]);
+
+  useEffect(() => {
+    isApiLive().then((live) => {
+      if (!live) {
+        toast.error("Backend API is not reachable. Queue actions may fail until the API is back online.");
+      }
+    });
+  }, []);
 
   async function loadQueue() {
     setLoading(true);
@@ -78,29 +89,11 @@ export default function AdminQueue() {
     else setSelected(new Set(items.map((entry) => entry.id)));
   };
 
-  const bulkSetStatus = async (action) => {
+  const bulkSetStatus = async (action, payload = {}) => {
     if (!selected.size) return;
     const ids = Array.from(selected);
-    let reason;
-    let fields;
-
-    if (action === "reject") {
-      reason = window.prompt("Rejection reason", "Eligibility criteria not met");
-      if (!reason) return;
-    }
-    if (action === "request_correction") {
-      reason = window.prompt("Correction reason", "Please update the flagged fields");
-      if (!reason) return;
-      const fieldInput = window.prompt("Fields to correct (comma separated)", "medical,weight_class");
-      fields = (fieldInput || "")
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean);
-      if (!fields.length) {
-        toast.error("At least one correction field is required");
-        return;
-      }
-    }
+    const reason = payload.reason;
+    const fields = payload.fields;
 
     setRunningBulkAction(true);
     const { data, error } = await api.bulkDecide({ ids, action, reason, fields });
@@ -119,6 +112,37 @@ export default function AdminQueue() {
     }
     loadQueue();
   };
+
+  function openBulkDialog(action) {
+    if (action === "approve") {
+      bulkSetStatus("approve");
+      return;
+    }
+    setBulkDialog({
+      open: true,
+      action,
+      reason: action === "reject" ? "Eligibility criteria not met" : "Please update the flagged fields",
+      fields: action === "request_correction" ? "medical,weight_class" : "",
+    });
+  }
+
+  function closeBulkDialog() {
+    setBulkDialog({ open: false, action: null, reason: "", fields: "" });
+  }
+
+  async function confirmBulkDialog() {
+    const reason = bulkDialog.reason.trim();
+    const fields = bulkDialog.action === "request_correction"
+      ? bulkDialog.fields.split(",").map((item) => item.trim()).filter(Boolean)
+      : undefined;
+    if (!reason) return;
+    if (bulkDialog.action === "request_correction" && !fields.length) {
+      toast.error("At least one correction field is required");
+      return;
+    }
+    await bulkSetStatus(bulkDialog.action, { reason, fields });
+    closeBulkDialog();
+  }
 
   const handleExportApproved = async () => {
     const { error } = await api.downloadApprovedXlsx();
@@ -206,8 +230,8 @@ export default function AdminQueue() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="text-sm font-medium">{entry.first_name} {entry.last_name}</div>
-                    <div className="mt-1 text-[11px] text-tertiary break-all">{entry.id}</div>
+                    <div className="text-sm font-medium">{entry.applicant_display_name || formatPersonName(entry.first_name, entry.last_name)}</div>
+                    <div className="mt-1 text-[11px] text-tertiary break-all">{entry.application_display_id || entry.id}</div>
                     <div className="mt-2 text-sm text-secondary-muted">{entry.tournament_name}</div>
                     <div className="text-sm text-secondary-muted">{entry.club_name || "Individual"}</div>
                   </div>
@@ -247,8 +271,8 @@ export default function AdminQueue() {
                     <Checkbox checked={selected.has(entry.id)} onCheckedChange={() => toggleSelect(entry.id)} />
                   </td>
                   <td className="py-3 cursor-pointer" onClick={() => router.push(`/admin/review/${entry.id}`)}>
-                    <div className="text-sm font-medium">{entry.first_name} {entry.last_name}</div>
-                    <div className="text-[11px] text-tertiary font-mono mt-1">{entry.id}</div>
+                    <div className="text-sm font-medium">{entry.applicant_display_name || formatPersonName(entry.first_name, entry.last_name)}</div>
+                    <div className="text-[11px] text-tertiary font-mono mt-1">{entry.application_display_id || entry.id}</div>
                   </td>
                   <td className="py-3 hidden lg:table-cell text-sm">{entry.tournament_name}</td>
                   <td className="py-3 hidden md:table-cell text-sm">{entry.club_name || "Individual"}</td>
@@ -269,17 +293,45 @@ export default function AdminQueue() {
           <div className="w-full text-sm font-medium sm:w-auto sm:pr-2">
             <span className="font-mono tabular-nums">{selected.size}</span> selected
           </div>
-          <Button size="sm" variant="ghost" className="flex-1 sm:flex-none" disabled={runningBulkAction} onClick={() => bulkSetStatus("approve")}>
+          <Button size="sm" variant="ghost" className="flex-1 sm:flex-none" disabled={runningBulkAction} onClick={() => openBulkDialog("approve")}>
             <CheckCheck className="size-3.5" /> Approve
           </Button>
-          <Button size="sm" variant="ghost" className="flex-1 sm:flex-none" disabled={runningBulkAction} onClick={() => bulkSetStatus("request_correction")}>
+          <Button size="sm" variant="ghost" className="flex-1 sm:flex-none" disabled={runningBulkAction} onClick={() => openBulkDialog("request_correction")}>
             <Filter className="size-3.5" /> Correction
           </Button>
-          <Button size="sm" variant="ghost" className="flex-1 sm:flex-none" disabled={runningBulkAction} onClick={() => bulkSetStatus("reject")}>
+          <Button size="sm" variant="ghost" className="flex-1 sm:flex-none" disabled={runningBulkAction} onClick={() => openBulkDialog("reject")}>
             <XCircle className="size-3.5" /> Reject
           </Button>
         </StickyActionBar>
       )}
+      <Dialog open={bulkDialog.open} onOpenChange={(open) => !open && closeBulkDialog()}>
+        <DialogContent className="max-w-lg rounded-3xl border-border">
+          <DialogHeader>
+            <DialogTitle>{bulkDialog.action === "request_correction" ? "Bulk correction request" : "Bulk rejection"}</DialogTitle>
+            <DialogDescription>
+              {bulkDialog.action === "request_correction"
+                ? "Apply the same correction reason and field list to every selected application."
+                : "Apply one rejection reason to every selected application."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-tertiary">Reason</div>
+              <Input value={bulkDialog.reason} onChange={(event) => setBulkDialog((current) => ({ ...current, reason: event.target.value }))} className="bg-surface" />
+            </div>
+            {bulkDialog.action === "request_correction" ? (
+              <div className="space-y-2">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-tertiary">Fields to update</div>
+                <Input value={bulkDialog.fields} onChange={(event) => setBulkDialog((current) => ({ ...current, fields: event.target.value }))} className="bg-surface" />
+              </div>
+            ) : null}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={closeBulkDialog}>Cancel</Button>
+              <Button onClick={confirmBulkDialog} disabled={runningBulkAction || !bulkDialog.reason.trim()}>Apply</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </ResponsivePageShell>
   );
 }
