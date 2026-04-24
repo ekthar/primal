@@ -202,6 +202,10 @@ export const api = {
     query,
     filename: "primal-approved-participants.xlsx",
   }),
+  downloadApprovedParticipantsPdf: (query) => downloadFile("/api/reports/participants.pdf", {
+    query,
+    filename: "primal-approved-participants.pdf",
+  }),
   downloadApplicationAnalyticsXlsx: (query) => downloadFile("/api/reports/analytics.xlsx", {
     query,
     filename: "primal-application-analytics.xlsx",

@@ -148,17 +148,28 @@ export default function Reports() {
     toast.success("Grouped analytics PDF export started");
   }
 
-  async function handleSeasonReportPdf() {
-    if (!selectedTournamentId) {
+  async function handleSeasonReportPdf(tournamentId = selectedTournamentId) {
+    if (!tournamentId) {
       toast.error("Select a tournament first");
       return;
     }
-    const { error } = await api.downloadSeasonReportPdf(selectedTournamentId);
+    const { error } = await api.downloadSeasonReportPdf(tournamentId);
     if (error) {
       toast.error(error.message || "Failed to export season report");
       return;
     }
     toast.success("Season report PDF export started");
+  }
+
+  async function handleParticipantsPdfExport() {
+    const { error } = await api.downloadApprovedParticipantsPdf(
+      selectedTournamentId ? { tournamentId: selectedTournamentId } : undefined,
+    );
+    if (error) {
+      toast.error(error.message || "Failed to export participant roster PDF");
+      return;
+    }
+    toast.success("Participant roster PDF export started");
   }
 
   const queueHealth = useMemo(() => {
@@ -233,7 +244,12 @@ export default function Reports() {
           </Button>
           {isAdmin && (
             <Button variant="outline" onClick={handleParticipantsExport}>
-              <Download className="size-4" /> Approved participants
+              <Download className="size-4" /> Approved participants (XLSX)
+            </Button>
+          )}
+          {isAdmin && (
+            <Button variant="outline" onClick={handleParticipantsPdfExport}>
+              <Download className="size-4" /> Approved participants (PDF)
             </Button>
           )}
           {isAdmin && (
@@ -422,7 +438,7 @@ export default function Reports() {
                   <Button variant="outline" onClick={handleAnalyticsPdfExport} disabled={loadingAnalytics}>
                     <Download className="size-4" /> PDF
                   </Button>
-                  <Button variant="outline" onClick={handleSeasonReportPdf} disabled={!selectedTournamentId}>
+                  <Button variant="outline" onClick={() => handleSeasonReportPdf()} disabled={!selectedTournamentId}>
                     <Download className="size-4" /> Season report
                   </Button>
                   <Button onClick={() => loadAnalytics(undefined)} disabled={loadingAnalytics}>
@@ -466,6 +482,9 @@ export default function Reports() {
                   <p className="text-sm text-secondary-muted mt-1">Club-wise and individual participant tables for approved applications.</p>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
+                  <Button variant="outline" size="sm" onClick={handleParticipantsPdfExport}>
+                    <Download className="size-4" /> Participant roster (PDF)
+                  </Button>
                   <Button variant="outline" size="sm" disabled={downloadingAllPdfs || loadingParticipants} onClick={handleDownloadAllParticipantPdfs}>
                     <InlineLoadingLabel loading={downloadingAllPdfs} loadingText="Preparing ZIP...">
                       <>
@@ -522,6 +541,63 @@ export default function Reports() {
               )}
             </section>
           )}
+
+          {isAdmin && tournaments.length ? (
+            <section className="mt-6 rounded-3xl border border-border bg-surface elev-card p-6">
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                  <h2 className="font-display text-2xl font-semibold tracking-tight">Seasonal archive reports</h2>
+                  <p className="text-sm text-secondary-muted mt-1">
+                    Full retrospective reports for every season. Applications are never deleted — past data
+                    stays available for download forever.
+                  </p>
+                </div>
+              </div>
+              <ul className="mt-4 grid gap-3 lg:grid-cols-2">
+                {[...tournaments]
+                  .sort((a, b) => {
+                    const aDate = a.starts_on || a.createdAt || "";
+                    const bDate = b.starts_on || b.createdAt || "";
+                    return String(bDate).localeCompare(String(aDate));
+                  })
+                  .map((tournament) => (
+                    <li
+                      key={tournament.id}
+                      className="rounded-2xl border border-border bg-background/60 p-4 flex items-start justify-between gap-4 flex-wrap"
+                    >
+                      <div className="min-w-0">
+                        <div className="font-medium text-foreground truncate">{tournament.name}</div>
+                        <div className="mt-1 text-xs text-tertiary">
+                          Season {tournament.season || "—"}
+                          {tournament.starts_on ? ` · ${String(tournament.starts_on).slice(0, 10)}` : ""}
+                          {tournament.deleted_at ? " · archived" : ""}
+                          {tournament.registrationOpen ? " · open for registration" : ""}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            api
+                              .downloadApprovedParticipantsPdf({ tournamentId: tournament.id })
+                              .then(({ error }) => {
+                                if (error) toast.error(error.message || "Failed to export participants");
+                                else toast.success("Participants PDF export started");
+                              })
+                          }
+                        >
+                          <Download className="size-4" /> Participants
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => handleSeasonReportPdf(tournament.id)}>
+                          <Download className="size-4" /> Full season report
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
+              </ul>
+            </section>
+          ) : null}
         </>
       )}
     </ResponsivePageShell>
