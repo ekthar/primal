@@ -4,6 +4,7 @@ const { applications, tournaments, clubs } = require('../repositories');
 const clubsService = require('../services/club.service');
 const circularsService = require('../services/circular.service');
 const tournamentService = require('../services/tournament.service');
+const albumService = require('../services/album.service');
 const { schemas } = require('../validators');
 const { verifySignatureForApplication } = require('../pdfSignature');
 const { config } = require('../config');
@@ -37,6 +38,17 @@ router.get('/tournaments/current', ah(async (_req, res) => {
 
 router.get('/clubs', ah(async (req, res) => {
   res.json({ clubs: await clubsService.listPublicClubs({ q: req.query.q }) });
+}));
+
+// Public: photo albums
+router.get('/albums', ah(async (_req, res) => {
+  res.json({ albums: await albumService.listAlbums({ publicOnly: true }) });
+}));
+
+router.get('/albums/:id', ah(async (req, res) => {
+  const album = await albumService.getAlbum(req.params.id, { publicOnly: true });
+  if (!album) return res.status(404).json({ error: 'not_found' });
+  res.json({ album });
 }));
 
 // Public: circulars / announcements

@@ -11,6 +11,7 @@ import {
   Search,
   ShieldCheck,
   Swords,
+  Mail,
   Undo2,
   XCircle,
 } from "lucide-react";
@@ -324,6 +325,30 @@ export default function ReviewerWorkbench() {
     refreshAll();
   }
 
+  async function handleResendNotification() {
+    if (!activeId || !activeApplication) return;
+    const template = activeApplication.status === "approved" ? "application.approved"
+      : activeApplication.status === "rejected" ? "application.rejected"
+      : activeApplication.status === "needs_correction" ? "application.needs_correction"
+      : null;
+    if (!template) {
+      toast.error("Resend is only available for approved, rejected, or correction-requested applications.");
+      return;
+    }
+    setActionBusy(true);
+    const { error } = await api.resendNotification(activeId, {
+      template,
+      channels: ["email", "whatsapp", "sms"],
+      reason: activeApplication.review_notes || activeApplication.rejection_reason || "",
+    });
+    setActionBusy(false);
+    if (error) {
+      toast.error(error.message || "Failed to resend notification");
+      return;
+    }
+    toast.success("Notification dispatched (email + SMS fallback)");
+  }
+
   async function handleReopen(reason) {
     if (!activeId) return;
     if (!reason) return;
@@ -470,6 +495,11 @@ export default function ReviewerWorkbench() {
               {canReopen && (
                 <Button variant="outline" disabled={actionBusy} onClick={() => openReviewDialog("reopen")}>
                   <Undo2 className="size-4 mr-1.5" /> Reopen
+                </Button>
+              )}
+              {["approved", "rejected", "needs_correction"].includes(activeApplication.status) && (
+                <Button variant="outline" disabled={actionBusy} onClick={handleResendNotification} title="Resend decision email + SMS to the applicant">
+                  <Mail className="size-4 mr-1.5" /> Resend notification
                 </Button>
               )}
               <Button variant="ghost" disabled={actionBusy} onClick={refreshAll}>
