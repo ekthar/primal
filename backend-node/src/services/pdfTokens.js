@@ -17,6 +17,40 @@
 
 const { config } = require('../config');
 
+/**
+ * Canonical Primal OS type scale for PDF exports.
+ *
+ * Six sizes, full stop. Any ad-hoc size on a PDF template is a Phase 1 bug —
+ * sizes outside this scale produce visual noise and break the 4pt baseline
+ * rhythm. If you need a seventh size, update this table and the Primal OS
+ * plan document, do not sprinkle a `fontSize(9.3)` call into a template.
+ */
+const TYPE_SCALE = Object.freeze({
+  display: { size: 28, lineGap: 4, letterSpacing: -0.5 },   // cover hero
+  h1:      { size: 20, lineGap: 2, letterSpacing: -0.2 },   // section title
+  h2:      { size: 14, lineGap: 2, letterSpacing: 0 },      // card title
+  label:   { size: 8,  lineGap: 0, letterSpacing: 0.8, uppercase: true }, // micro label
+  body:    { size: 10, lineGap: 2, letterSpacing: 0 },      // default copy
+  micro:   { size: 7,  lineGap: 0, letterSpacing: 0 },      // kpi / mono / footer
+});
+
+/**
+ * Machine-checkable status specification. Every status gets an icon shape
+ * (colorblind-safe), an ink-red vs verify vs neutral tone, and a short label
+ * that prints identically in color or grayscale. Used by drawStatusBadge().
+ *
+ * shape: 'check' | 'cross' | 'dot' | 'clock' | 'dash' | 'asterisk'
+ */
+const STATUS_SPEC = Object.freeze({
+  approved:         { tone: 'verify',  shape: 'check',    label: 'APPROVED' },
+  rejected:         { tone: 'accent',  shape: 'cross',    label: 'REJECTED' },
+  needs_correction: { tone: 'warn',    shape: 'asterisk', label: 'CORRECTION REQUIRED' },
+  under_review:     { tone: 'ink',     shape: 'clock',    label: 'UNDER REVIEW' },
+  pending:          { tone: 'ink',     shape: 'dot',      label: 'PENDING' },
+  submitted:        { tone: 'ink',     shape: 'dot',      label: 'SUBMITTED' },
+  season_closed:    { tone: 'muted',   shape: 'dash',     label: 'SEASON CLOSED' },
+});
+
 const BASE_TOKENS = Object.freeze({
   paper: '#FAFAF7',
   surface: '#FFFFFF',
@@ -223,11 +257,18 @@ function finalizePageRibbons(doc, {
     const rightLabel = rightText
       || [signatureShortId, ts].filter(Boolean).join(' · ');
 
-    doc.text(leftLabel, left, y, { width: width / 3, align: 'left', lineBreak: false });
+    // The ribbon sits inside the bottom margin on purpose — text writes this
+    // low would trigger pdfkit's auto-paginator. We save/restore doc.y around
+    // each write so the ribbon is a pure visual side-effect.
+    const savedY = doc.y;
+    doc.text(leftLabel, left, y, { width: width / 3, align: 'left', lineBreak: false, height: 0 });
+    doc.y = savedY;
     doc.font(fontBold).fillColor(palette.text);
-    doc.text(center, left + width / 3, y, { width: width / 3, align: 'center', lineBreak: false });
+    doc.text(center, left + width / 3, y, { width: width / 3, align: 'center', lineBreak: false, height: 0 });
+    doc.y = savedY;
     doc.font(fontBody).fillColor(palette.textMuted);
-    doc.text(rightLabel, left + (2 * width) / 3, y, { width: width / 3, align: 'right', lineBreak: false });
+    doc.text(rightLabel, left + (2 * width) / 3, y, { width: width / 3, align: 'right', lineBreak: false, height: 0 });
+    doc.y = savedY;
     doc.restore();
   }
 }
@@ -244,8 +285,34 @@ function shortSignatureId(signature) {
   return cleaned.slice(0, 10).toUpperCase();
 }
 
+/**
+ * Resolve a STATUS_SPEC tone name into a concrete palette color. This is the
+ * only place where a status → color mapping exists; templates consume it via
+ * `resolveStatusColor`, never hardcoding crimsons and greens themselves.
+ */
+function resolveStatusColor(tone, palette) {
+  switch (tone) {
+    case 'verify': return palette.verify;
+    case 'accent': return palette.accent;
+    case 'warn':   return palette.warn;
+    case 'muted':  return palette.textMuted;
+    case 'ink':
+    default:       return palette.ink;
+  }
+}
+
+/**
+ * Look up the spec for a raw status string. Unknown values fall back to
+ * `submitted` so templates never crash on novel statuses.
+ */
+function getStatusSpec(status) {
+  return STATUS_SPEC[status] || STATUS_SPEC.submitted;
+}
+
 module.exports = {
   BASE_TOKENS,
+  TYPE_SCALE,
+  STATUS_SPEC,
   createPalette,
   buildPdfInfo,
   baseDocumentOptions,
@@ -253,4 +320,6 @@ module.exports = {
   finalizePageRibbons,
   shortSignatureId,
   slug,
+  getStatusSpec,
+  resolveStatusColor,
 };

@@ -142,5 +142,40 @@ describe('pdfTokens', () => {
         brand: 'Primal',
       })).not.toThrow();
     });
+
+    it('does not create additional pages when stamping the ribbon near the bottom margin', async () => {
+      // Regression: the ribbon writes text at y ≈ page.height - 24, which sits
+      // inside pdfkit's auto-pagination zone. If any of the three text writes
+      // forgets { lineBreak: false, height: 0 } + doc.y reset, pdfkit silently
+      // adds a new page per stamped ribbon — doubling page count every time
+      // the artifact is exported.
+      const doc = new PDFDocument({ ...baseDocumentOptions({ title: 'T', brand: 'Primal' }) });
+      const chunks = [];
+      doc.on('data', (chunk) => chunks.push(chunk));
+      const ended = new Promise((resolve) => doc.on('end', resolve));
+      let addedPages = 0;
+      doc.on('pageAdded', () => { addedPages += 1; });
+
+      doc.addPage(); // page 2
+      doc.addPage(); // page 3
+      const startCount = doc.bufferedPageRange().count;
+      expect(startCount).toBe(3);
+      const pagesBeforeRibbon = addedPages;
+
+      finalizePageRibbons(doc, {
+        palette: createPalette({ pdf: {} }),
+        fonts: { body: 'Helvetica', bodyBold: 'Helvetica-Bold' },
+        brand: 'Primal',
+        identifier: 'TEST-01',
+        signatureShortId: 'SIG12345',
+      });
+      doc.end();
+      await ended;
+
+      // Ribbon stamping must not add pages. No exception, no overflow.
+      expect(addedPages - pagesBeforeRibbon).toBe(0);
+      const buf = Buffer.concat(chunks);
+      expect(buf.slice(0, 4).toString('latin1')).toBe('%PDF');
+    });
   });
 });
