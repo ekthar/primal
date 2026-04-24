@@ -492,6 +492,368 @@ function drawRunningHeader(doc, {
   doc.restore();
 }
 
+// ─── Bracket composition (Phase 2) ────────────────────────────────────────
+
+/**
+ * Draw a single fighter "slot" — the top or bottom half of a match box. Uses
+ * a corner bar (blue / red) + seed fingerprint + name + club. Winners get a
+ * full ink left bar and bold name; losers are kept at normal weight so the
+ * tree is scannable without color.
+ */
+function drawBracketSlot(doc, ctx) {
+  const {
+    x, y, width, height, side,
+    isWinner = false,
+    isChampionshipRound = false,
+    palette,
+    fonts,
+  } = ctx;
+
+  // Card body — winners get a subtle tint so the advance path is visible
+  // without a line cutting across the text (previous bug).
+  doc.save();
+  doc.rect(x, y, width, height).fill(isWinner ? palette.surface : palette.paper);
+  doc.rect(x, y, width, height).strokeColor(palette.line).opacity(0.35).lineWidth(0.5).stroke();
+  doc.restore();
+
+  // Left corner bar — blue / red for the two seeds; gold left bar marks a
+  // winner. Championship-round winner stays gold (the champion card picks
+  // up the brighter emphasis).
+  const corner = side && side.corner;
+  let barColor = palette.textMuted;
+  if (corner === 'blue') barColor = '#0F4C81';
+  else if (corner === 'red') barColor = palette.accent;
+  if (isWinner) barColor = isChampionshipRound ? palette.gold : palette.ink;
+  doc.save();
+  doc.rect(x, y, 3, height).fill(barColor);
+  doc.restore();
+
+  const padX = 10;
+  const contentX = x + padX;
+  const contentW = width - padX - 6;
+
+  if (!side || side.placeholder === 'tbd' || !side.name) {
+    doc.save();
+    doc.fillColor(palette.textMuted).font(fonts.body).fontSize(TYPE_SCALE.body.size);
+    lockedText(doc, 'TBD', contentX, y + height / 2 - TYPE_SCALE.body.size / 2, {
+      width: contentW,
+    });
+    doc.restore();
+    return;
+  }
+
+  // Compact slot (≤ 28pt tall): single-line — seed · name on one row.
+  // Generous slot (> 28pt): two-row — seed/corner micro-label above,
+  // name + club stacked.
+  const compact = height <= 28;
+  const seedText = side.seedScore || side.seed ? `#${side.seedScore || side.seed}` : '';
+  const cornerText = (side.corner || '').toUpperCase();
+
+  if (compact) {
+    // Seed fingerprint on the left, small muted
+    const leftMeta = [cornerText.charAt(0), seedText].filter(Boolean).join(' ');
+    let nameX = contentX;
+    let nameW = contentW;
+    if (leftMeta) {
+      doc.save();
+      doc.fillColor(palette.textMuted).font(fonts.body).fontSize(TYPE_SCALE.micro.size);
+      lockedText(doc, leftMeta, contentX, y + (height - TYPE_SCALE.body.size) / 2 + 1, {
+        width: 28,
+      });
+      doc.restore();
+      nameX = contentX + 30;
+      nameW = contentW - 30;
+    }
+    doc.save();
+    doc.fillColor(palette.ink)
+      .font(isWinner ? (fonts.headingBold || fonts.bodyBold) : (fonts.bodyBold || fonts.body))
+      .fontSize(TYPE_SCALE.body.size);
+    lockedText(doc, side.name, nameX, y + (height - TYPE_SCALE.body.size) / 2, {
+      width: nameW,
+      ellipsis: true,
+    });
+    doc.restore();
+    return;
+  }
+
+  // Generous layout
+  const labelY = y + 4;
+  if (cornerText) {
+    doc.save();
+    doc.fillColor(barColor).font(fonts.bodyBold || fonts.body).fontSize(TYPE_SCALE.micro.size);
+    lockedText(doc, cornerText, contentX, labelY, {
+      width: 32,
+      characterSpacing: 0.6,
+    });
+    doc.restore();
+  }
+  if (seedText) {
+    doc.save();
+    doc.fillColor(palette.textMuted).font(fonts.bodyBold || fonts.body).fontSize(TYPE_SCALE.micro.size);
+    lockedText(doc, seedText, x + width - padX - 30, labelY, {
+      width: 28,
+      align: 'right',
+    });
+    doc.restore();
+  }
+  doc.save();
+  doc.fillColor(palette.ink)
+    .font(isWinner ? (fonts.headingBold || fonts.bodyBold) : (fonts.bodyBold || fonts.body))
+    .fontSize(TYPE_SCALE.body.size);
+  lockedText(doc, side.name, contentX, y + 13, {
+    width: contentW,
+    ellipsis: true,
+  });
+  doc.restore();
+  if (height >= 34) {
+    doc.save();
+    doc.fillColor(palette.textMuted).font(fonts.body).fontSize(TYPE_SCALE.micro.size);
+    lockedText(doc, side.club || 'Independent', contentX, y + 13 + TYPE_SCALE.body.size + 3, {
+      width: contentW,
+      ellipsis: true,
+    });
+    doc.restore();
+  }
+}
+
+/**
+ * Pair-geometry helper: given a list of Y-centers for the child round, return
+ * the Y-centers for the parent round — each parent center is the midpoint
+ * between its two child matches. This is how a classical elimination tree
+ * stays balanced: a match is vertically centered on the pair below it, not
+ * stair-stepped sideways like the old layout.
+ */
+function deriveParentCenters(childCenters) {
+  const parents = [];
+  for (let i = 0; i < childCenters.length; i += 2) {
+    const a = childCenters[i];
+    const b = childCenters[i + 1];
+    if (b === undefined) { parents.push(a); continue; }
+    parents.push((a + b) / 2);
+  }
+  return parents;
+}
+
+/**
+ * Draw a connector — two horizontal legs out of the child match right edges,
+ * joined by a short vertical segment, then one horizontal leg into the
+ * parent match left edge. Classical elimination-tree geometry.
+ */
+function drawBracketConnector(doc, ctx) {
+  const { childRightX, parentLeftX, topY, bottomY, parentY, palette } = ctx;
+  const midX = childRightX + (parentLeftX - childRightX) / 2;
+  doc.save();
+  doc.lineWidth(0.75).strokeColor(palette.ink).opacity(0.55);
+  // Leg from top child
+  doc.moveTo(childRightX, topY).lineTo(midX, topY).stroke();
+  // Leg from bottom child
+  doc.moveTo(childRightX, bottomY).lineTo(midX, bottomY).stroke();
+  // Vertical join
+  doc.moveTo(midX, topY).lineTo(midX, bottomY).stroke();
+  // Entry into parent
+  doc.moveTo(midX, parentY).lineTo(parentLeftX, parentY).stroke();
+  doc.restore();
+}
+
+/**
+ * Auto-fit slot height: given vertical room for N match-boxes, pick a slot
+ * height that leaves ~30% of each pitch as visible gap between match boxes
+ * (so pairs read as discrete matches, not as a continuous list). Clamps
+ * between a readable minimum (14pt) and a cap (24pt).
+ */
+function autoSlotHeight({ contentHeight, firstRoundMatches, innerGap = 0 }) {
+  const pitch = contentHeight / Math.max(1, firstRoundMatches);
+  const usable = pitch * 0.72 - innerGap; // reserve 28% as between-pair gap
+  const raw = usable / 2;
+  return Math.max(14, Math.min(24, raw));
+}
+
+/**
+ * Compute a classical elimination-tree layout for an array of rounds.
+ *
+ * Rounds are given in ascending order: rounds[0] is the first round with the
+ * most matches, rounds[rounds.length-1] is the final.
+ *
+ * Returns: { matchLayout: { [roundIndex]: [{ y, centerY }...] }, contentHeight }
+ *
+ * The first-round matches are evenly distributed across `contentHeight`.
+ * Each subsequent round's match centers are midpoints of its two children.
+ * Match boxes are `slotHeight * 2 + matchGap` tall and vertically centered on
+ * their computed centerY.
+ */
+function layoutBracket(rounds, { contentHeight, topY, slotHeight, matchGap }) {
+  const firstRound = rounds[0] || { matches: [] };
+  const firstCount = Math.max(1, firstRound.matches.length);
+  const matchHeight = slotHeight * 2 + matchGap;
+  // Evenly space first-round match centers across the usable content area.
+  const firstPitch = contentHeight / firstCount;
+  let centers = [];
+  for (let i = 0; i < firstCount; i += 1) {
+    centers.push(topY + firstPitch * (i + 0.5));
+  }
+  const layout = { 0: centers.map((c) => ({ centerY: c, y: c - matchHeight / 2 })) };
+  for (let r = 1; r < rounds.length; r += 1) {
+    centers = deriveParentCenters(centers);
+    layout[r] = centers.map((c) => ({ centerY: c, y: c - matchHeight / 2 }));
+  }
+  return { matchLayout: layout, matchHeight };
+}
+
+/**
+ * Full bracket poster renderer. Draws the classical elimination tree onto
+ * the current page, with round labels along the top and connectors between
+ * match boxes. Champion card is rendered to the right of the final round.
+ *
+ * ctx.rounds — an array of { label, matches: [{ sides: [slotA, slotB], winnerIndex }] }
+ * ctx.x, ctx.y, ctx.width, ctx.height — the rectangle to fill with the tree
+ */
+function drawBracketTree(doc, ctx) {
+  const {
+    rounds,
+    x, y, width, height,
+    palette, fonts,
+    slotWidth = 140,
+    slotHeight = 18,
+    matchGap = 0,
+  } = ctx;
+
+  if (!rounds || !rounds.length) return;
+
+  const numRounds = rounds.length;
+  const roundPitch = (width - slotWidth) / Math.max(1, numRounds - 0.5);
+  const { matchLayout, matchHeight } = layoutBracket(rounds, {
+    contentHeight: height,
+    topY: y,
+    slotHeight,
+    matchGap,
+  });
+
+  rounds.forEach((round, r) => {
+    const roundX = x + r * roundPitch;
+    // Round label at the top
+    doc.save();
+    doc.fillColor(palette.textMuted).font(fonts.bodyBold || fonts.body).fontSize(TYPE_SCALE.label.size);
+    lockedText(doc, (round.label || `ROUND ${r + 1}`).toUpperCase(), roundX, y - 20, {
+      width: slotWidth,
+      align: 'center',
+      characterSpacing: TYPE_SCALE.label.letterSpacing,
+    });
+    doc.restore();
+
+    round.matches.forEach((match, i) => {
+      const pos = matchLayout[r][i];
+      if (!pos) return;
+      const matchY = pos.y;
+      const topSide = match.sides && match.sides[0];
+      const botSide = match.sides && match.sides[1];
+      const isChampRound = r === numRounds - 1;
+      const topWin = match.winnerIndex === 0;
+      const botWin = match.winnerIndex === 1;
+
+      drawBracketSlot(doc, {
+        x: roundX, y: matchY, width: slotWidth, height: slotHeight,
+        side: topSide, isWinner: topWin, isChampionshipRound: isChampRound,
+        palette, fonts,
+      });
+      drawBracketSlot(doc, {
+        x: roundX, y: matchY + slotHeight + matchGap, width: slotWidth, height: slotHeight,
+        side: botSide, isWinner: botWin, isChampionshipRound: isChampRound,
+        palette, fonts,
+      });
+
+      // Draw connector from this pair to parent, if a parent exists.
+      if (r < numRounds - 1) {
+        const parentPos = matchLayout[r + 1][Math.floor(i / 2)];
+        if (parentPos) {
+          const matchCenterY = pos.centerY;
+          const childRightX = roundX + slotWidth;
+          const parentLeftX = x + (r + 1) * roundPitch;
+          const midX = (childRightX + parentLeftX) / 2;
+          doc.save();
+          doc.lineWidth(0.9).strokeColor(palette.ink).opacity(0.75);
+          // Leg from child match center
+          doc.moveTo(childRightX, matchCenterY).lineTo(midX, matchCenterY).stroke();
+          // Vertical join toward parent — each sibling draws its own half of
+          // the vertical; together they form the full bracket fork.
+          doc.moveTo(midX, matchCenterY).lineTo(midX, parentPos.centerY).stroke();
+          // Horizontal into parent
+          doc.moveTo(midX, parentPos.centerY).lineTo(parentLeftX, parentPos.centerY).stroke();
+          doc.restore();
+        }
+      }
+    });
+  });
+}
+
+/**
+ * Champion card — renders to the right of the final. Paper-white card with
+ * gold left bar (championship tone), "CHAMPION" micro-label, name + club.
+ */
+function drawChampionCard(doc, ctx) {
+  const { x, y, champion, palette, fonts, width = 160, height = 60 } = ctx;
+  doc.save();
+  doc.rect(x, y, width, height).fill(palette.surface);
+  doc.rect(x, y, 4, height).fill(palette.gold);
+  doc.rect(x, y, width, height).strokeColor(palette.line).opacity(0.3).lineWidth(0.5).stroke();
+  doc.restore();
+  doc.save();
+  doc.fillColor(palette.gold).font(fonts.bodyBold || fonts.body).fontSize(TYPE_SCALE.label.size);
+  lockedText(doc, 'CHAMPION', x + 12, y + 8, { characterSpacing: TYPE_SCALE.label.letterSpacing });
+  doc.restore();
+  doc.save();
+  doc.fillColor(palette.ink).font(fonts.headingBold || fonts.bodyBold).fontSize(TYPE_SCALE.h2.size);
+  lockedText(doc, champion?.name || 'TBD', x + 12, y + 22, { width: width - 24, ellipsis: true });
+  doc.restore();
+  doc.save();
+  doc.fillColor(palette.textMuted).font(fonts.body).fontSize(TYPE_SCALE.body.size);
+  lockedText(doc, champion?.club || 'Independent', x + 12, y + 40, { width: width - 24, ellipsis: true });
+  doc.restore();
+}
+
+/**
+ * Bracket poster header — a compact landscape header with brand · tournament
+ * name · category label · status · seeding on a single row, plus the
+ * ink-red accent rule. Leaves the tree area free.
+ */
+function drawBracketHeader(doc, ctx) {
+  const { palette, fonts, brandName, tournamentName, categoryLabel, statusText, seedingLabel, exportedAt } = ctx;
+  const PW = doc.page.width;
+  const ML = doc.page.margins.left;
+  const MT = doc.page.margins.top;
+  const MR = doc.page.margins.right;
+  const CW = PW - ML - MR;
+
+  doc.save();
+  doc.rect(0, 0, PW, 3).fill(palette.accent);
+  doc.restore();
+
+  doc.save();
+  doc.fillColor(palette.textMuted).font(fonts.bodyBold || fonts.body).fontSize(TYPE_SCALE.label.size);
+  lockedText(doc, (brandName || 'Primal').toUpperCase(), ML, MT + 6, {
+    characterSpacing: TYPE_SCALE.label.letterSpacing,
+  });
+  doc.restore();
+
+  doc.save();
+  doc.fillColor(palette.ink).font(fonts.headingBold || fonts.bodyBold).fontSize(TYPE_SCALE.h1.size);
+  lockedText(doc, tournamentName || 'Tournament', ML, MT + 18, {
+    width: CW * 0.7,
+    ellipsis: true,
+  });
+  doc.restore();
+
+  doc.save();
+  doc.fillColor(palette.accent).font(fonts.bodyBold || fonts.body).fontSize(TYPE_SCALE.h2.size);
+  lockedText(doc, categoryLabel || 'Bracket', ML, MT + 40, { width: CW * 0.7, ellipsis: true });
+  doc.restore();
+
+  const meta = [statusText, seedingLabel, exportedAt].filter(Boolean).join('  ·  ');
+  doc.save();
+  doc.fillColor(palette.textMuted).font(fonts.body).fontSize(TYPE_SCALE.micro.size);
+  lockedText(doc, meta, ML, MT + 56, { width: CW });
+  doc.restore();
+}
+
 module.exports = {
   setType,
   lockedText,
@@ -500,4 +862,11 @@ module.exports = {
   drawIdentityBlocks,
   drawApplicationCoverPage,
   drawRunningHeader,
+  drawBracketSlot,
+  drawBracketTree,
+  drawBracketHeader,
+  drawChampionCard,
+  layoutBracket,
+  deriveParentCenters,
+  autoSlotHeight,
 };

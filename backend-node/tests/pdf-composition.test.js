@@ -6,6 +6,12 @@ import {
   drawIdentityBlocks,
   drawApplicationCoverPage,
   drawRunningHeader,
+  drawBracketTree,
+  drawBracketHeader,
+  drawChampionCard,
+  layoutBracket,
+  deriveParentCenters,
+  autoSlotHeight,
 } from '../src/services/pdfComposition.js';
 
 function paletteDefault() {
@@ -144,5 +150,120 @@ describe('pdfComposition', () => {
       });
     });
     expect(buf.slice(0, 4).toString('latin1')).toBe('%PDF');
+  });
+
+  // ─── Bracket composition (Phase 2) ────────────────────────────────────────
+
+  it('deriveParentCenters halves a list of child centers by pair-midpoint', () => {
+    // Classical elimination tree: parent center is the midpoint between its
+    // two child match centers. Stair-step layouts violate this by shifting
+    // every round down by a fixed offset — the old bracket bug.
+    expect(deriveParentCenters([10, 30, 50, 70])).toEqual([20, 60]);
+    expect(deriveParentCenters([20, 60])).toEqual([40]);
+    expect(deriveParentCenters([40])).toEqual([40]);
+  });
+
+  it('layoutBracket produces a balanced multi-round layout', () => {
+    const rounds = [
+      { matches: [{}, {}, {}, {}] },
+      { matches: [{}, {}] },
+      { matches: [{}] },
+    ];
+    const { matchLayout, matchHeight } = layoutBracket(rounds, {
+      contentHeight: 400, topY: 0, slotHeight: 18, matchGap: 0,
+    });
+    // First round: 4 matches centered at pitch * (i + 0.5) = 50, 150, 250, 350
+    expect(matchLayout[0].map((p) => p.centerY)).toEqual([50, 150, 250, 350]);
+    // Second round: parents at midpoint of each pair — 100, 300
+    expect(matchLayout[1].map((p) => p.centerY)).toEqual([100, 300]);
+    // Final: midpoint of semi-finals — 200
+    expect(matchLayout[2].map((p) => p.centerY)).toEqual([200]);
+    // Match height is 2 slots + gap
+    expect(matchHeight).toBe(36);
+  });
+
+  it('autoSlotHeight stays within the readable clamp [14, 24]', () => {
+    // Massive vertical room, few matches — clamped at 24 so cards don't get giant.
+    expect(autoSlotHeight({ contentHeight: 800, firstRoundMatches: 2 })).toBe(24);
+    // Tight 64-fighter bracket — clamped at 14 so it still fits.
+    expect(autoSlotHeight({ contentHeight: 400, firstRoundMatches: 32 })).toBe(14);
+    // Typical 16-fighter bracket — lands somewhere in the middle.
+    const mid = autoSlotHeight({ contentHeight: 400, firstRoundMatches: 8 });
+    expect(mid).toBeGreaterThanOrEqual(14);
+    expect(mid).toBeLessThanOrEqual(24);
+  });
+
+  it('drawBracketHeader renders without throwing', async () => {
+    const buf = await renderToBuffer((doc) => {
+      drawBracketHeader(doc, {
+        palette: paletteDefault(), fonts: fonts(),
+        brandName: 'Primal',
+        tournamentName: 'Spring Championship 2026',
+        categoryLabel: 'MMA · -65 kg',
+        statusText: 'Status: Completed',
+        seedingLabel: 'Draw: Rank-based',
+        exportedAt: 'Exported 2026-04-24',
+      });
+    });
+    expect(buf.slice(0, 4).toString('latin1')).toBe('%PDF');
+  });
+
+  it('drawChampionCard renders a TBD placeholder without throwing', async () => {
+    const buf = await renderToBuffer((doc) => {
+      drawChampionCard(doc, {
+        x: 300, y: 200, champion: null,
+        palette: paletteDefault(), fonts: fonts(),
+        width: 160, height: 60,
+      });
+    });
+    expect(buf.slice(0, 4).toString('latin1')).toBe('%PDF');
+  });
+
+  it('drawBracketTree renders a full 4-round (16-fighter) elimination tree', async () => {
+    const rounds = [
+      { label: 'R16', matches: Array.from({ length: 8 }, (_, i) => ({
+        sides: [
+          { corner: 'blue', name: `Fighter ${i * 2 + 1}`, club: 'Club A', seedScore: i * 2 + 1 },
+          { corner: 'red', name: `Fighter ${i * 2 + 2}`, club: 'Club B', seedScore: i * 2 + 2 },
+        ],
+        winnerIndex: 0,
+      })) },
+      { label: 'Quarter-final', matches: Array.from({ length: 4 }, (_, i) => ({
+        sides: [
+          { corner: 'blue', name: `Q${i}A`, club: 'Club A', seedScore: i * 4 + 1 },
+          { corner: 'red', name: `Q${i}B`, club: 'Club B', seedScore: i * 4 + 3 },
+        ],
+        winnerIndex: 0,
+      })) },
+      { label: 'Semi-final', matches: Array.from({ length: 2 }, (_, i) => ({
+        sides: [
+          { corner: 'blue', name: `S${i}A`, club: 'Club A', seedScore: 1 },
+          { corner: 'red', name: `S${i}B`, club: 'Club B', seedScore: 5 },
+        ],
+        winnerIndex: 0,
+      })) },
+      { label: 'Final', matches: [{
+        sides: [
+          { corner: 'blue', name: 'Champion A', club: 'Club A', seedScore: 1 },
+          { corner: 'red', name: 'Champion B', club: 'Club B', seedScore: 5 },
+        ],
+        winnerIndex: 0,
+      }] },
+    ];
+    let extraPages = 0;
+    const buf = await renderToBuffer((doc) => {
+      doc.on('pageAdded', () => { extraPages += 1; });
+      drawBracketTree(doc, {
+        rounds, x: 40, y: 100, width: 600, height: 400,
+        palette: paletteDefault(), fonts: fonts(),
+        slotWidth: 120,
+        slotHeight: autoSlotHeight({ contentHeight: 400, firstRoundMatches: 8 }),
+        matchGap: 0,
+      });
+    });
+    expect(buf.slice(0, 4).toString('latin1')).toBe('%PDF');
+    // Tree rendering must never add pages — the composition is locked to the
+    // caller-supplied rectangle.
+    expect(extraPages).toBe(0);
   });
 });
