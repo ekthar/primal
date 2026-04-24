@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import ThemeToggle from "@/components/shared/ThemeToggle";
+import CommandPalette from "@/components/shared/CommandPalette";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -325,6 +326,7 @@ export default function AppShell({ children }) {
         <div className="flex-1 min-w-0 app-shell-safe-bottom md:pb-0">{children}</div>
         <MobileBottomNav nav={nav} />
       </main>
+      <CommandPalette />
     </div>
   );
 }
