@@ -59,6 +59,18 @@ module.exports = {
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',
+        // Primal OS federation palette — mirrors backend pdfTokens.js so that
+        // the app and the PDF exports share a single visual language.
+        primal: {
+          paper: 'var(--primal-paper)',
+          ink: 'var(--primal-ink)',
+          'ink-red': 'var(--primal-ink-red)',
+          accent: 'var(--primal-accent)',
+          verify: 'var(--primal-verify)',
+          gold: 'var(--primal-gold)',
+          line: 'var(--primal-line)',
+          'line-soft': 'var(--primal-line-soft)',
+        },
       },
       boxShadow: {
         'soft': '0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px rgb(0 0 0 / 0.04)',

@@ -20,6 +20,13 @@ const matchService = require('./match.service');
 const documentStorage = require('./documentStorage.service');
 const { buildSignatureForApplication } = require('../pdfSignature');
 const { formatPersonName, applicationDisplayId, reviewerDisplayId } = require('./identity.service');
+const {
+  createPalette,
+  baseDocumentOptions,
+  buildExportFilename,
+  finalizePageRibbons,
+  shortSignatureId,
+} = require('./pdfTokens');
 
 function formatDateTime(value) {
   if (!value) return '—';
@@ -579,30 +586,33 @@ function drawAnalyticsTable(doc, title, rows, palette, fonts) {
 async function groupedAnalyticsToPdf(res, actor, { tournamentId, discipline } = {}, ctx = {}) {
   const report = await groupedApplicationReport({ tournamentId, discipline });
   const brandName = config.pdf?.brandName || 'Primal';
-  const palette = {
-    primary: '#8c6a43',
-    text: '#1f2937',
-    textMuted: '#5f6773',
-    line: '#2f3742',
-  };
+  const palette = createPalette(config);
+
+  const filename = buildExportFilename({
+    type: 'analytics',
+    tournamentId: tournamentId || 'all',
+    discipline: discipline || undefined,
+    brand: brandName,
+  });
 
   res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', 'attachment; filename="application-analytics.pdf"');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   const doc = new PDFDocument({
+    ...baseDocumentOptions({
+      title: `${brandName} / Grouped application analytics`,
+      subject: 'Grouped application analytics',
+      brand: brandName,
+      keywords: ['analytics', 'applications'],
+    }),
     size: 'A4',
     layout: 'landscape',
     margins: { top: 28, bottom: 28, left: 28, right: 28 },
-    info: {
-      Title: 'Application analytics export',
-      Author: brandName,
-      Subject: 'Grouped application analytics',
-    },
   });
   doc.pipe(res);
   const fonts = resolvePdfFonts(doc);
 
   doc.save();
-  doc.rect(0, 0, doc.page.width, doc.page.height).fill('#f4f1ea');
+  doc.rect(0, 0, doc.page.width, doc.page.height).fill(palette.paper);
   doc.restore();
 
   const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
@@ -611,8 +621,8 @@ async function groupedAnalyticsToPdf(res, actor, { tournamentId, discipline } = 
     y: doc.page.margins.top,
     width: pageWidth,
     height: 84,
-    fill: '#fbfaf7',
-    stroke: '#2f3742',
+    fill: palette.surface,
+    stroke: palette.line,
     radius: 16,
   });
 
@@ -640,7 +650,7 @@ async function groupedAnalyticsToPdf(res, actor, { tournamentId, discipline } = 
       value: String(value),
       palette,
       fonts,
-      tone: '#fbfaf7',
+      tone: palette.surface,
     });
   });
 
@@ -652,6 +662,12 @@ async function groupedAnalyticsToPdf(res, actor, { tournamentId, discipline } = 
     label: `${row.label} / ${row.discipline} / ${row.weightClass}`,
   })), palette, fonts);
 
+  finalizePageRibbons(doc, {
+    palette,
+    fonts,
+    brand: brandName,
+    identifier: `Analytics · ${discipline || 'All disciplines'}`,
+  });
   doc.end();
 
   await auditWrite({
@@ -668,30 +684,34 @@ async function groupedAnalyticsToPdf(res, actor, { tournamentId, discipline } = 
 async function seasonalReportToPdf(res, actor, tournamentId, ctx = {}) {
   const report = await seasonalTournamentReport({ tournamentId });
   const brandName = config.pdf?.brandName || 'Primal';
-  const palette = {
-    primary: '#8c6a43',
-    text: '#1f2937',
-    textMuted: '#5f6773',
-    line: '#2f3742',
-  };
+  const palette = createPalette(config);
+
+  const filename = buildExportFilename({
+    type: 'season',
+    tournamentName: report.tournament.name,
+    tournamentId: report.tournament.id,
+    extra: report.tournament.season ? `s${report.tournament.season}` : undefined,
+    brand: brandName,
+  });
 
   res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `attachment; filename="season-${report.tournament.id}.pdf"`);
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   const doc = new PDFDocument({
+    ...baseDocumentOptions({
+      title: `${brandName} / ${report.tournament.name} / Season archive`,
+      subject: 'Season archive report',
+      brand: brandName,
+      keywords: ['season', 'archive', report.tournament.name],
+    }),
     size: 'A4',
     layout: 'portrait',
     margins: { top: 24, bottom: 24, left: 24, right: 24 },
-    info: {
-      Title: `${report.tournament.name} seasonal report`,
-      Author: brandName,
-      Subject: 'Season archive report',
-    },
   });
   doc.pipe(res);
   const fonts = resolvePdfFonts(doc);
 
   doc.save();
-  doc.rect(0, 0, doc.page.width, doc.page.height).fill('#f4f1ea');
+  doc.rect(0, 0, doc.page.width, doc.page.height).fill(palette.paper);
   doc.restore();
 
   const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
@@ -700,8 +720,8 @@ async function seasonalReportToPdf(res, actor, tournamentId, ctx = {}) {
     y: doc.page.margins.top,
     width: pageWidth,
     height: 88,
-    fill: '#fbfaf7',
-    stroke: '#2f3742',
+    fill: palette.surface,
+    stroke: palette.line,
     radius: 16,
   });
   doc.fillColor(palette.primary).font(fonts.bodyBold).fontSize(9)
@@ -730,7 +750,7 @@ async function seasonalReportToPdf(res, actor, tournamentId, ctx = {}) {
       value: String(value),
       palette,
       fonts,
-      tone: '#fbfaf7',
+      tone: palette.surface,
     });
   });
 
@@ -739,6 +759,12 @@ async function seasonalReportToPdf(res, actor, tournamentId, ctx = {}) {
   drawSeasonDivisionTable(doc, report.divisions, palette, fonts);
   drawSeasonMatchesTable(doc, report.matches, palette, fonts);
 
+  finalizePageRibbons(doc, {
+    palette,
+    fonts,
+    brand: brandName,
+    identifier: `Season Archive · ${report.tournament.name}`,
+  });
   doc.end();
   await auditWrite({
     actorUserId: actor?.id,
@@ -1031,15 +1057,7 @@ async function loadApplicationExportViewModel(applicationId, actor) {
   await assertCanView(actor, app);
 
   const brandName = config.pdf?.brandName || 'Primal';
-  const palette = {
-    primary: '#8c6a43',
-    accent: '#2f3742',
-    text: '#1f2937',
-    textMuted: '#5f6773',
-    line: '#2f3742',
-    surface: '#f4f1ea',
-    cardBorder: '#2f3742',
-  };
+  const palette = createPalette(config);
 
   const [documents, statusEvents] = await Promise.all([
     docsRepo.listForApplication(app.id),
@@ -1296,17 +1314,28 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
   const appliedDisciplines = viewModel.appliedDisciplines;
   const address = app.metadata && typeof app.metadata === 'object' ? app.metadata.address : null;
 
+  const filename = buildExportFilename({
+    type: 'application',
+    tournamentName: app.tournament_name,
+    tournamentId: app.tournament_id,
+    applicationDisplayId: viewModel.applicationDisplayId || app.id,
+    applicationId: app.id,
+    brand: brandName,
+  });
+
   res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `attachment; filename="application-${app.id}.pdf"`);
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
   const doc = new PDFDocument({
+    ...baseDocumentOptions({
+      title: `${brandName} / ${viewModel.applicantName || 'Applicant'} / ${viewModel.applicationDisplayId || app.id}`,
+      subject: 'Participant application export',
+      brand: brandName,
+      keywords: ['application', 'participant', viewModel.applicantName || '', app.tournament_name || '']
+        .filter(Boolean),
+    }),
     size: 'A4',
     margins: { top: 32, bottom: 32, left: 32, right: 32 },
-    info: {
-      Title: `Application ${app.id}`,
-      Author: brandName,
-      Subject: 'Participant application export',
-    },
   });
   doc.pipe(res);
 
@@ -1318,7 +1347,7 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
 
   // ── Page background ──────────────────────────────────────────────────────
   doc.save();
-  doc.rect(0, 0, doc.page.width, doc.page.height).fill('#f4f1ea');
+  doc.rect(0, 0, doc.page.width, doc.page.height).fill(palette.paper);
   doc.restore();
 
   // ── HEADER BAND ──────────────────────────────────────────────────────────
@@ -1572,14 +1601,15 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
   drawTimelineCards(doc, statusEvents, { x: PX, width: CW, palette, fonts });
 
   // ── Footer ────────────────────────────────────────────────────────────────
-  doc.moveDown(1.2);
-  gridRule(doc, PX, doc.y, CW, palette.line);
-  doc.moveDown(0.4);
-  doc.fillColor(palette.textMuted).font(fonts.body).fontSize(7.2)
-    .text(
-      `${brandName} · Participant Application Export · Digitally signed · ${formatDateTime(new Date())}`,
-      PX, doc.y, { width: CW, align: 'center' },
-    );
+  // Per-page signed ribbon is rendered via finalizePageRibbons below so that
+  // page numbers, identifier, and signature fingerprint show on every page.
+  finalizePageRibbons(doc, {
+    palette,
+    fonts,
+    brand: brandName,
+    identifier: `Application · ${viewModel.applicationDisplayId || app.id}`,
+    signatureShortId: shortSignatureId(signatureArtifacts.signature),
+  });
 
   doc.end();
 
@@ -1735,40 +1765,40 @@ async function bracketToPdf(res, bracketId, actor, ctx = {}) {
   const tournament = await tournamentsRepo.findById(bracket.tournamentId);
 
   const brandName = config.pdf?.brandName || 'Primal';
-  const palette = {
-    primary: normalizeHexColor(config.pdf?.brandPrimary, '#0b0b0b'),
-    accent: normalizeHexColor(config.pdf?.brandAccent, '#ef1a1a'),
-    text: '#111111',
-    textMuted: '#5b6470',
-    line: '#dbe1ea',
-    surface: '#f8fafc',
-  };
+  const palette = createPalette(config);
+
+  const filename = buildExportFilename({
+    type: 'bracket',
+    tournamentName: tournament?.name,
+    tournamentId: bracket.tournamentId,
+    extra: bracket.categoryLabel,
+    bracketId: bracket.id,
+    brand: brandName,
+  });
 
   res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `attachment; filename="bracket-${bracket.id}.pdf"`);
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   const doc = new PDFDocument({
+    ...baseDocumentOptions({
+      title: `${brandName} / ${tournament?.name || 'Tournament'} / ${bracket.categoryLabel} bracket`,
+      subject: 'Tournament bracket export',
+      brand: brandName,
+      keywords: ['bracket', tournament?.name || '', bracket.categoryLabel || ''].filter(Boolean),
+    }),
     size: 'A4',
     layout: 'landscape',
     margin: 28,
-    info: {
-      Title: `${bracket.categoryLabel} bracket`,
-      Author: brandName,
-      Subject: 'Tournament bracket export',
-    },
   });
   doc.pipe(res);
   const fonts = resolvePdfFonts(doc);
 
   const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
   doc.save();
-  doc.rect(0, 0, doc.page.width, doc.page.height).fill('#fffaf5');
-  doc.fillOpacity(0.7).fillColor('#fee2e2').circle(doc.page.width - 120, 90, 180).fill();
-  doc.fillOpacity(0.7).fillColor('#dbeafe').circle(110, doc.page.height - 80, 140).fill();
-  doc.fillOpacity(0.62).fillColor('#fef3c7').circle(doc.page.width / 2 + 120, doc.page.height / 2 + 100, 120).fill();
+  doc.rect(0, 0, doc.page.width, doc.page.height).fill(palette.paper);
   doc.restore();
   doc.save();
-  doc.roundedRect(doc.page.margins.left, doc.page.margins.top, pageWidth, 72, 16).fill('#ffffff');
-  doc.roundedRect(doc.page.margins.left, doc.page.margins.top, pageWidth, 72, 16).strokeColor('#111111').lineWidth(1.5).stroke();
+  doc.roundedRect(doc.page.margins.left, doc.page.margins.top, pageWidth, 72, 16).fill(palette.surface);
+  doc.roundedRect(doc.page.margins.left, doc.page.margins.top, pageWidth, 72, 16).strokeColor(palette.line).lineWidth(1.5).stroke();
   doc.restore();
 
   drawLogoMark(doc, {
@@ -1784,7 +1814,7 @@ async function bracketToPdf(res, bracketId, actor, ctx = {}) {
     .font(fonts.headingBold)
     .fontSize(20)
     .text(tournament?.name || 'Tournament', doc.page.margins.left + 68, doc.page.margins.top + 15);
-  doc.fillColor('#b91c1c')
+  doc.fillColor(palette.accent)
     .font(fonts.headingBold)
     .fontSize(13)
     .text(bracket.categoryLabel, doc.page.margins.left + 68, doc.page.margins.top + 40, { width: pageWidth - 220 });
@@ -1810,12 +1840,18 @@ async function bracketToPdf(res, bracketId, actor, ctx = {}) {
     const connectorStartX = startX + (rounds.length - 1) * roundWidth + 126;
     const connectorY = championY + 46;
     doc.save();
-    doc.lineWidth(1.5).strokeColor('#111111');
+    doc.lineWidth(1.5).strokeColor(palette.line);
     doc.moveTo(connectorStartX, connectorY).lineTo(championX - 12, connectorY).stroke();
     doc.restore();
     drawChampionCard(doc, championX, championY, champion, palette, fonts);
   }
 
+  finalizePageRibbons(doc, {
+    palette,
+    fonts,
+    brand: brandName,
+    identifier: `Bracket · ${tournament?.name || 'Tournament'} · ${bracket.categoryLabel}`,
+  });
   doc.end();
   await auditWrite({
     actorUserId: actor?.id,
@@ -1842,42 +1878,41 @@ async function divisionBracketToPdf(res, divisionId, actor, ctx = {}) {
 
   const { division, bracket } = payload;
   const brandName = config.pdf?.brandName || 'Primal';
-  const palette = {
-    primary: normalizeHexColor(config.pdf?.brandPrimary, '#0b0b0b'),
-    accent: normalizeHexColor(config.pdf?.brandAccent, '#ef1a1a'),
-    text: '#111111',
-    textMuted: '#5b6470',
-    line: '#dbe1ea',
-    surface: '#f8fafc',
-  };
+  const palette = createPalette(config);
+
+  const filename = buildExportFilename({
+    type: 'division-bracket',
+    tournamentName: division.tournamentName,
+    divisionId: division.id,
+    extra: division.label,
+    brand: brandName,
+  });
 
   res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `attachment; filename="division-${division.id}-bracket.pdf"`);
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   const doc = new PDFDocument({
+    ...baseDocumentOptions({
+      title: `${brandName} / ${division.tournamentName || 'Tournament'} / ${division.label} bracket`,
+      subject: 'Division bracket export',
+      brand: brandName,
+      keywords: ['bracket', 'division', division.tournamentName || '', division.label || '']
+        .filter(Boolean),
+    }),
     size: 'A4',
     layout: 'landscape',
     margin: 28,
-    info: {
-      Title: `${division.label} bracket`,
-      Author: brandName,
-      Subject: 'Division bracket export',
-    },
   });
   doc.pipe(res);
   const fonts = resolvePdfFonts(doc);
   const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
 
   doc.save();
-  doc.rect(0, 0, doc.page.width, doc.page.height).fill('#fff8fb');
-  doc.fillOpacity(0.68).fillColor('#ffd6e7').circle(doc.page.width - 160, 96, 180).fill();
-  doc.fillOpacity(0.68).fillColor('#cde8ff').circle(110, doc.page.height - 90, 150).fill();
-  doc.fillOpacity(0.64).fillColor('#fde68a').circle(doc.page.width / 2 + 110, doc.page.height / 2 + 90, 120).fill();
-  doc.fillOpacity(0.3).fillColor('#fecaca').circle(doc.page.width / 2 - 150, 120, 90).fill();
+  doc.rect(0, 0, doc.page.width, doc.page.height).fill(palette.paper);
   doc.restore();
 
   doc.save();
-  doc.roundedRect(doc.page.margins.left, doc.page.margins.top, pageWidth, 76, 16).fill('#ffffff');
-  doc.roundedRect(doc.page.margins.left, doc.page.margins.top, pageWidth, 76, 16).strokeColor('#111111').lineWidth(1.5).stroke();
+  doc.roundedRect(doc.page.margins.left, doc.page.margins.top, pageWidth, 76, 16).fill(palette.surface);
+  doc.roundedRect(doc.page.margins.left, doc.page.margins.top, pageWidth, 76, 16).strokeColor(palette.line).lineWidth(1.5).stroke();
   doc.restore();
 
   drawLogoMark(doc, {
@@ -1894,7 +1929,7 @@ async function divisionBracketToPdf(res, divisionId, actor, ctx = {}) {
     .font(fonts.headingBold)
     .fontSize(20)
     .text(division.tournamentName || 'Tournament', doc.page.margins.left + 68, doc.page.margins.top + 15);
-  doc.fillColor('#b91c1c')
+  doc.fillColor(palette.accent)
     .font(fonts.headingBold)
     .fontSize(13)
     .text(division.label, doc.page.margins.left + 68, doc.page.margins.top + 42, { width: pageWidth - 220 });
@@ -1925,13 +1960,19 @@ async function divisionBracketToPdf(res, divisionId, actor, ctx = {}) {
     const connectorY = championY + 46;
     if (rounds.length) {
       doc.save();
-      doc.lineWidth(1.5).strokeColor('#111111');
+      doc.lineWidth(1.5).strokeColor(palette.line);
       doc.moveTo(connectorStartX, connectorY).lineTo(championX - 12, connectorY).stroke();
       doc.restore();
     }
     drawChampionCard(doc, championX, championY, champion, palette, fonts);
   }
 
+  finalizePageRibbons(doc, {
+    palette,
+    fonts,
+    brand: brandName,
+    identifier: `Division Bracket · ${division.tournamentName || 'Tournament'} · ${division.label}`,
+  });
   doc.end();
   await auditWrite({
     actorUserId: actor?.id,
