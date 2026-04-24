@@ -31,6 +31,10 @@ const {
 const {
   drawApplicationCoverPage,
   drawRunningHeader,
+  drawBracketTree,
+  drawBracketHeader,
+  drawChampionCard: drawBracketChampionCard,
+  autoSlotHeight,
 } = require('./pdfComposition');
 
 function formatDateTime(value) {
@@ -1602,99 +1606,8 @@ async function auditToExcel(res, actor, { since, until } = {}) {
     entityType: 'audit', entityId: 'bulk', payload: { since, until, count: rows.length }, requestIp: ctx.ip });
 }
 
-function getBracketSlotHeight(totalRounds) {
-  return totalRounds <= 2 ? 120 : totalRounds === 3 ? 96 : 82;
-}
-
-function drawBracketSlot(doc, x, y, width, height, side, palette, fonts) {
-  doc.save();
-  doc.roundedRect(x, y, width, height, 10).fill('#ffffff');
-  doc.roundedRect(x, y, width, height, 10).strokeColor('#111111').lineWidth(1.5).stroke();
-  doc.restore();
-  if (!side || side.placeholder === 'tbd') return;
-
-  doc.fillColor(side.corner === 'blue' ? '#0f6ab6' : '#b91c1c')
-    .font(fonts.headingBold)
-    .fontSize(7.5)
-    .text((side.corner || 'slot').toUpperCase(), x + 8, y + 6, { width: width - 16 });
-  if (side.seedScore) {
-    doc.fillColor('#6b7280')
-      .font(fonts.bodyBold)
-      .fontSize(7.5)
-      .text(`#${side.seedScore}`, x + width - 28, y + 6, { width: 20, align: 'right' });
-  }
-  doc.fillColor('#111827')
-    .font(fonts.headingBold)
-    .fontSize(9)
-    .text(side.name || 'TBD', x + 8, y + 18, { width: width - 16, ellipsis: true });
-  doc.fillColor('#4b5563')
-    .font(fonts.body)
-    .fontSize(7.5)
-    .text(side.club || 'Independent', x + 8, y + 33, { width: width - 16, ellipsis: true });
-}
-
-function drawBracketMatch(doc, x, y, slotWidth, slotHeight, matchGap, match, palette, fonts) {
-  const topY = y;
-  const bottomY = y + slotHeight + matchGap;
-  drawBracketSlot(doc, x, topY, slotWidth, slotHeight, match.sides[0], palette, fonts);
-  drawBracketSlot(doc, x, bottomY, slotWidth, slotHeight, match.sides[1], palette, fonts);
-
-  const connectorX = x + slotWidth;
-  const midX = connectorX + 18;
-  const topMidY = topY + slotHeight / 2;
-  const bottomMidY = bottomY + slotHeight / 2;
-  const centerY = (topMidY + bottomMidY) / 2;
-
-  doc.save();
-  doc.lineWidth(1.5).strokeColor('#111111');
-  doc.moveTo(connectorX, topMidY).lineTo(midX, topMidY).stroke();
-  doc.moveTo(connectorX, bottomMidY).lineTo(midX, bottomMidY).stroke();
-  doc.moveTo(midX, topMidY).lineTo(midX, bottomMidY).stroke();
-  doc.moveTo(midX, centerY).lineTo(midX + 14, centerY).stroke();
-  doc.restore();
-
-  return { centerY };
-}
-
-function drawBracketRound(doc, x, startY, round, roundIndex, totalRounds, palette, fonts) {
-  const slotWidth = 112;
-  const slotHeight = getBracketSlotHeight(totalRounds);
-  const matchGap = 16;
-  const roundBlockHeight = slotHeight * 2 + matchGap;
-  const roundSpacing = Math.max(30, (slotHeight + matchGap) * Math.pow(2, roundIndex));
-  const centers = [];
-
-  doc.fillColor(palette.text)
-    .font(fonts.headingBold)
-    .fontSize(10)
-    .text(round.label, x, startY - 22, { width: slotWidth + 40, align: 'center' });
-
-  round.matches.forEach((match, index) => {
-    const y = startY + index * (roundBlockHeight + roundSpacing);
-    const result = drawBracketMatch(doc, x, y, slotWidth, slotHeight, matchGap, match, palette, fonts);
-    centers.push(result.centerY);
-  });
-
-  return centers;
-}
-
-function drawChampionCard(doc, x, y, champion, palette, fonts) {
-  const width = 148;
-  const height = 92;
-  doc.save();
-  doc.roundedRect(x, y, width, height, 14).fill('#fef3c7');
-  doc.roundedRect(x, y, width, height, 14).strokeColor('#b45309').lineWidth(1.5).stroke();
-  doc.restore();
-  doc.fillColor('#b45309').font(fonts.headingBold).fontSize(10).text('Champion', x + 12, y + 12);
-  doc.fillColor('#111827').font(fonts.headingBold).fontSize(13).text(champion?.name || 'TBD', x + 12, y + 32, {
-    width: width - 24,
-    ellipsis: true,
-  });
-  doc.fillColor('#6b7280').font(fonts.body).fontSize(9).text(champion?.club || 'Independent', x + 12, y + 52, {
-    width: width - 24,
-    ellipsis: true,
-  });
-}
+// Bracket primitives (slot, match, tree, champion card) now live in
+// pdfComposition.js — see drawBracketTree / drawBracketChampionCard.
 
 async function bracketToPdf(res, bracketId, actor, ctx = {}) {
   if (!actor || actor.role !== 'admin') {
@@ -1732,63 +1645,79 @@ async function bracketToPdf(res, bracketId, actor, ctx = {}) {
     }),
     size: 'A4',
     layout: 'landscape',
-    margin: 28,
+    margins: { top: 28, bottom: 32, left: 28, right: 28 },
   });
   doc.pipe(res);
   const fonts = resolvePdfFonts(doc);
 
-  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  // Paper wash
   doc.save();
   doc.rect(0, 0, doc.page.width, doc.page.height).fill(palette.paper);
   doc.restore();
-  doc.save();
-  doc.roundedRect(doc.page.margins.left, doc.page.margins.top, pageWidth, 72, 16).fill(palette.surface);
-  doc.roundedRect(doc.page.margins.left, doc.page.margins.top, pageWidth, 72, 16).strokeColor(palette.line).lineWidth(1.5).stroke();
-  doc.restore();
 
-  drawLogoMark(doc, {
-    x: doc.page.margins.left + 16,
-    y: doc.page.margins.top + 14,
-    size: 40,
-    logoPath: config.pdf?.logoPath,
-    brandName,
-    accent: palette.primary,
-    fonts,
+  // Header band (brand + tournament + category + meta)
+  drawBracketHeader(doc, {
+    palette, fonts, brandName,
+    tournamentName: tournament?.name,
+    categoryLabel: bracket.categoryLabel,
+    statusText: `Status: ${statusLabel(bracket.status)}`,
+    seedingLabel: `Draw: ${bracket.seedingLabel || bracket.seeding || '—'}`,
+    exportedAt: `Exported ${formatDateOnly(new Date())}`,
   });
-  doc.fillColor(palette.text)
-    .font(fonts.headingBold)
-    .fontSize(20)
-    .text(tournament?.name || 'Tournament', doc.page.margins.left + 68, doc.page.margins.top + 15);
-  doc.fillColor(palette.accent)
-    .font(fonts.headingBold)
-    .fontSize(13)
-    .text(bracket.categoryLabel, doc.page.margins.left + 68, doc.page.margins.top + 40, { width: pageWidth - 220 });
-  doc.fillColor(palette.textMuted)
-    .font(fonts.body)
-    .fontSize(9)
-    .text(`Status: ${statusLabel(bracket.status)}   |   Draw: ${bracket.seedingLabel || bracket.seeding}   |   Exported: ${formatDateOnly(new Date())}`, doc.page.margins.left + 68, doc.page.margins.top + 58);
 
+  // Classical elimination tree area
   const rounds = bracket.rounds || [];
-  const startX = doc.page.margins.left + 22;
-  const startY = doc.page.margins.top + 120;
-  const roundWidth = 145;
-  rounds.forEach((round, roundIndex) => {
-    drawBracketRound(doc, startX + roundIndex * roundWidth, startY + roundIndex * 28, round, roundIndex, rounds.length, palette, fonts);
-  });
+  const ML = doc.page.margins.left;
+  const MT = doc.page.margins.top;
+  const MR = doc.page.margins.right;
+  const MB = doc.page.margins.bottom;
+  const headerH = 90;
+  const treeTop = MT + headerH;
+  const treeBottom = doc.page.height - MB - 32; // leave room for ribbon
+  const treeHeight = treeBottom - treeTop;
+  const championW = rounds.length ? 160 : 0;
+  const gutter = rounds.length ? 16 : 0;
+  const treeLeft = ML;
+  const treeWidth = doc.page.width - ML - MR - championW - gutter;
 
-  const finalMatch = rounds[rounds.length - 1]?.matches?.[0];
-  const champion = finalMatch?.winnerIndex !== undefined ? finalMatch.sides?.[finalMatch.winnerIndex] : null;
-  if (finalMatch) {
-    const slotHeight = getBracketSlotHeight(rounds.length);
-    const championX = startX + rounds.length * roundWidth + 18;
-    const championY = startY + (slotHeight / 2) + 18;
-    const connectorStartX = startX + (rounds.length - 1) * roundWidth + 126;
-    const connectorY = championY + 46;
+  if (rounds.length) {
+    drawBracketTree(doc, {
+      rounds,
+      x: treeLeft,
+      y: treeTop,
+      width: treeWidth,
+      height: treeHeight,
+      palette, fonts,
+      slotWidth: Math.min(150, treeWidth / Math.max(1, rounds.length + 0.5)),
+      slotHeight: autoSlotHeight({
+        contentHeight: treeHeight,
+        firstRoundMatches: rounds[0].matches.length,
+      }),
+      matchGap: 0,
+    });
+
+    // Champion card to the right of the final
+    const finalMatch = rounds[rounds.length - 1]?.matches?.[0];
+    if (finalMatch) {
+      const champion = finalMatch.winnerIndex !== undefined ? finalMatch.sides?.[finalMatch.winnerIndex] : null;
+      const championX = treeLeft + treeWidth + gutter;
+      const championY = treeTop + treeHeight / 2 - 30;
+      drawBracketChampionCard(doc, {
+        x: championX, y: championY, champion, palette, fonts,
+        width: championW, height: 60,
+      });
+      // Connector from final match → champion
+      doc.save();
+      doc.lineWidth(0.9).strokeColor(palette.ink).opacity(0.75);
+      doc.moveTo(championX - gutter, championY + 30).lineTo(championX, championY + 30).stroke();
+      doc.restore();
+    }
+  } else {
+    // Empty state
     doc.save();
-    doc.lineWidth(1.5).strokeColor(palette.line);
-    doc.moveTo(connectorStartX, connectorY).lineTo(championX - 12, connectorY).stroke();
+    doc.fillColor(palette.textMuted).font(fonts.body).fontSize(TYPE_SCALE.body.size)
+      .text('No rounds have been generated for this bracket yet.', treeLeft, treeTop + 12, { width: treeWidth });
     doc.restore();
-    drawChampionCard(doc, championX, championY, champion, palette, fonts);
   }
 
   finalizePageRibbons(doc, {
@@ -1845,51 +1774,37 @@ async function divisionBracketToPdf(res, divisionId, actor, ctx = {}) {
     }),
     size: 'A4',
     layout: 'landscape',
-    margin: 28,
+    margins: { top: 28, bottom: 32, left: 28, right: 28 },
   });
   doc.pipe(res);
   const fonts = resolvePdfFonts(doc);
-  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
 
   doc.save();
   doc.rect(0, 0, doc.page.width, doc.page.height).fill(palette.paper);
   doc.restore();
 
-  doc.save();
-  doc.roundedRect(doc.page.margins.left, doc.page.margins.top, pageWidth, 76, 16).fill(palette.surface);
-  doc.roundedRect(doc.page.margins.left, doc.page.margins.top, pageWidth, 76, 16).strokeColor(palette.line).lineWidth(1.5).stroke();
-  doc.restore();
-
-  drawLogoMark(doc, {
-    x: doc.page.margins.left + 16,
-    y: doc.page.margins.top + 16,
-    size: 40,
-    logoPath: config.pdf?.logoPath,
-    brandName,
-    accent: palette.primary,
-    fonts,
+  drawBracketHeader(doc, {
+    palette, fonts, brandName,
+    tournamentName: division.tournamentName,
+    categoryLabel: division.label,
+    statusText: `Status: ${bracket.statusLabel || statusLabel(bracket.status)}`,
+    seedingLabel: `Draw: ${bracket.seedingLabel || '—'}`,
+    exportedAt: `Exported ${formatDateOnly(new Date())}`,
   });
-
-  doc.fillColor(palette.text)
-    .font(fonts.headingBold)
-    .fontSize(20)
-    .text(division.tournamentName || 'Tournament', doc.page.margins.left + 68, doc.page.margins.top + 15);
-  doc.fillColor(palette.accent)
-    .font(fonts.headingBold)
-    .fontSize(13)
-    .text(division.label, doc.page.margins.left + 68, doc.page.margins.top + 42, { width: pageWidth - 220 });
-  doc.fillColor(palette.textMuted)
-    .font(fonts.body)
-    .fontSize(9)
-    .text(`Status: ${bracket.statusLabel || statusLabel(bracket.status)}   |   Draw: ${bracket.seedingLabel}   |   Exported: ${formatDateOnly(new Date())}`, doc.page.margins.left + 68, doc.page.margins.top + 60);
 
   const rounds = bracket.rounds || [];
-  const startX = doc.page.margins.left + 22;
-  const startY = doc.page.margins.top + 120;
-  const roundWidth = 145;
-  rounds.forEach((round, roundIndex) => {
-    drawBracketRound(doc, startX + roundIndex * roundWidth, startY + roundIndex * 28, round, roundIndex, rounds.length || 1, palette, fonts);
-  });
+  const ML = doc.page.margins.left;
+  const MT = doc.page.margins.top;
+  const MR = doc.page.margins.right;
+  const MB = doc.page.margins.bottom;
+  const headerH = 90;
+  const treeTop = MT + headerH;
+  const treeBottom = doc.page.height - MB - 32;
+  const treeHeight = treeBottom - treeTop;
+  const championW = 160;
+  const gutter = 16;
+  const treeLeft = ML;
+  const treeWidth = doc.page.width - ML - MR - championW - gutter;
 
   const finalMatch = rounds[rounds.length - 1]?.matches?.[0];
   const champion = finalMatch?.winnerIndex !== undefined ? finalMatch.sides?.[finalMatch.winnerIndex] : (bracket.champion || payload.champion ? {
@@ -1897,19 +1812,41 @@ async function divisionBracketToPdf(res, divisionId, actor, ctx = {}) {
     club: bracket.champion?.club || payload.champion?.clubName,
   } : null);
 
+  if (rounds.length) {
+    drawBracketTree(doc, {
+      rounds,
+      x: treeLeft,
+      y: treeTop,
+      width: treeWidth,
+      height: treeHeight,
+      palette, fonts,
+      slotWidth: Math.min(150, treeWidth / Math.max(1, rounds.length + 0.5)),
+      slotHeight: autoSlotHeight({
+        contentHeight: treeHeight,
+        firstRoundMatches: rounds[0].matches.length,
+      }),
+      matchGap: 0,
+    });
+  } else {
+    doc.save();
+    doc.fillColor(palette.textMuted).font(fonts.body).fontSize(TYPE_SCALE.body.size)
+      .text('No rounds have been generated for this bracket yet.', treeLeft, treeTop + 12, { width: treeWidth });
+    doc.restore();
+  }
+
   if (finalMatch || champion) {
-    const slotHeight = getBracketSlotHeight(Math.max(rounds.length, 1));
-    const championX = startX + Math.max(rounds.length, 1) * roundWidth + 18;
-    const championY = startY + (slotHeight / 2) + 18;
-    const connectorStartX = startX + Math.max(rounds.length - 1, 0) * roundWidth + 126;
-    const connectorY = championY + 46;
+    const championX = treeLeft + treeWidth + gutter;
+    const championY = treeTop + treeHeight / 2 - 30;
+    drawBracketChampionCard(doc, {
+      x: championX, y: championY, champion, palette, fonts,
+      width: championW, height: 60,
+    });
     if (rounds.length) {
       doc.save();
-      doc.lineWidth(1.5).strokeColor(palette.line);
-      doc.moveTo(connectorStartX, connectorY).lineTo(championX - 12, connectorY).stroke();
+      doc.lineWidth(0.9).strokeColor(palette.ink).opacity(0.75);
+      doc.moveTo(championX - gutter, championY + 30).lineTo(championX, championY + 30).stroke();
       doc.restore();
     }
-    drawChampionCard(doc, championX, championY, champion, palette, fonts);
   }
 
   finalizePageRibbons(doc, {
