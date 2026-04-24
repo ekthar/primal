@@ -252,6 +252,32 @@ export default function ApplicantDashboard() {
     [applications]
   );
 
+  /* Partition applications into "current season" and "archived".
+     Current  = application still in an active workflow state (any status
+                except season_closed) AND its tournament is either open for
+                registration now, or doesn't exist in the public list (e.g.
+                the owner-created a season and registration hasn't opened yet).
+     Archived = season_closed records, plus any past-tournament records whose
+                tournament is no longer in the open-season list. Archived data
+                is never deleted; it's collapsed under an Accordion to keep
+                the current tab uncluttered. */
+  const openSeasonTournamentIds = useMemo(
+    () => new Set(openSeasonTournaments.map((tournament) => tournament.id)),
+    [openSeasonTournaments]
+  );
+  const { currentApplications, archivedApplications } = useMemo(() => {
+    const current = [];
+    const archived = [];
+    for (const application of applications) {
+      const isArchivedStatus = application.status === "season_closed";
+      const isOpenSeason = openSeasonTournamentIds.has(application.tournament_id);
+      if (isArchivedStatus || !isOpenSeason) archived.push(application);
+      else current.push(application);
+    }
+    return { currentApplications: current, archivedApplications: archived };
+  }, [applications, openSeasonTournamentIds]);
+  const [archivedExpanded, setArchivedExpanded] = useState(false);
+
   if (loading) {
     return (
       <ResponsivePageShell className="max-w-6xl">
@@ -374,11 +400,16 @@ export default function ApplicantDashboard() {
 
           <div className="rounded-3xl border border-border bg-surface elev-card p-6">
             <div>
-              <h2 className="font-display text-2xl font-semibold tracking-tight">Tournament submissions</h2>
-              <p className="text-sm text-secondary-muted mt-1">Every submission remains viewable from your dashboard, even after registration closes.</p>
+              <h2 className="font-display text-2xl font-semibold tracking-tight">Current season</h2>
+              <p className="text-sm text-secondary-muted mt-1">Active tournament submissions. Edit drafts, respond to corrections, and submit while registration is open.</p>
             </div>
+            {!currentApplications.length && (
+              <div className="mt-5 rounded-2xl border border-dashed border-border bg-background/40 p-6 text-sm text-secondary-muted text-center">
+                No current-season submissions yet. When a tournament opens registration it will appear here; past applications stay below for reference and reapply.
+              </div>
+            )}
             <div className="mt-5 space-y-4">
-              {applications.map((application) => (
+              {currentApplications.map((application) => (
                 <article key={application.id} className="rounded-2xl border border-border bg-background/60 p-4">
                   <div className="flex items-start justify-between gap-3 flex-wrap">
                     <div>
@@ -484,6 +515,73 @@ export default function ApplicantDashboard() {
               ))}
             </div>
           </div>
+
+          {archivedApplications.length > 0 && (
+            <div className="rounded-3xl border border-border bg-surface elev-card p-6">
+              <button
+                type="button"
+                onClick={() => setArchivedExpanded((current) => !current)}
+                className="flex w-full items-center justify-between gap-3 text-left"
+                aria-expanded={archivedExpanded}
+              >
+                <div>
+                  <h2 className="font-display text-2xl font-semibold tracking-tight">Past applications</h2>
+                  <p className="text-sm text-secondary-muted mt-1">
+                    {archivedApplications.length} archived record{archivedApplications.length === 1 ? "" : "s"}. Data is retained for the federation record — nothing here is deleted.
+                  </p>
+                </div>
+                <span className="rounded-full border border-border bg-background px-3 py-1 text-[11px] uppercase tracking-[0.16em] text-secondary-muted">
+                  {archivedExpanded ? "Hide" : "Show"}
+                </span>
+              </button>
+              {archivedExpanded && (
+                <div className="mt-5 space-y-3">
+                  {archivedApplications.map((application) => {
+                    const matchingOpenTournament = openSeasonTournaments.find((tournament) => !applicationsByTournament[tournament.id]);
+                    const canReapply = ["season_closed", "approved", "rejected"].includes(application.status) && matchingOpenTournament;
+                    return (
+                      <article key={application.id} className="rounded-2xl border border-border bg-background/40 p-4 opacity-95">
+                        <div className="flex items-start justify-between gap-3 flex-wrap">
+                          <div className="min-w-0">
+                            <div className="font-display text-lg font-semibold tracking-tight truncate">{application.tournament_name}</div>
+                            <div className="text-xs text-tertiary mt-1">
+                              {application.application_display_id || application.id} · updated {new Date(application.updated_at).toLocaleDateString()}
+                            </div>
+                          </div>
+                          <StatusPill status={application.status} />
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openApplication(application)}
+                            disabled={loadingApplicationId === application.id}
+                          >
+                            <InlineLoadingLabel loading={loadingApplicationId === application.id} loadingText="Opening...">
+                              <>
+                                <Eye className="size-3.5" /> View application
+                              </>
+                            </InlineLoadingLabel>
+                          </Button>
+                          {canReapply && (
+                            <Button
+                              size="sm"
+                              onClick={() => reapplyFromPreviousSeason(application, matchingOpenTournament)}
+                              disabled={startingSeasonId === matchingOpenTournament.id}
+                            >
+                              <InlineLoadingLabel loading={startingSeasonId === matchingOpenTournament.id} loadingText="Reapplying...">
+                                Reapply to {matchingOpenTournament.name}
+                              </InlineLoadingLabel>
+                            </Button>
+                          )}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           {activeApplicationDetails && activeApplication ? (
             <div className="rounded-3xl border border-border bg-surface elev-card p-6">

@@ -104,21 +104,37 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
   const [participantQuery, setParticipantQuery] = useState("");
   const [participants, setParticipants] = useState([]);
   const [weightDrafts, setWeightDrafts] = useState({});
-  const currentSeasonTournamentId = useMemo(() => {
+  /* Season filter: "current" resolves to the backend-defined current tournament
+     (open registration > running with 30d grace > most recent). Any concrete
+     tournament id overrides the default, so admins can still weigh historical
+     events without losing them. */
+  const [seasonFilter, setSeasonFilter] = useState("current");
+  const [currentSeason, setCurrentSeason] = useState(null);
+  const publicCurrentSeasonId = currentSeason?.id || null;
+  const fallbackPublicSeasonId = useMemo(() => {
     const current = tournaments.find((tournament) => tournament.is_public && !tournament.deleted_at);
     return current?.id || tournaments[0]?.id || "";
   }, [tournaments]);
+  const resolvedSeasonId = seasonFilter === "current"
+    ? (publicCurrentSeasonId || fallbackPublicSeasonId)
+    : seasonFilter;
 
   useEffect(() => {
     if (user?.role !== "admin") return;
     loadTournaments();
     loadClubs();
+    loadCurrentSeason();
   }, [user?.role]);
 
   useEffect(() => {
     if (user?.role !== "admin") return;
     loadReweighList();
-  }, [user?.role, clubFilter, participantQuery, currentSeasonTournamentId]);
+  }, [user?.role, clubFilter, participantQuery, resolvedSeasonId]);
+
+  async function loadCurrentSeason() {
+    const { data } = await api.publicCurrentTournament();
+    setCurrentSeason(data?.tournament || null);
+  }
 
   async function loadTournaments() {
     setLoadingTournaments(true);
@@ -166,7 +182,7 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
     const { data, error } = await api.adminReweighList({
       clubId: clubFilter === "all" ? undefined : clubFilter,
       q: participantQuery || undefined,
-      tournamentId: currentSeasonTournamentId || undefined,
+      tournamentId: resolvedSeasonId || undefined,
       limit: 200,
       offset: 0,
     });
@@ -646,7 +662,27 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
               </Button>
             </div>
 
-            <div className="mt-5 grid gap-4 md:grid-cols-[220px_1fr]">
+            <div className="mt-5 grid gap-4 md:grid-cols-[240px_220px_1fr]">
+              <Field label="Season">
+                <Select value={seasonFilter} onValueChange={setSeasonFilter}>
+                  <SelectTrigger className="h-10 bg-background">
+                    <SelectValue placeholder="Current season" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="current">
+                      {currentSeason?.name ? `Current · ${currentSeason.name}` : "Current season"}
+                    </SelectItem>
+                    {tournaments
+                      .filter((tournament) => !tournament.deleted_at)
+                      .map((tournament) => (
+                        <SelectItem key={tournament.id} value={tournament.id}>
+                          {tournament.name}
+                          {tournament.id === publicCurrentSeasonId ? " · live" : ""}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </Field>
               <Field label="Club filter">
                 <Select value={clubFilter} onValueChange={setClubFilter}>
                   <SelectTrigger className="h-10 bg-background">
@@ -668,6 +704,11 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
                   placeholder="Search fighter, email, or club"
                 />
               </Field>
+            </div>
+            <div className="mt-3 text-[11px] uppercase tracking-[0.16em] text-tertiary">
+              {participants.length} participant{participants.length === 1 ? "" : "s"}
+              {seasonFilter === "current" && currentSeason?.name ? ` · ${currentSeason.name}` : ""}
+              {seasonFilter !== "current" ? " · historical season view" : ""}
             </div>
 
             {loadingClubs || loadingReweigh ? (
