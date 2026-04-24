@@ -26,6 +26,15 @@ router.get('/tournaments', ah(async (_req, res) => {
   res.json({ tournaments: await tournamentService.listPublic() });
 }));
 
+/* Current season — the single tournament that client-side UIs treat as the
+   default filter for season-scoped screens (weigh-in board, applicant
+   dashboard's current tab, reports). Returns 200 with `tournament: null`
+   when no public tournaments exist so the UI can gracefully render a
+   "no active season" state instead of erroring. */
+router.get('/tournaments/current', ah(async (_req, res) => {
+  res.json({ tournament: await tournamentService.currentPublicSeason() });
+}));
+
 router.get('/clubs', ah(async (req, res) => {
   res.json({ clubs: await clubsService.listPublicClubs({ q: req.query.q }) });
 }));

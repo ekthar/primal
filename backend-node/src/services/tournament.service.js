@@ -47,6 +47,43 @@ async function hasOpenPublicRegistration() {
   return tournaments.some((tournament) => tournament.registrationOpen);
 }
 
+/**
+ * Pure selection — given the already-enriched list of public tournaments,
+ * return the one that should act as the default "current season" filter.
+ *
+ * Selection order:
+ *   1. Any public tournament whose registration window is OPEN right now.
+ *   2. Else any public tournament whose event dates (starts_on..ends_on)
+ *      cover today, extended by a 30-day post-event grace window so admins
+ *      finishing paperwork don't lose the "current" label the day after.
+ *   3. Else the most recently created public tournament (already pre-ordered
+ *      by the repo by `starts_on DESC`, so the first element is newest).
+ *
+ * Exposed as a named export so unit tests can exercise each branch without
+ * standing up a database.
+ */
+function chooseCurrentSeason(tournaments, now = Date.now()) {
+  if (!Array.isArray(tournaments) || !tournaments.length) return null;
+
+  const openNow = tournaments.find((tournament) => tournament.registrationOpen);
+  if (openNow) return openNow;
+
+  const GRACE_MS = 30 * 24 * 60 * 60 * 1000;
+  const runningNow = tournaments.find((tournament) => {
+    const starts = tournament.starts_on ? new Date(tournament.starts_on).getTime() : null;
+    const ends = tournament.ends_on ? new Date(tournament.ends_on).getTime() : null;
+    if (!Number.isFinite(starts) || !Number.isFinite(ends)) return false;
+    return now >= starts && now <= ends + GRACE_MS;
+  });
+  if (runningNow) return runningNow;
+
+  return tournaments[0];
+}
+
+async function currentPublicSeason() {
+  return chooseCurrentSeason(await listPublic(), Date.now());
+}
+
 async function closePriorSeasonApplications(actor, tournament) {
   const state = getRegistrationState(tournament);
   if (!tournament?.is_public || !state.registrationOpen) return [];
@@ -142,4 +179,4 @@ async function archiveAdmin(actor, tournamentId, ctx = {}) {
   return next;
 }
 
-module.exports = { listAdmin, createAdmin, updateAdmin, archiveAdmin, listPublic, hasOpenPublicRegistration, enrichPublicTournament, getRegistrationState };
+module.exports = { listAdmin, createAdmin, updateAdmin, archiveAdmin, listPublic, currentPublicSeason, chooseCurrentSeason, hasOpenPublicRegistration, enrichPublicTournament, getRegistrationState };

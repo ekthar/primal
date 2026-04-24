@@ -230,6 +230,7 @@ export const api = {
   }),
 
   publicTournaments: () => request("GET", "/api/public/tournaments"),
+  publicCurrentTournament: () => request("GET", "/api/public/tournaments/current"),
   publicParticipants: (query) => request("GET", "/api/public/participants", { query }),
   publicClubs: (query) => request("GET", "/api/public/clubs", { query }),
   publicCirculars: (query) => request("GET", "/api/public/circulars", { query }),
