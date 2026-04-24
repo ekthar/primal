@@ -1833,6 +1833,157 @@ async function applicationExportSmoke(applicationId, actor) {
   };
 }
 
+// ─── Bulk ZIP export (Phase 4) ──────────────────────────────────────────────
+//
+// Replaces the frontend's sequential `for…await` of 250+ individual PDF
+// downloads (with a native `window.confirm`) with a single streaming ZIP
+// archive assembled server-side. Uses `archiver` to pipe the ZIP directly
+// into the response — no large in-memory staging of the whole archive.
+//
+// Each entry inside the ZIP is still a canonical Primal OS application PDF
+// with the deterministic filename built by `buildExportFilename()` so the
+// archive unzips to human-readable files ready for print queues.
+
+const archiver = require('archiver');
+const { PassThrough } = require('stream');
+
+/**
+ * Render one application PDF into a Buffer. This is a thin wrapper around
+ * `applicationToPdf(res, …)` that swaps the HTTP response for a PassThrough
+ * sink so the resulting bytes can be written into a ZIP entry.
+ *
+ * Returns `{ filename, buffer }`. `filename` is the Content-Disposition
+ * filename the endpoint would have used — ideal for the ZIP entry name.
+ */
+async function applicationToPdfBuffer(applicationId, actor, ctx = {}) {
+  return new Promise((resolve, reject) => {
+    const pass = new PassThrough();
+    const chunks = [];
+    let filename = `application-${applicationId}.pdf`;
+
+    pass.on('data', (chunk) => chunks.push(chunk));
+    pass.on('end', () => resolve({ filename, buffer: Buffer.concat(chunks) }));
+    pass.on('error', reject);
+
+    const resLike = {
+      setHeader(name, value) {
+        if (String(name).toLowerCase() === 'content-disposition') {
+          const match = /filename="([^"]+)"/.exec(String(value));
+          if (match) filename = match[1];
+        }
+      },
+      write: pass.write.bind(pass),
+      end: pass.end.bind(pass),
+      on: pass.on.bind(pass),
+      once: pass.once.bind(pass),
+      emit: pass.emit.bind(pass),
+      pipe: pass.pipe.bind(pass),
+    };
+
+    applicationToPdf(resLike, applicationId, actor, ctx).catch(reject);
+  });
+}
+
+/**
+ * Stream a ZIP of every approved participant PDF for the given tournament
+ * (or across all tournaments when `tournamentId` is omitted) straight into
+ * the response.
+ *
+ * The archive name is deterministic: `primal_<tournament>_participants_<date>.zip`
+ * so the browser downloads a file with a useful name.
+ *
+ * Errors while generating an individual application PDF are swallowed per
+ * entry so one bad record never breaks the whole bulk export — a manifest
+ * file `_errors.txt` is appended at the end listing any failures.
+ */
+async function bulkApprovedParticipantsToZip(res, actor, { tournamentId } = {}, ctx = {}) {
+  const report = await approvedParticipantReport({ tournamentId });
+  const deduped = new Map();
+  [...report.clubParticipants, ...report.individualParticipants].forEach((row) => {
+    if (row?.applicationId && !deduped.has(row.applicationId)) {
+      deduped.set(row.applicationId, row);
+    }
+  });
+  const applications = Array.from(deduped.values());
+
+  const brandName = config.pdf?.brandName || 'Primal';
+  const tournamentName = applications[0]?.tournamentName || (tournamentId ? 'tournament' : 'all');
+  const archiveName = buildExportFilename({
+    type: 'participants',
+    tournamentName,
+    tournamentId: tournamentId || 'all',
+    extra: `bundle-${applications.length}`,
+    brand: brandName,
+    extension: 'zip',
+  });
+
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="${archiveName}"`);
+  res.setHeader('Cache-Control', 'no-store');
+
+  const archive = archiver('zip', {
+    zlib: { level: 5 }, // PDFs are already compressed — level 5 is a good balance
+  });
+
+  const errors = [];
+  archive.on('warning', (err) => {
+    if (err.code !== 'ENOENT') errors.push(`archive warning: ${err.message}`);
+  });
+  archive.on('error', (err) => {
+    if (!res.headersSent) res.status(500);
+    errors.push(`archive error: ${err.message}`);
+    try { res.end(); } catch (_) { /* ignore */ }
+  });
+
+  archive.pipe(res);
+
+  // Sequential generation keeps memory flat — each PDF is buffered, zipped, and released.
+  for (const row of applications) {
+    try {
+      const { filename, buffer } = await applicationToPdfBuffer(row.applicationId, actor, ctx);
+      archive.append(buffer, { name: filename });
+    } catch (err) {
+      errors.push(`${row.applicationId} (${row.participantName || 'unknown'}): ${err.message}`);
+    }
+  }
+
+  if (errors.length) {
+    archive.append(errors.join('\n') + '\n', { name: '_errors.txt' });
+  }
+
+  // Include a human-readable manifest so federation staff can audit the bundle.
+  const manifest = [
+    `${brandName} · Approved participants bundle`,
+    `Tournament: ${tournamentName}`,
+    `Count: ${applications.length} approved applications`,
+    `Generated: ${new Date().toISOString()}`,
+    '',
+    '# applicationId | name | club | discipline',
+    ...applications.map((row) => [
+      row.applicationId,
+      row.participantName || '—',
+      row.clubName || 'Independent',
+      row.discipline || '—',
+    ].join(' | ')),
+  ].join('\n');
+  archive.append(`${manifest}\n`, { name: 'manifest.txt' });
+
+  await archive.finalize();
+
+  await auditWrite({
+    actorUserId: actor?.id,
+    actorRole: actor?.role,
+    action: 'export.participants_bulk_zip',
+    entityType: 'tournament',
+    entityId: tournamentId || 'all',
+    payload: {
+      count: applications.length,
+      errors: errors.length,
+    },
+    requestIp: ctx.ip,
+  });
+}
+
 module.exports = {
   approvedToExcel,
   approvedParticipantsToExcel,
@@ -1841,6 +1992,8 @@ module.exports = {
   seasonalReportToPdf,
   applicationToPaper,
   applicationToPdf,
+  applicationToPdfBuffer,
+  bulkApprovedParticipantsToZip,
   applicationExportSmoke,
   auditToExcel,
   bracketToPdf,

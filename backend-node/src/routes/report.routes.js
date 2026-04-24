@@ -30,6 +30,15 @@ router.get('/participants.xlsx', requireRole('admin'), ah(async (req, res) => {
   await exporter.approvedParticipantsToExcel(res, { tournamentId: req.query.tournamentId });
 }));
 
+router.get('/participants.zip', requireRole('admin'), ah(async (req, res) => {
+  await exporter.bulkApprovedParticipantsToZip(
+    res,
+    req.user,
+    { tournamentId: req.query.tournamentId },
+    { ip: req.ip },
+  );
+}));
+
 router.get('/analytics', requireRole('admin'), ah(async (req, res) => {
   const report = await reportService.groupedApplicationReport({
     tournamentId: req.query.tournamentId,
