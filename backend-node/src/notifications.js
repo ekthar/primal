@@ -72,11 +72,23 @@ const TEMPLATES = {
   },
   'application.needs_correction': {
     subject: () => 'Action needed on your application',
-    text: (p) => `Hi ${p.applicantName},\n\nThe reviewer has requested a correction:\n\n${p.reason}\n\nPlease update the flagged fields and resubmit before ${p.dueAt}.\n\n- Primal`,
+    text: (p) => `Primal: Action needed on application ${p.applicationDisplayId || ''}. Reason: ${p.reason || 'see email'}. Update & resubmit before ${p.dueAt || 'the deadline'}.`,
+    html: (p) => renderEmailLayout({
+      eyebrow: 'Action needed',
+      title: 'We need a correction before we can proceed',
+      body: `
+        <p style="margin:0 0 12px;">Hi ${escapeHtml(p.applicantName)},</p>
+        <p style="margin:0 0 12px;">The reviewer has flagged your application for <strong>${escapeHtml(p.tournamentName)}</strong> and requested an update.</p>
+        <p style="margin:0 0 12px;">Application ID: <strong>${escapeHtml(p.applicationDisplayId || 'Pending')}</strong></p>
+        <p style="margin:0 0 12px;"><strong>Reason:</strong><br>${escapeHtml(p.reason || '')}</p>
+        <p style="margin:0;">Please update the flagged fields and resubmit before <strong>${escapeHtml(String(p.dueAt || 'the deadline'))}</strong>.</p>
+      `,
+      footer: 'You can update your application from your applicant dashboard. Contact operations if anything is unclear.',
+    }),
   },
   'application.approved': {
     subject: () => "You're in. Approved for weigh-in.",
-    text: (p) => `Congratulations ${p.applicantName} - your application for ${p.tournamentName} is approved. See you at weigh-in.\n\n- Primal`,
+    text: (p) => `Primal: ${p.applicantName}, your application ${p.applicationDisplayId || ''} for ${p.tournamentName} is APPROVED. See you at weigh-in.`,
     html: (p) => renderEmailLayout({
       eyebrow: 'Application approved',
       title: 'Approved for the next stage',
@@ -91,7 +103,19 @@ const TEMPLATES = {
   },
   'application.rejected': {
     subject: () => 'Application decision',
-    text: (p) => `Hi ${p.applicantName},\n\nUnfortunately your application for ${p.tournamentName} was not approved. Reason: ${p.reason}\n\nYou can file an appeal within ${p.appealWindowDays} days.\n\n- Primal`,
+    text: (p) => `Primal: ${p.applicantName}, your application ${p.applicationDisplayId || ''} for ${p.tournamentName} was not approved. Appeal window: ${p.appealWindowDays}d.`,
+    html: (p) => renderEmailLayout({
+      eyebrow: 'Application decision',
+      title: 'Your application was not approved',
+      body: `
+        <p style="margin:0 0 12px;">Hi ${escapeHtml(p.applicantName)},</p>
+        <p style="margin:0 0 12px;">After review, your application for <strong>${escapeHtml(p.tournamentName)}</strong> was not approved.</p>
+        <p style="margin:0 0 12px;">Application ID: <strong>${escapeHtml(p.applicationDisplayId || 'Pending')}</strong></p>
+        <p style="margin:0 0 12px;"><strong>Reason:</strong><br>${escapeHtml(p.reason || '')}</p>
+        <p style="margin:0;">You can file an appeal within <strong>${escapeHtml(String(p.appealWindowDays || 7))} days</strong>. See your applicant dashboard for the appeal form.</p>
+      `,
+      footer: 'Thank you for applying. If you disagree with the decision, please raise an appeal within the window above.',
+    }),
   },
   'auth.password_reset': {
     subject: () => 'Reset your password',

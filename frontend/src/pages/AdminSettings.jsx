@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarRange, Plus, RefreshCcw, Save, Scale, Settings2, Trash2 } from "lucide-react";
+import { Bell, CalendarRange, CheckCircle2, Mail, MessageCircle, Plus, RefreshCcw, Save, Scale, Settings2, Trash2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -364,6 +364,7 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
         <TabsList className="bg-surface-muted p-1 rounded-xl h-auto flex w-full justify-start overflow-x-auto">
           <TabsTrigger value="tournaments" className="data-[state=active]:bg-surface rounded-lg px-4 py-2">Tournament windows</TabsTrigger>
           <TabsTrigger value="weighin" className="data-[state=active]:bg-surface rounded-lg px-4 py-2">Weigh-in updates</TabsTrigger>
+          <TabsTrigger value="notifications" className="data-[state=active]:bg-surface rounded-lg px-4 py-2">Notifications</TabsTrigger>
           <TabsTrigger value="backlog" className="data-[state=active]:bg-surface rounded-lg px-4 py-2">Pending roadmap</TabsTrigger>
         </TabsList>
 
@@ -820,6 +821,10 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
           </section>
         </TabsContent>
 
+        <TabsContent value="notifications">
+          <NotificationsHealthPanel />
+        </TabsContent>
+
         <TabsContent value="backlog">
           <section className="rounded-3xl border border-border bg-surface elev-card p-6">
             <div className="flex items-start gap-3">
@@ -860,5 +865,101 @@ function DetailLite({ label, value }) {
       <div className="text-[10px] uppercase tracking-wider text-tertiary font-semibold">{label}</div>
       <div className="mt-1 text-sm">{value}</div>
     </div>
+  );
+}
+
+function NotificationsHealthPanel() {
+  const [loading, setLoading] = useState(true);
+  const [health, setHealth] = useState(null);
+
+  async function refresh() {
+    setLoading(true);
+    try {
+      const data = await api.notificationsHealth();
+      setHealth(data);
+    } catch (err) {
+      toast.error(err?.message || "Failed to load notification health");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { refresh(); }, []);
+
+  const channels = [
+    { key: "email", icon: Mail, label: "Email (Resend)", note: "Decision emails, password resets, reminders." },
+    { key: "sms", icon: MessageCircle, label: "SMS (Twilio)", note: "Fallback for critical decision notifications." },
+    { key: "whatsapp", icon: MessageCircle, label: "WhatsApp (Twilio)", note: "Primary mobile channel where enabled." },
+  ];
+
+  if (loading && !health) {
+    return <SectionLoader />;
+  }
+
+  return (
+    <section className="rounded-3xl border border-border bg-surface elev-card p-6 space-y-5">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex items-start gap-3">
+          <Bell className="size-5 text-primary shrink-0 mt-0.5" />
+          <div>
+            <h2 className="font-display text-2xl font-semibold tracking-tight">Notifications health</h2>
+            <p className="text-sm text-secondary-muted mt-1">
+              Live status of Resend / Twilio / push providers — and a 7-day rolling summary of delivery results.
+            </p>
+          </div>
+        </div>
+        <Button variant="outline" onClick={refresh}>
+          <RefreshCcw className="size-4" /> Refresh
+        </Button>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        {channels.map(({ key, icon: Icon, label, note }) => {
+          const ch = health?.[key] || {};
+          return (
+            <div key={key} className="rounded-2xl border border-border bg-background/50 p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Icon className="size-4 text-secondary" />
+                  <span className="font-medium text-sm">{label}</span>
+                </div>
+                {ch.configured
+                  ? <span className="inline-flex items-center gap-1 text-xs text-emerald-700"><CheckCircle2 className="size-3.5" /> Configured</span>
+                  : <span className="inline-flex items-center gap-1 text-xs text-secondary-muted"><XCircle className="size-3.5" /> Missing creds</span>}
+              </div>
+              <div className="mt-3 text-xs text-secondary-muted leading-relaxed">{note}</div>
+              {ch.from ? (
+                <div className="mt-3 text-[11px] uppercase tracking-wider text-tertiary">
+                  From: <span className="font-mono text-foreground">{ch.from}</span>
+                </div>
+              ) : null}
+              {health?.recent?.[key] ? (
+                <div className="mt-3 flex gap-2 flex-wrap text-[11px]">
+                  {Object.entries(health.recent[key]).map(([status, count]) => (
+                    <span
+                      key={status}
+                      className={`rounded-full px-2 py-0.5 border ${status === "sent" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : status === "failed" ? "border-red-200 bg-red-50 text-red-800" : "border-border bg-surface-muted text-secondary"}`}
+                    >
+                      {status}: {count}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+
+      {health?.templates?.length ? (
+        <div>
+          <h3 className="font-display text-sm font-semibold tracking-tight text-secondary mb-2">Registered templates</h3>
+          <div className="flex gap-2 flex-wrap">
+            {health.templates.map((t) => (
+              <span key={t} className="rounded-full px-2.5 py-1 border border-border bg-surface-muted text-xs font-mono">{t}</span>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </section>
   );
 }

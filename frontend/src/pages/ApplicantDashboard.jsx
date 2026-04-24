@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Camera, Download, Eye, FileCheck2, FileText, Gavel, ScanLine, ShieldAlert, Upload } from "lucide-react";
+import { AlertCircle, Camera, Download, Eye, FileCheck2, FileText, Gavel, Mail as MailIcon, ScanLine, ShieldAlert, Upload, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
@@ -186,6 +186,20 @@ export default function ApplicantDashboard() {
       setApplications((current) => [nextApplication, ...current]);
       toast.success(`Reapplied into ${tournament.name}`);
     }
+  }
+
+  async function withdrawApplication(application) {
+    if (!application?.id) return;
+    if (!confirm(`Withdraw your application for "${application.tournament_name}"? Reviewers will see a cancel request and may close it out. Your data is not deleted.`)) return;
+    const reason = window.prompt("Optional reason:") || "Applicant withdrew via dashboard";
+    const { error } = await api.requestApplicationCancel(application.id, { reason });
+    if (error) {
+      toast.error(error.message || "Failed to request withdrawal");
+      return;
+    }
+    toast.success("Withdrawal request sent to reviewers");
+    const appRes = await api.listApplications();
+    if (!appRes.error) setApplications(appRes.data.items || []);
   }
 
   function setDraftFile(applicationId, kind, file) {
@@ -426,7 +440,37 @@ export default function ApplicantDashboard() {
                     <Detail label="Reviewer" value={application.reviewer_display_id || "Unassigned"} />
                     <Detail label="Correction due" value={application.correction_due_at ? new Date(application.correction_due_at).toLocaleDateString() : "-"} />
                   </div>
-                  <div className="mt-4 flex justify-end">
+                  {(application.review_notes || application.rejection_reason || application.reopen_reason) && (
+                    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/50 p-4">
+                      <div className="flex items-center gap-2 text-sm font-medium text-amber-900">
+                        <AlertCircle className="size-4" /> Decision notes from reviewer
+                      </div>
+                      {application.rejection_reason && (
+                        <div className="mt-2 text-sm text-secondary"><strong>Reason:</strong> {application.rejection_reason}</div>
+                      )}
+                      {application.review_notes && (
+                        <div className="mt-2 text-sm text-secondary"><strong>Notes:</strong> {application.review_notes}</div>
+                      )}
+                      {application.reopen_reason && (
+                        <div className="mt-2 text-sm text-secondary"><strong>Reopen reason:</strong> {application.reopen_reason}</div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="mt-4 flex flex-wrap justify-end gap-2">
+                    <Button variant="ghost" size="sm" onClick={() => downloadApplicationPdf(application.id)} disabled={downloadingPdf}>
+                      <Download className="size-3.5" /> PDF
+                    </Button>
+                    <Button variant="ghost" size="sm" asChild>
+                      <a href="mailto:operations@primalfight.io?subject=Application%20help" title="Contact the tournament operations team">
+                        <MailIcon className="size-3.5" /> Contact organizers
+                      </a>
+                    </Button>
+                    {!["approved", "rejected", "season_closed"].includes(application.status) && (
+                      <Button variant="ghost" size="sm" onClick={() => withdrawApplication(application)}>
+                        <XCircle className="size-3.5" /> Withdraw
+                      </Button>
+                    )}
                     <Button className="w-full sm:w-auto" variant="outline" onClick={() => openApplication(application)} disabled={loadingApplicationId === application.id}>
                       <InlineLoadingLabel loading={loadingApplicationId === application.id} loadingText="Opening...">
                         <>

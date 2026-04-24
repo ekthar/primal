@@ -17,6 +17,7 @@ import {
   Menu,
   Trophy,
   ArrowLeft,
+  Image as ImageIcon,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import ThemeToggle from "@/components/shared/ThemeToggle";
@@ -59,6 +60,7 @@ const NAV = {
     { to: "/admin/appeals", icon: Gavel, label: "Appeals", shortLabel: "Appeals", testid: "nav-appeals" },
     { to: "/admin/reports", icon: BarChart3, label: "Reports", shortLabel: "Reports", testid: "nav-reports" },
     { to: "/admin/circulars", icon: Newspaper, label: "Circulars", shortLabel: "Circulars", testid: "nav-circulars" },
+    { to: "/admin/albums", icon: ImageIcon, label: "Albums", shortLabel: "Albums", testid: "nav-albums" },
   ],
   reviewer: [
     { to: "/admin/queue", icon: ListChecks, label: "Review Queue", shortLabel: "Queue", testid: "nav-queue" },

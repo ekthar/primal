@@ -264,6 +264,27 @@ export const api = {
   createCircular: (body) => request("POST", "/api/circulars", { body }),
   updateCircular: (id, body) => request("PATCH", `/api/circulars/${id}`, { body }),
   deleteCircular: (id) => request("DELETE", `/api/circulars/${id}`),
+
+  // Albums
+  adminListAlbums: () => request("GET", "/api/albums"),
+  adminGetAlbum: (id) => request("GET", `/api/albums/${id}`),
+  adminCreateAlbum: (body) => request("POST", "/api/albums", { body }),
+  adminUpdateAlbum: (id, body) => request("PATCH", `/api/albums/${id}`, { body }),
+  adminDeleteAlbum: (id) => request("DELETE", `/api/albums/${id}`),
+  adminUploadAlbumPhoto: (id, { file, caption, orderIndex }) => {
+    const body = new FormData();
+    body.append("file", file);
+    if (caption) body.append("caption", caption);
+    if (orderIndex !== undefined) body.append("orderIndex", String(orderIndex));
+    return request("POST", `/api/albums/${id}/photos`, { body });
+  },
+  adminDeleteAlbumPhoto: (albumId, photoId) => request("DELETE", `/api/albums/${albumId}/photos/${photoId}`),
+  publicListAlbums: () => request("GET", "/api/public/albums"),
+  publicGetAlbum: (id) => request("GET", `/api/public/albums/${id}`),
+
+  // Notifications
+  notificationsHealth: () => request("GET", "/api/notifications/health"),
+  resendNotification: (applicationId, body) => request("POST", `/api/notifications/resend/${applicationId}`, { body }),
 };
 
 export async function isApiLive() {
