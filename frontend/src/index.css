@@ -292,6 +292,54 @@
   }
 }
 
+/* ─── Phase 6 · Accessibility pass ──────────────────────────────────────── */
+/* Skip link — keyboard-first navigation to main content. Hidden until
+   focused so it doesn't clutter the visual design, but discoverable
+   via Tab as the first focusable element on every page. */
+.skip-to-main {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 100;
+  padding: 0.75rem 1rem;
+  background: hsl(var(--foreground));
+  color: hsl(var(--background));
+  font-weight: 600;
+  text-decoration: none;
+  transform: translateY(-200%);
+  transition: transform 150ms ease-out;
+  border-bottom-right-radius: 0.75rem;
+}
+.skip-to-main:focus,
+.skip-to-main:focus-visible {
+  transform: translateY(0);
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+/* Global focus-visible ring — every interactive element gets a 2px
+   ring when tab-focused (mouse focus stays unchanged). WCAG 2.4.7. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+/* Respect user motion preference — kill all non-essential animation
+   and transitions when the OS requests reduced motion. WCAG 2.3.3. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 @media (max-height: 820px) {
   .short-screen-tight {
     padding-top: 1rem !important;

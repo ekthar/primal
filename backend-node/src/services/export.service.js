@@ -21,12 +21,25 @@ const documentStorage = require('./documentStorage.service');
 const { buildSignatureForApplication } = require('../pdfSignature');
 const { formatPersonName, applicationDisplayId, reviewerDisplayId } = require('./identity.service');
 const {
+  TYPE_SCALE,
   createPalette,
   baseDocumentOptions,
   buildExportFilename,
   finalizePageRibbons,
   shortSignatureId,
 } = require('./pdfTokens');
+const {
+  drawApplicationCoverPage,
+  drawRunningHeader,
+  drawBracketTree,
+  drawBracketHeader,
+  drawChampionCard: drawBracketChampionCard,
+  autoSlotHeight,
+  drawReportHeader,
+  drawKpiStrip,
+  drawDataTable,
+  drawStatusDistributionBar,
+} = require('./pdfComposition');
 
 function formatDateTime(value) {
   if (!value) return '—';
@@ -252,19 +265,24 @@ function drawDocumentTable(doc, documents, palette, fonts) {
   ensureSpace(doc, 22);
   const headerY = doc.y;
   doc.save();
-  doc.roundedRect(x, headerY, width, 18, 4).fill(palette.primary);
+  doc.rect(x, headerY, width, 20).fill(palette.ink);
   doc.restore();
 
   let colX = x;
   columns.forEach((c) => {
-    doc.fillColor('#111111').font(fonts.headingBold).fontSize(8)
-      .text(String(c.label).toUpperCase(), colX + 4, headerY + 5, { width: c.w - 8 });
+    doc.fillColor(palette.paper).font(fonts.headingBold).fontSize(TYPE_SCALE.label.size)
+      .text(String(c.label).toUpperCase(), colX + 6, headerY + 6, {
+        width: c.w - 12,
+        characterSpacing: TYPE_SCALE.label.letterSpacing,
+        lineBreak: false,
+      });
     colX += c.w;
   });
 
-  doc.y = headerY + 22;
+  doc.y = headerY + 24;
   if (!documents.length) {
-    doc.fillColor(palette.textMuted).font(fonts.body).fontSize(9).text('No uploaded documents.');
+    doc.fillColor(palette.textMuted).font(fonts.body).fontSize(TYPE_SCALE.body.size)
+      .text('No uploaded documents.');
     return;
   }
 
@@ -277,22 +295,27 @@ function drawDocumentTable(doc, documents, palette, fonts) {
       uploaded: formatDateOnly(d.created_at),
     };
 
-    const rowHeight = 18;
+    const rowHeight = 20;
     ensureSpace(doc, rowHeight + 2);
     const rowY = doc.y;
     if (idx % 2 === 0) {
       doc.save();
-      doc.roundedRect(x, rowY, width, rowHeight, 3).fill('#fff8f1');
+      doc.rect(x, rowY, width, rowHeight).fill(palette.surfaceMuted);
       doc.restore();
     }
+    // Thin hairline between rows
+    doc.save();
+    doc.strokeColor(palette.line).opacity(0.1).lineWidth(0.5);
+    doc.moveTo(x, rowY + rowHeight).lineTo(x + width, rowY + rowHeight).stroke();
+    doc.restore();
 
     let vx = x;
     columns.forEach((c) => {
-      doc.fillColor(palette.text).font(fonts.body).fontSize(8)
-        .text(String(values[c.key]).toUpperCase ? values[c.key] : values[c.key], vx + 4, rowY + 5, { width: c.w - 8, ellipsis: true });
+      doc.fillColor(palette.text).font(fonts.body).fontSize(TYPE_SCALE.body.size)
+        .text(values[c.key], vx + 6, rowY + 6, { width: c.w - 12, ellipsis: true, lineBreak: false });
       vx += c.w;
     });
-    doc.y = rowY + rowHeight + 2;
+    doc.y = rowY + rowHeight;
   });
 }
 
@@ -384,19 +407,29 @@ function drawTimelineCards(doc, events, options) {
     return;
   }
 
-  events.forEach((ev) => {
-    ensureSpace(doc, 44);
+  events.forEach((ev, idx) => {
+    ensureSpace(doc, 40);
     const y = doc.y;
-    drawPanel(doc, { x, y, width, height: 38, fill: '#fffdf9', stroke: palette.line, radius: 2 });
-    doc.fillColor(palette.text).font(fonts.headingBold).fontSize(8.5)
-      .text(`${statusLabel(ev.from_status)} -> ${statusLabel(ev.to_status)}`, x + 12, y + 8, { width: width - 150, ellipsis: true });
-    doc.fillColor(palette.textMuted).font(fonts.body).fontSize(7.8)
-      .text(formatDateTime(ev.created_at), x + width - 128, y + 8, { width: 116, align: 'right' });
-    if (ev.reason) {
-      doc.fillColor(palette.textMuted).font(fonts.body).fontSize(7.8)
-        .text(ev.reason, x + 12, y + 20, { width: width - 24, ellipsis: true });
+    // Zebra stripe on the paper; no blobby rounded card.
+    if (idx % 2 === 0) {
+      doc.save();
+      doc.rect(x, y, width, 34).fill(palette.surfaceMuted);
+      doc.restore();
     }
-    doc.y = y + 44;
+    // Left ink bar indicates workflow advance
+    doc.save();
+    doc.rect(x, y, 2, 34).fill(palette.ink);
+    doc.restore();
+
+    doc.fillColor(palette.text).font(fonts.headingBold).fontSize(TYPE_SCALE.body.size)
+      .text(`${statusLabel(ev.from_status)} → ${statusLabel(ev.to_status)}`, x + 10, y + 6, { width: width - 150, ellipsis: true, lineBreak: false });
+    doc.fillColor(palette.textMuted).font(fonts.body).fontSize(TYPE_SCALE.micro.size)
+      .text(formatDateTime(ev.created_at), x + width - 128, y + 8, { width: 120, align: 'right', lineBreak: false });
+    if (ev.reason) {
+      doc.fillColor(palette.textMuted).font(fonts.body).fontSize(TYPE_SCALE.micro.size)
+        .text(ev.reason, x + 10, y + 20, { width: width - 20, ellipsis: true, lineBreak: false });
+    }
+    doc.y = y + 38;
   });
 }
 
@@ -496,92 +529,9 @@ async function groupedAnalyticsToExcel(res, { tournamentId, discipline } = {}) {
   res.end();
 }
 
-function drawAnalyticsTable(doc, title, rows, palette, fonts) {
-  const x = doc.page.margins.left;
-  const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
-  const columns = [
-    { key: 'label', label: title, width: 190 },
-    { key: 'submitted', label: 'Submitted', width: 60 },
-    { key: 'under_review', label: 'Review', width: 56 },
-    { key: 'needs_correction', label: 'Correction', width: 64 },
-    { key: 'season_closed', label: 'Season Closed', width: 68 },
-    { key: 'approved', label: 'Approved', width: 60 },
-    { key: 'rejected', label: 'Rejected', width: 60 },
-    { key: 'total', label: 'Total', width: 52 },
-  ];
-
-  ensureSpace(doc, 36);
-  doc.fillColor(palette.text).font(fonts.headingBold).fontSize(13).text(title);
-  doc.moveDown(0.3);
-
-  const headerY = doc.y;
-  doc.save();
-  doc.roundedRect(x, headerY, width, 22, 6).fill('#ece6dc');
-  doc.restore();
-
-  let headerX = x;
-  columns.forEach((column) => {
-    doc.fillColor(palette.text).font(fonts.bodyBold).fontSize(8)
-      .text(column.label.toUpperCase(), headerX + 6, headerY + 7, { width: column.width - 12, ellipsis: true });
-    headerX += column.width;
-  });
-
-  doc.y = headerY + 26;
-  if (!rows.length) {
-    doc.fillColor(palette.textMuted).font(fonts.body).fontSize(9).text('No grouped rows found for the selected filters.');
-    doc.moveDown(1);
-    return;
-  }
-
-  rows.forEach((row, index) => {
-    const participantNames = Array.isArray(row.participantNames) ? row.participantNames.filter(Boolean) : [];
-    const participantDetails = Array.isArray(row.participantDetails) ? row.participantDetails.filter(Boolean) : [];
-    const participantLine = participantDetails.length ? participantDetails.join(' • ') : participantNames.length ? participantNames.join(', ') : '';
-    let rowHeight = 20;
-    if (participantLine) {
-      doc.font(fonts.body).fontSize(7.2);
-      rowHeight = Math.max(28, doc.heightOfString(participantLine, { width: columns[0].width - 12 }) + 18);
-    }
-
-    ensureSpace(doc, rowHeight + 2);
-    const rowY = doc.y;
-    if (index % 2 === 0) {
-      doc.save();
-      doc.roundedRect(x, rowY, width, rowHeight, 4).fill('#fbfaf7');
-      doc.restore();
-    }
-
-    const values = {
-      label: row.label,
-      submitted: row.statuses.submitted,
-      under_review: row.statuses.under_review,
-      needs_correction: row.statuses.needs_correction,
-      season_closed: row.statuses.season_closed,
-      approved: row.statuses.approved,
-      rejected: row.statuses.rejected,
-      total: row.statuses.total,
-    };
-
-    let valueX = x;
-    columns.forEach((column) => {
-      if (column.key === 'label') {
-        doc.fillColor(palette.text).font(fonts.body).fontSize(8.5)
-          .text(String(values[column.key]), valueX + 6, rowY + 5, { width: column.width - 12, ellipsis: !participantLine });
-        if (participantLine) {
-          doc.fillColor(palette.textMuted).font(fonts.body).fontSize(7.2)
-            .text(participantLine, valueX + 6, rowY + 15, { width: column.width - 12, ellipsis: false });
-        }
-      } else {
-        doc.fillColor(palette.text).font(fonts.body).fontSize(8.5)
-          .text(String(values[column.key]), valueX + 6, rowY + 6, { width: column.width - 12, ellipsis: true });
-      }
-      valueX += column.width;
-    });
-    doc.y = rowY + rowHeight;
-  });
-
-  doc.moveDown(0.8);
-}
+// Legacy `drawAnalyticsTable` has been retired. The analytics tables in
+// groupedAnalyticsToPdf now use `drawDataTable` from pdfComposition.js with
+// inline status distribution bars (drawStatusDistributionBar).
 
 async function groupedAnalyticsToPdf(res, actor, { tournamentId, discipline } = {}, ctx = {}) {
   const report = await groupedApplicationReport({ tournamentId, discipline });
@@ -606,7 +556,7 @@ async function groupedAnalyticsToPdf(res, actor, { tournamentId, discipline } = 
     }),
     size: 'A4',
     layout: 'landscape',
-    margins: { top: 28, bottom: 28, left: 28, right: 28 },
+    margins: { top: 28, bottom: 32, left: 28, right: 28 },
   });
   doc.pipe(res);
   const fonts = resolvePdfFonts(doc);
@@ -616,51 +566,106 @@ async function groupedAnalyticsToPdf(res, actor, { tournamentId, discipline } = 
   doc.restore();
 
   const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
-  drawPanel(doc, {
+
+  const cursorY = drawReportHeader(doc, {
+    palette, fonts, brandName,
+    title: 'Application Analytics',
+    subtitle: tournamentId ? 'Tournament report' : 'Federation-wide report',
+    metaLines: [
+      `Generated ${formatDateTime(report.generatedAt)}`,
+      `Tournament ${displayText(report.filters.tournamentId, 'All')}`,
+      `Discipline ${displayText(report.filters.discipline, 'All')}`,
+    ],
+  });
+
+  const pending = report.totals.submitted + report.totals.under_review + report.totals.needs_correction;
+  let y = drawKpiStrip(doc, {
     x: doc.page.margins.left,
-    y: doc.page.margins.top,
+    y: cursorY,
     width: pageWidth,
-    height: 84,
-    fill: palette.surface,
-    stroke: palette.line,
-    radius: 16,
+    height: 52,
+    palette, fonts,
+    kpis: [
+      { label: 'All applications', value: report.totals.total },
+      { label: 'Approved', value: report.totals.approved, highlight: true,
+        delta: report.totals.total ? `${Math.round((report.totals.approved / report.totals.total) * 100)}% of total` : undefined },
+      { label: 'Pending review', value: pending },
+      { label: 'Rejected', value: report.totals.rejected },
+    ],
   });
 
-  doc.fillColor(palette.primary).font(fonts.bodyBold).fontSize(9)
-    .text('GROUPED APPLICATION ANALYTICS', doc.page.margins.left + 18, doc.page.margins.top + 16);
-  doc.fillColor(palette.text).font(fonts.headingBold).fontSize(24)
-    .text(brandName, doc.page.margins.left + 18, doc.page.margins.top + 30);
-  doc.fillColor(palette.textMuted).font(fonts.body).fontSize(9)
-    .text(`Generated ${formatDateTime(report.generatedAt)} / Tournament ${displayText(report.filters.tournamentId, 'All')} / Discipline ${displayText(report.filters.discipline, 'All')}`, doc.page.margins.left + 18, doc.page.margins.top + 58);
+  // Shared columns for discipline / weight / category tables — inline status
+  // distribution bar makes each table scannable at a glance.
+  const pageBottom = doc.page.height - doc.page.margins.bottom - 32;
+  const makeColumns = (labelHeader) => ([
+    { key: 'label', label: labelHeader, width: 180 },
+    { key: 'total', label: 'Total', width: 50, align: 'right',
+      render: ({ doc: d, row, x, y: cy, width: cw }) => {
+        d.save();
+        d.fillColor(palette.ink).font(fonts.bodyBold || fonts.body).fontSize(TYPE_SCALE.body.size);
+        d.text(String(row.statuses.total || 0), x, cy + 5, { width: cw, align: 'right', lineBreak: false, height: 0 });
+        d.restore();
+      } },
+    { key: 'approved', label: 'Approved', width: 55, align: 'right',
+      render: ({ doc: d, row, x, y: cy, width: cw }) => {
+        d.save();
+        d.fillColor(palette.verify).font(fonts.bodyBold || fonts.body).fontSize(TYPE_SCALE.body.size);
+        d.text(String(row.statuses.approved || 0), x, cy + 5, { width: cw, align: 'right', lineBreak: false, height: 0 });
+        d.restore();
+      } },
+    { key: 'pending', label: 'Pending', width: 55, align: 'right',
+      render: ({ doc: d, row, x, y: cy, width: cw }) => {
+        const v = (row.statuses.submitted || 0) + (row.statuses.under_review || 0) + (row.statuses.needs_correction || 0);
+        d.save();
+        d.fillColor(palette.ink).font(fonts.body).fontSize(TYPE_SCALE.body.size);
+        d.text(String(v), x, cy + 5, { width: cw, align: 'right', lineBreak: false, height: 0 });
+        d.restore();
+      } },
+    { key: 'rejected', label: 'Rejected', width: 55, align: 'right',
+      render: ({ doc: d, row, x, y: cy, width: cw }) => {
+        d.save();
+        d.fillColor(palette.accent).font(fonts.body).fontSize(TYPE_SCALE.body.size);
+        d.text(String(row.statuses.rejected || 0), x, cy + 5, { width: cw, align: 'right', lineBreak: false, height: 0 });
+        d.restore();
+      } },
+    { key: 'distribution', label: 'Distribution', width: 280,
+      render: ({ row, x, y: cy, width: cw }) => {
+        drawStatusDistributionBar(doc, {
+          x, y: cy + 2, width: cw, height: 8, palette,
+          segments: [
+            { tone: 'verify', count: row.statuses.approved || 0 },
+            { tone: 'ink',    count: (row.statuses.submitted || 0) + (row.statuses.under_review || 0) },
+            { tone: 'warn',   count: row.statuses.needs_correction || 0 },
+            { tone: 'accent', count: row.statuses.rejected || 0 },
+            { tone: 'muted',  count: row.statuses.season_closed || 0 },
+          ],
+        });
+      } },
+  ]);
 
-  const kpiY = doc.page.margins.top + 104;
-  const kpiW = (pageWidth - 24) / 4;
-  [
-    ['All applications', report.totals.total],
-    ['Approved', report.totals.approved],
-    ['Pending', report.totals.submitted + report.totals.under_review + report.totals.needs_correction],
-    ['Rejected', report.totals.rejected],
-  ].forEach(([label, value], index) => {
-    drawMetricChip(doc, {
-      x: doc.page.margins.left + index * (kpiW + 8),
-      y: kpiY,
-      width: kpiW,
-      height: 54,
-      label,
-      value: String(value),
-      palette,
-      fonts,
-      tone: palette.surface,
-    });
-  });
+  const ML = doc.page.margins.left;
+  const renderSection = (title, rows) => {
+    const estHeight = 28 + 18 + rows.length * 18 + 8;
+    if (y + estHeight > pageBottom) {
+      doc.addPage();
+      doc.save();
+      doc.rect(0, 0, doc.page.width, doc.page.height).fill(palette.paper);
+      doc.restore();
+      y = doc.page.margins.top;
+    }
+    y = drawDataTable(doc, {
+      x: ML, y, width: pageWidth,
+      title, rows, columns: makeColumns(title.split(' · ')[0]),
+      palette, fonts,
+    }) + 8;
+  };
 
-  doc.y = kpiY + 72;
-  drawAnalyticsTable(doc, 'By discipline', report.disciplineGroups, palette, fonts);
-  drawAnalyticsTable(doc, 'By weight class', report.weightClassGroups, palette, fonts);
-  drawAnalyticsTable(doc, 'By category', report.categoryGroups.map((row) => ({
+  renderSection('By discipline', report.disciplineGroups);
+  renderSection('By weight class', report.weightClassGroups);
+  renderSection('By category', report.categoryGroups.map((row) => ({
     ...row,
-    label: `${row.label} / ${row.discipline} / ${row.weightClass}`,
-  })), palette, fonts);
+    label: `${row.label} · ${row.discipline} · ${row.weightClass}`,
+  })));
 
   finalizePageRibbons(doc, {
     palette,
@@ -704,8 +709,8 @@ async function seasonalReportToPdf(res, actor, tournamentId, ctx = {}) {
       keywords: ['season', 'archive', report.tournament.name],
     }),
     size: 'A4',
-    layout: 'portrait',
-    margins: { top: 24, bottom: 24, left: 24, right: 24 },
+    layout: 'landscape',
+    margins: { top: 28, bottom: 32, left: 28, right: 28 },
   });
   doc.pipe(res);
   const fonts = resolvePdfFonts(doc);
@@ -714,55 +719,108 @@ async function seasonalReportToPdf(res, actor, tournamentId, ctx = {}) {
   doc.rect(0, 0, doc.page.width, doc.page.height).fill(palette.paper);
   doc.restore();
 
-  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
-  drawPanel(doc, {
-    x: doc.page.margins.left,
-    y: doc.page.margins.top,
-    width: pageWidth,
-    height: 88,
-    fill: palette.surface,
-    stroke: palette.line,
-    radius: 16,
-  });
-  doc.fillColor(palette.primary).font(fonts.bodyBold).fontSize(9)
-    .text('SEASON ARCHIVE REPORT', doc.page.margins.left + 18, doc.page.margins.top + 16);
-  doc.fillColor(palette.text).font(fonts.headingBold).fontSize(22)
-    .text(report.tournament.name, doc.page.margins.left + 18, doc.page.margins.top + 30);
-  doc.fillColor(palette.textMuted).font(fonts.body).fontSize(9)
-    .text(`Season ${displayText(report.tournament.season, 'N/A')} / Archived ${displayText(formatDateOnly(report.tournament.archivedAt), 'Active')} / Generated ${formatDateTime(report.generatedAt)}`, doc.page.margins.left + 18, doc.page.margins.top + 58);
+  const ML = doc.page.margins.left;
+  const pageWidth = doc.page.width - ML - doc.page.margins.right;
+  const pageBottom = doc.page.height - doc.page.margins.bottom - 32;
 
-  const kpiY = doc.page.margins.top + 104;
-  const kpiW = (pageWidth - 8) / 2;
-  [
-    ['Registered', report.totals.total],
-    ['Approved', report.totals.approved],
-    ['Divisions', report.divisions.length],
-    ['Matches', report.matches.filter((row) => row.matchId).length],
-  ].forEach(([label, value], index) => {
-    const row = Math.floor(index / 2);
-    const col = index % 2;
-    drawMetricChip(doc, {
-      x: doc.page.margins.left + col * (kpiW + 8),
-      y: kpiY + row * 60,
-      width: kpiW,
-      height: 52,
-      label,
-      value: String(value),
-      palette,
-      fonts,
-      tone: palette.surface,
-    });
+  const matchesPlayed = report.matches.filter((row) => row.matchId).length;
+  const matchesCompleted = report.matches.filter((row) => row.status === 'completed').length;
+
+  const cursorY = drawReportHeader(doc, {
+    palette, fonts, brandName,
+    title: report.tournament.name,
+    subtitle: `Season archive · ${displayText(report.tournament.season, 'N/A')}`,
+    metaLines: [
+      `Archived ${displayText(formatDateOnly(report.tournament.archivedAt), 'Active')}`,
+      `Generated ${formatDateTime(report.generatedAt)}`,
+      `${report.divisions.length} divisions`,
+      `${matchesPlayed} matches played`,
+    ],
   });
 
-  doc.y = kpiY + 128;
-  drawSeasonRegistrationTable(doc, report.registrations, palette, fonts);
-  drawSeasonDivisionTable(doc, report.divisions, palette, fonts);
-  drawSeasonMatchesTable(doc, report.matches, palette, fonts);
+  let y = drawKpiStrip(doc, {
+    x: ML, y: cursorY, width: pageWidth, height: 52, palette, fonts,
+    kpis: [
+      { label: 'Registered', value: report.totals.total },
+      { label: 'Approved',   value: report.totals.approved, highlight: true,
+        delta: report.totals.total ? `${Math.round((report.totals.approved / report.totals.total) * 100)}% of registered` : undefined },
+      { label: 'Divisions',  value: report.divisions.length },
+      { label: 'Matches',    value: matchesPlayed,
+        delta: matchesPlayed ? `${matchesCompleted} completed` : undefined },
+    ],
+  });
+
+  const renderSection = (title, rows, columns) => {
+    const estHeight = 28 + 18 + rows.length * 18 + 8;
+    if (y + estHeight > pageBottom) {
+      doc.addPage();
+      doc.save();
+      doc.rect(0, 0, doc.page.width, doc.page.height).fill(palette.paper);
+      doc.restore();
+      y = doc.page.margins.top;
+    }
+    y = drawDataTable(doc, {
+      x: ML, y, width: pageWidth,
+      title, rows, columns,
+      palette, fonts,
+    }) + 8;
+  };
+
+  // Registered participants — the core season record
+  renderSection('Registered participants by category', report.registrations, [
+    { key: 'applicationDisplayId', label: 'App ID', width: 80 },
+    { key: 'participantName', label: 'Participant', width: 130 },
+    { key: 'discipline', label: 'Discipline', width: 80 },
+    { key: 'weightClass', label: 'Wt class', width: 64 },
+    { key: 'weightKg', label: 'Kg', width: 40, align: 'right' },
+    { key: 'status', label: 'Status', width: 80 },
+    { key: 'category', label: 'Category', width: 150 },
+    { key: 'bracketState', label: 'Bracket', width: 76 },
+  ]);
+
+  // Divisions — winner highlighted
+  renderSection('Division winners and category summary', report.divisions, [
+    { key: 'discipline_name', label: 'Discipline', width: 110 },
+    { key: 'label', label: 'Division', width: 210 },
+    { key: 'fighter_count', label: 'Fighters', width: 60, align: 'right' },
+    { key: 'match_count', label: 'Matches', width: 60, align: 'right' },
+    { key: 'champion_name', label: 'Champion', width: 150,
+      render: ({ doc: d, row, x, y: cy, width: cw }) => {
+        d.save();
+        d.fillColor(row.champion_name ? palette.ink : palette.textMuted)
+         .font(row.champion_name ? (fonts.bodyBold || fonts.body) : fonts.body)
+         .fontSize(TYPE_SCALE.body.size);
+        d.text(displayText(row.champion_name, 'Pending'), x, cy + 5, {
+          width: cw, ellipsis: true, lineBreak: false, height: 0,
+        });
+        d.restore();
+      } },
+    { key: 'champion_club_name', label: 'Club', width: 110 },
+  ]);
+
+  // Matches — full ledger
+  renderSection('Matches played', report.matches, [
+    { key: 'divisionLabel', label: 'Division', width: 200 },
+    { key: 'roundNumber', label: 'Rnd', width: 40, align: 'right' },
+    { key: 'matchNumber', label: 'Bout', width: 40, align: 'right' },
+    { key: 'redName', label: 'Red', width: 120 },
+    { key: 'blueName', label: 'Blue', width: 120 },
+    { key: 'winnerName', label: 'Winner', width: 130,
+      render: ({ doc: d, row, x, y: cy, width: cw }) => {
+        d.save();
+        d.fillColor(row.winnerName ? palette.ink : palette.textMuted)
+         .font(row.winnerName ? (fonts.bodyBold || fonts.body) : fonts.body)
+         .fontSize(TYPE_SCALE.body.size);
+        d.text(displayText(row.winnerName, 'Pending'), x, cy + 5, {
+          width: cw, ellipsis: true, lineBreak: false, height: 0,
+        });
+        d.restore();
+      } },
+    { key: 'status', label: 'Status', width: 80 },
+  ]);
 
   finalizePageRibbons(doc, {
-    palette,
-    fonts,
-    brand: brandName,
+    palette, fonts, brand: brandName,
     identifier: `Season Archive · ${report.tournament.name}`,
   });
   doc.end();
@@ -777,96 +835,11 @@ async function seasonalReportToPdf(res, actor, tournamentId, ctx = {}) {
   });
 }
 
-function drawSeasonRegistrationTable(doc, rows, palette, fonts) {
-  const columns = [
-    { key: 'applicationDisplayId', label: 'App ID', width: 54 },
-    { key: 'participantName', label: 'Participant', width: 104 },
-    { key: 'discipline', label: 'Discipline', width: 68 },
-    { key: 'weightClass', label: 'Wt Class', width: 54 },
-    { key: 'weightKg', label: 'Kg', width: 34 },
-    { key: 'status', label: 'Status', width: 64 },
-    { key: 'category', label: 'Category', width: 118 },
-    { key: 'bracketState', label: 'Bracket', width: 70 },
-  ];
-  drawWideTable(doc, 'Registered participants by category', rows, columns, palette, fonts);
-}
-
-function drawSeasonDivisionTable(doc, rows, palette, fonts) {
-  const columns = [
-    { key: 'discipline_name', label: 'Discipline', width: 82 },
-    { key: 'label', label: 'Division', width: 170 },
-    { key: 'fighter_count', label: 'Fighters', width: 48 },
-    { key: 'match_count', label: 'Matches', width: 48 },
-    { key: 'champion_name', label: 'Winner', width: 110 },
-    { key: 'champion_club_name', label: 'Club', width: 86 },
-  ];
-  drawWideTable(doc, 'Division winners and category summary', rows, columns, palette, fonts);
-}
-
-function drawSeasonMatchesTable(doc, rows, palette, fonts) {
-  const columns = [
-    { key: 'divisionLabel', label: 'Division', width: 154 },
-    { key: 'roundNumber', label: 'Rnd', width: 34 },
-    { key: 'matchNumber', label: 'Bout', width: 34 },
-    { key: 'redName', label: 'Red', width: 84 },
-    { key: 'blueName', label: 'Blue', width: 84 },
-    { key: 'winnerName', label: 'Winner', width: 84 },
-    { key: 'status', label: 'Status', width: 58 },
-  ];
-  drawWideTable(doc, 'Bracket and match ledger', rows.filter((row) => row.matchId), columns, palette, fonts);
-}
-
-function drawWideTable(doc, title, rows, columns, palette, fonts) {
-  ensureSpace(doc, 36);
-  doc.fillColor(palette.text).font(fonts.headingBold).fontSize(13).text(title);
-  doc.moveDown(0.3);
-  const x = doc.page.margins.left;
-  const width = columns.reduce((sum, column) => sum + column.width, 0);
-
-  const drawHeader = () => {
-    const headerY = doc.y;
-    doc.save();
-    doc.roundedRect(x, headerY, width, 22, 6).fill('#ece6dc');
-    doc.restore();
-
-    let currentX = x;
-    columns.forEach((column) => {
-      doc.fillColor(palette.text).font(fonts.bodyBold).fontSize(7.2)
-        .text(column.label.toUpperCase(), currentX + 4, headerY + 7, { width: column.width - 8, ellipsis: true });
-      currentX += column.width;
-    });
-    doc.y = headerY + 26;
-  };
-
-  drawHeader();
-  if (!rows.length) {
-    doc.fillColor(palette.textMuted).font(fonts.body).fontSize(9).text('No rows found.');
-    doc.moveDown(0.8);
-    return;
-  }
-
-  rows.forEach((row, index) => {
-    if (doc.y + 20 > doc.page.height - doc.page.margins.bottom) {
-      doc.addPage();
-      drawHeader();
-    }
-    const rowY = doc.y;
-    if (index % 2 === 0) {
-      doc.save();
-      doc.roundedRect(x, rowY, width, 19, 4).fill('#fbfaf7');
-      doc.restore();
-    }
-    let rowX = x;
-    columns.forEach((column) => {
-      doc.fillColor(palette.text).font(fonts.body).fontSize(7.2)
-        .text(displayText(row[column.key], ''), rowX + 4, rowY + 6, { width: column.width - 8, ellipsis: true });
-      rowX += column.width;
-    });
-    doc.y = rowY + 21;
-  });
-
-  doc.moveDown(0.8);
-}
+// Season-report tabular helpers (drawSeasonRegistrationTable,
+// drawSeasonDivisionTable, drawSeasonMatchesTable, drawWideTable) now live
+// inside `seasonalReportToPdf` as inline column definitions passed to
+// `drawDataTable` from pdfComposition.js — the Primal OS unified table
+// primitive with an ink header band, zebra rows, and custom cell renderers.
 
 // ─── Grid layout helpers ──────────────────────────────────────────────────────
 
@@ -1345,177 +1318,97 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
   const CW   = doc.page.width  - PX - doc.page.margins.right;                  // content width  (~531)
   const COL  = (CW - GRID.gap * 11) / 12;                                      // column unit
 
-  // ── Page background ──────────────────────────────────────────────────────
-  doc.save();
-  doc.rect(0, 0, doc.page.width, doc.page.height).fill(palette.paper);
-  doc.restore();
-
-  // ── HEADER BAND ──────────────────────────────────────────────────────────
-  const HEADER_H = 80;
-  doc.save();
-  doc.rect(0, 0, doc.page.width, HEADER_H + 32).fill(palette.primary);
-  doc.restore();
-
-  // Logo mark
-  const LOGO_SIZE = 54;
-  const logo = resolveLogoPath(config.pdf?.logoPath);
-  if (logo) {
-    doc.image(logo, PX, PY + 2, { fit: [LOGO_SIZE, LOGO_SIZE], align: 'center', valign: 'center' });
-  } else {
-    doc.fillColor('#ffffff').font(fonts.headingBold).fontSize(14)
-      .text(brandInitials(brandName), PX, PY + 19, { width: LOGO_SIZE, align: 'center' });
-  }
-
-  // Brand + tournament
-  doc.fillColor('#ffffff').font(fonts.headingBold).fontSize(18)
-    .text(brandName, PX + LOGO_SIZE + 14, PY + 10);
-  doc.fillColor('#ece6dc').font(fonts.body).fontSize(8.5)
-    .text(asText(app.tournament_name), PX + LOGO_SIZE + 14, PY + 33);
-  doc.fillColor('#e4d7c6').font(fonts.body).fontSize(7.5)
-    .text(`Application  ${viewModel.applicationDisplayId}   /   ${formatDateTime(new Date())}`, PX + LOGO_SIZE + 14, PY + 47);
-
-  // Status pill + ID (right-aligned)
-  const pillX = PX + CW - 130;
-  statusPill(doc, app.status, pillX, PY + 14, fonts);
-  doc.fillColor('#ece6dc').font(fonts.body).fontSize(7)
-    .text('PARTICIPANT REGISTRATION EXPORT', pillX - 34, PY + 40, { width: 170, align: 'right' });
-
-  // Divider below header
-  doc.y = PY + HEADER_H + 10;
-
-  // ── ROW 1: 4 metric chips ─────────────────────────────────────────────
-  const CHIP_H = 58;
-  const CHIP_W = (CW - GRID.gap * 3) / 4;
-  const chips = [
-    { label: 'Disciplines',  value: displayText(appliedDisciplines.length ? appliedDisciplines.join(' / ') : 'Open') },
-    { label: 'Weight Class', value: asText(app.weight_class || 'Open')   },
-    { label: 'Entry Type',   value: app.club_name ? 'Club Entry' : 'Individual' },
-    { label: 'Status',       value: statusLabel(app.status)              },
+  // ── Cover page ──────────────────────────────────────────────────────────
+  // Phase 1: every application export opens with a credential-style cover
+  // page holding the hero portrait, participant name, status, the 4-block
+  // identity grid, the issuing authority block, and the verify QR/fingerprint.
+  const identityBlocks = [
+    { label: 'Full Name',      value: displayText(viewModel.applicantName) },
+    { label: 'Application ID', value: viewModel.applicationDisplayId || app.id },
+    { label: 'Date of Birth',  value: formatDateOnly(app.date_of_birth) },
+    { label: 'Nationality',    value: asText(app.nationality) },
   ];
-  const chipY = doc.y;
-  chips.forEach((chip, i) => {
-    const cx = PX + i * (CHIP_W + GRID.gap);
-    gridCard(doc, cx, chipY, CHIP_W, CHIP_H, { fill: '#fbfaf7', stroke: palette.cardBorder, radius: 8 });
-    microLabel(doc, chip.label, cx + 10, chipY + 8, CHIP_W - 20, palette, fonts);
-    doc.fillColor(palette.text).font(fonts.headingBold).fontSize(11)
-      .text(chip.value, cx + 10, chipY + 18, { width: CHIP_W - 20, height: CHIP_H - 22, ellipsis: true });
+  const categoryLine = [
+    appliedDisciplines.length ? appliedDisciplines.join(' / ') : null,
+    app.weight_class || null,
+    app.weight_kg ? `${app.weight_kg} kg` : null,
+  ].filter(Boolean).join('  ·  ') || '—';
+
+  drawApplicationCoverPage(doc, {
+    palette,
+    fonts,
+    brandName,
+    tournamentName: asText(app.tournament_name),
+    applicationDisplayId: viewModel.applicationDisplayId || app.id,
+    applicantName: viewModel.applicantName,
+    clubName: app.club_name || 'Individual',
+    categoryLine,
+    status: app.status,
+    identityBlocks,
+    photoBuffer: primaryImage ? primaryImage.imageBuffer : null,
+    qrBuffer: signatureArtifacts.qrBuffer,
+    verifyUrl: signatureArtifacts.signature && signatureArtifacts.signature.url,
+    signatureShortId: shortSignatureId(signatureArtifacts.signature),
+    issuingAuthority: brandName,
+    issuedAt: formatDateTime(new Date()),
   });
-  doc.y = chipY + CHIP_H + 10;
 
-  const disciplinesY = doc.y;
-  const disciplinesH = 66;
-  gridCard(doc, PX, disciplinesY, CW, disciplinesH, { fill: '#fbfaf7', stroke: palette.cardBorder, radius: 8, accentColor: palette.primary, accentW: 4 });
-  microLabel(doc, 'Discipline Breakdown', PX + 14, disciplinesY + 10, CW - 28, palette, fonts);
-  doc.fillColor(palette.text).font(fonts.headingBold).fontSize(12)
-    .text(appliedDisciplines.length ? appliedDisciplines.join(' / ') : 'Open', PX + 14, disciplinesY + 24, { width: CW - 28, ellipsis: true });
-  doc.y = disciplinesY + disciplinesH + 10;
+  // ── Detail pages ───────────────────────────────────────────────────────
+  // Register a running-header listener so every subsequent page carries
+  // brand, app id, and the grayscale-safe status badge. Never draws on page 1.
+  doc.on('pageAdded', () => {
+    drawRunningHeader(doc, {
+      palette,
+      fonts,
+      brandName,
+      applicationDisplayId: viewModel.applicationDisplayId || app.id,
+      tournamentName: asText(app.tournament_name),
+      status: app.status,
+    });
+    doc.save();
+    doc.rect(0, 0, doc.page.width, doc.page.height).fill(palette.paper);
+    doc.restore();
+    doc.y = doc.page.margins.top + 16;
+  });
 
-  // ── ROW 2: Identity card (left 7 cols) + Photo/Verify panel (right 5 cols) ──
-  const ROW2_Y = doc.y;
-  const LEFT_W  = Math.floor(CW * 0.575);
-  const RIGHT_W = CW - LEFT_W - GRID.gap;
-  const RIGHT_X = PX + LEFT_W + GRID.gap;
+  doc.addPage();
 
-  // LEFT: identity grid card
-  const ID_ROWS = [
-    ['Full Name',    displayText(viewModel.applicantName)],
-    ['Application ID', viewModel.applicationDisplayId],
+  // Section header for detail content
+  doc.fillColor(palette.ink).font(fonts.headingBold).fontSize(TYPE_SCALE.h1.size)
+    .text('Participant record', PX, doc.y);
+  doc.fillColor(palette.textMuted).font(fonts.body).fontSize(TYPE_SCALE.body.size)
+    .text('Full declaration, submitted documents, and workflow events for this registration.', PX, doc.y + 24, { width: CW });
+  doc.y += 28;
+
+  // ── Contact & additional identity details (moved from cover to page 2) ──
+  const DETAILS_ROWS = [
     ['Email',        asText(app.email)],
     ['Phone',        asText(app.phone)],
-    ['Date of Birth', formatDateOnly(app.date_of_birth)],
     ['Gender',       asText(app.gender)],
-    ['Nationality',  asText(app.nationality)],
     ['Club / Team',  asText(app.club_name || 'Individual')],
     ['Fight Record', `${app.record_wins || 0}W – ${app.record_losses || 0}L – ${app.record_draws || 0}D`],
-    ['Weight',       app.weight_kg ? `${app.weight_kg} kg` : '—'],
     ['Experience',   asText(app.form_data?.experienceLevel)],
   ];
-  const ID_CARD_H = ID_ROWS.length * 22 + 36;
-  gridCard(doc, PX, ROW2_Y, LEFT_W, ID_CARD_H, { fill: '#fbfaf7', stroke: palette.cardBorder, radius: 8, accentColor: palette.primary, accentW: 4 });
-
-  doc.fillColor(palette.text).font(fonts.headingBold).fontSize(10)
-    .text('Applicant Identity', PX + 14, ROW2_Y + 12);
-  gridRule(doc, PX + 14, ROW2_Y + 28, LEFT_W - 28, palette.line);
-
-  ID_ROWS.forEach((row, i) => {
-    const ry = ROW2_Y + 36 + i * 22;
-    const bgFill = i % 2 === 0 ? '#ede7dc' : '#fbfaf7';
-    doc.save();
-    doc.rect(PX + 14, ry, LEFT_W - 28, 20).fill(bgFill);
-    doc.restore();
-    kvRow(doc, row[0], row[1], PX + 18, ry + 6, LEFT_W - 36, palette, fonts, 82);
-  });
-
-  // RIGHT: photo + digital approval stacked
-  const PHOTO_CARD_H = 214;
-  gridCard(doc, RIGHT_X, ROW2_Y, RIGHT_W, PHOTO_CARD_H, { fill: '#fbfaf7', stroke: palette.cardBorder, radius: 8 });
-
-  const PHOTO_W = 80;
-  const PHOTO_H = 104;
-  const PHOTO_X = RIGHT_X + 12;
-  const PHOTO_Y = ROW2_Y + 16;
-  doc.save();
-  doc.roundedRect(PHOTO_X, PHOTO_Y, PHOTO_W, PHOTO_H, 8).fill('#e7e0d5');
-  doc.roundedRect(PHOTO_X, PHOTO_Y, PHOTO_W, PHOTO_H, 8).strokeColor('#2f3742').lineWidth(0.75).stroke();
-  doc.restore();
-
-  if (primaryImage) {
-    doc.save();
-    doc.roundedRect(PHOTO_X + 2, PHOTO_Y + 2, PHOTO_W - 4, PHOTO_H - 4, 7).clip();
-    doc.image(primaryImage.imageBuffer, PHOTO_X + 2, PHOTO_Y + 2, {
-      fit: [PHOTO_W - 4, PHOTO_H - 4],
-      align: 'center',
-      valign: 'center',
-    });
-    doc.restore();
-  } else {
-    doc.fillColor(palette.textMuted).font(fonts.body).fontSize(7.5)
-      .text('No photo\nuploaded', PHOTO_X, PHOTO_Y + 42, { width: PHOTO_W, align: 'center' });
+  const DETAILS_COLS = 3;
+  const DETAILS_CW = (CW - GRID.gap * (DETAILS_COLS - 1)) / DETAILS_COLS;
+  microLabel(doc, 'Contact & Profile', PX, doc.y, CW, palette, fonts);
+  gridRule(doc, PX, doc.y + 13, CW, palette.line);
+  doc.y += 18;
+  for (let i = 0; i < DETAILS_ROWS.length; i += DETAILS_COLS) {
+    ensureSpace(doc, 40);
+    const rowY = doc.y;
+    for (let c = 0; c < DETAILS_COLS; c += 1) {
+      const idx = i + c;
+      if (idx >= DETAILS_ROWS.length) break;
+      const cx = PX + c * (DETAILS_CW + GRID.gap);
+      gridCard(doc, cx, rowY, DETAILS_CW, 32, { fill: palette.surface, stroke: palette.cardBorder, radius: 4 });
+      microLabel(doc, DETAILS_ROWS[idx][0], cx + 8, rowY + 5, DETAILS_CW - 16, palette, fonts);
+      doc.fillColor(palette.text).font(fonts.body).fontSize(TYPE_SCALE.body.size)
+        .text(asText(DETAILS_ROWS[idx][1]), cx + 8, rowY + 16, { width: DETAILS_CW - 16, ellipsis: true });
+    }
+    doc.y = rowY + 36;
   }
-
-  microLabel(doc, 'Photo ID', PHOTO_X, PHOTO_Y + PHOTO_H + 5, PHOTO_W, palette, fonts);
-
-  // Approval block to the right of photo
-  const VX = PHOTO_X + PHOTO_W + 10;
-  const VW = RIGHT_W - PHOTO_W - 34;
-  doc.fillColor(palette.text).font(fonts.headingBold).fontSize(8.5)
-    .text(viewModel.applicantName, VX, PHOTO_Y, { width: VW, ellipsis: true });
-  microLabel(doc, 'Reviewer ID', VX, PHOTO_Y + 14, VW, palette, fonts);
-  doc.fillColor(palette.text).font(fonts.body).fontSize(8)
-    .text(displayText(viewModel.reviewerDisplayId, 'Unassigned'), VX, PHOTO_Y + 22, { width: VW, ellipsis: true });
-  microLabel(doc, 'Decided', VX, PHOTO_Y + 36, VW, palette, fonts);
-  doc.fillColor(palette.text).font(fonts.body).fontSize(8)
-    .text(formatDateTime(app.decided_at), VX, PHOTO_Y + 44, { width: VW });
-
-  doc.save();
-  doc.circle(VX + 12, PHOTO_Y + 78, 11).fill(palette.primary);
-  doc.lineWidth(2).lineCap('round').strokeColor('#ffffff');
-  doc.moveTo(VX + 7, PHOTO_Y + 78).lineTo(VX + 11, PHOTO_Y + 82).lineTo(VX + 18, PHOTO_Y + 73).stroke();
-  doc.restore();
-  doc.fillColor('#1f2937').font(fonts.bodyBold).fontSize(8.5)
-    .text('DIGITALLY VERIFIED', VX + 28, PHOTO_Y + 70, { width: VW - 28, ellipsis: true });
-  doc.fillColor(palette.textMuted).font(fonts.bodyBold).fontSize(7.2)
-    .text('SIGNED RECORD / INTERNAL REFERENCE COPY', VX, PHOTO_Y + 84, { width: VW - 6, align: 'left' });
-  doc.fillColor(palette.textMuted).font(fonts.body).fontSize(7.2)
-    .text('Verified copy of the submitted participant record.', VX, PHOTO_Y + 98, { width: VW - 6, align: 'left' });
-
-  const qrSectionY = ROW2_Y + PHOTO_CARD_H - 76;
-  doc.save();
-  doc.roundedRect(RIGHT_X + 12, qrSectionY, RIGHT_W - 24, 60, 8).fill('#f4f1ea');
-  doc.restore();
-  const qrBoxSize = 52;
-  const qrX = RIGHT_X + RIGHT_W - qrBoxSize - 20;
-  const qrY = qrSectionY + 4;
-  doc.save();
-  doc.roundedRect(qrX - 106, qrY, 86, qrBoxSize, 8).fill('#ede7dc');
-  doc.restore();
-  doc.image(signatureArtifacts.qrBuffer, qrX, qrY, { fit: [qrBoxSize, qrBoxSize] });
-  doc.fillColor(palette.textMuted).font(fonts.bodyBold).fontSize(6.5)
-    .text('SCAN TO VERIFY', qrX - 98, qrY + 10, { width: 72, align: 'right' });
-  doc.fillColor(palette.textMuted).font(fonts.body).fontSize(5.6)
-    .text('Printed QR opens the signed verification record.', qrX - 112, qrY + 22, { width: 94, align: 'right' });
-
-  doc.y = Math.max(ROW2_Y + ID_CARD_H, ROW2_Y + PHOTO_CARD_H) + 12;
+  doc.y += 6;
 
   // ── ROW 3: Competition Declaration (full width 3-col grid) ────────────────
   ensureSpace(doc, 20);
@@ -1561,9 +1454,9 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
       const idx = i + c;
       if (idx >= declRows.length) break;
       const cx = PX + c * (DECL_CW + GRID.gap);
-      gridCard(doc, cx, rowY, DECL_CW, DECL_CARD_H, { fill: '#fbfaf7', stroke: palette.cardBorder, radius: 6 });
+      gridCard(doc, cx, rowY, DECL_CW, DECL_CARD_H, { fill: palette.surface, stroke: palette.cardBorder, radius: 4 });
       microLabel(doc, declRows[idx][0], cx + 8, rowY + 5, DECL_CW - 16, palette, fonts);
-      doc.fillColor(palette.text).font(fonts.body).fontSize(8)
+      doc.fillColor(palette.text).font(fonts.body).fontSize(TYPE_SCALE.body.size)
         .text(asText(declRows[idx][1]), cx + 8, rowY + 15, { width: DECL_CW - 16, ellipsis: true });
     }
     doc.y = rowY + DECL_CARD_H + 5;
@@ -1573,10 +1466,10 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
   if (address) {
     ensureSpace(doc, DECL_CARD_H + 5);
     const addrY = doc.y;
-    gridCard(doc, PX, addrY, CW, DECL_CARD_H, { fill: '#fbfaf7', stroke: palette.cardBorder, radius: 6 });
+    gridCard(doc, PX, addrY, CW, DECL_CARD_H, { fill: palette.surface, stroke: palette.cardBorder, radius: 4 });
     microLabel(doc, 'Address', PX + 8, addrY + 5, CW - 16, palette, fonts);
     const addrStr = `${asText(address.line1)}, ${asText(address.line2)}, ${asText(address.district)}, ${asText(address.state)}, ${asText(address.country)} ${asText(address.postalCode)}`;
-    doc.fillColor(palette.text).font(fonts.body).fontSize(8)
+    doc.fillColor(palette.text).font(fonts.body).fontSize(TYPE_SCALE.body.size)
       .text(addrStr, PX + 8, addrY + 15, { width: CW - 16, ellipsis: true });
     doc.y = addrY + DECL_CARD_H + 5;
   }
@@ -1657,99 +1550,8 @@ async function auditToExcel(res, actor, { since, until } = {}) {
     entityType: 'audit', entityId: 'bulk', payload: { since, until, count: rows.length }, requestIp: ctx.ip });
 }
 
-function getBracketSlotHeight(totalRounds) {
-  return totalRounds <= 2 ? 120 : totalRounds === 3 ? 96 : 82;
-}
-
-function drawBracketSlot(doc, x, y, width, height, side, palette, fonts) {
-  doc.save();
-  doc.roundedRect(x, y, width, height, 10).fill('#ffffff');
-  doc.roundedRect(x, y, width, height, 10).strokeColor('#111111').lineWidth(1.5).stroke();
-  doc.restore();
-  if (!side || side.placeholder === 'tbd') return;
-
-  doc.fillColor(side.corner === 'blue' ? '#0f6ab6' : '#b91c1c')
-    .font(fonts.headingBold)
-    .fontSize(7.5)
-    .text((side.corner || 'slot').toUpperCase(), x + 8, y + 6, { width: width - 16 });
-  if (side.seedScore) {
-    doc.fillColor('#6b7280')
-      .font(fonts.bodyBold)
-      .fontSize(7.5)
-      .text(`#${side.seedScore}`, x + width - 28, y + 6, { width: 20, align: 'right' });
-  }
-  doc.fillColor('#111827')
-    .font(fonts.headingBold)
-    .fontSize(9)
-    .text(side.name || 'TBD', x + 8, y + 18, { width: width - 16, ellipsis: true });
-  doc.fillColor('#4b5563')
-    .font(fonts.body)
-    .fontSize(7.5)
-    .text(side.club || 'Independent', x + 8, y + 33, { width: width - 16, ellipsis: true });
-}
-
-function drawBracketMatch(doc, x, y, slotWidth, slotHeight, matchGap, match, palette, fonts) {
-  const topY = y;
-  const bottomY = y + slotHeight + matchGap;
-  drawBracketSlot(doc, x, topY, slotWidth, slotHeight, match.sides[0], palette, fonts);
-  drawBracketSlot(doc, x, bottomY, slotWidth, slotHeight, match.sides[1], palette, fonts);
-
-  const connectorX = x + slotWidth;
-  const midX = connectorX + 18;
-  const topMidY = topY + slotHeight / 2;
-  const bottomMidY = bottomY + slotHeight / 2;
-  const centerY = (topMidY + bottomMidY) / 2;
-
-  doc.save();
-  doc.lineWidth(1.5).strokeColor('#111111');
-  doc.moveTo(connectorX, topMidY).lineTo(midX, topMidY).stroke();
-  doc.moveTo(connectorX, bottomMidY).lineTo(midX, bottomMidY).stroke();
-  doc.moveTo(midX, topMidY).lineTo(midX, bottomMidY).stroke();
-  doc.moveTo(midX, centerY).lineTo(midX + 14, centerY).stroke();
-  doc.restore();
-
-  return { centerY };
-}
-
-function drawBracketRound(doc, x, startY, round, roundIndex, totalRounds, palette, fonts) {
-  const slotWidth = 112;
-  const slotHeight = getBracketSlotHeight(totalRounds);
-  const matchGap = 16;
-  const roundBlockHeight = slotHeight * 2 + matchGap;
-  const roundSpacing = Math.max(30, (slotHeight + matchGap) * Math.pow(2, roundIndex));
-  const centers = [];
-
-  doc.fillColor(palette.text)
-    .font(fonts.headingBold)
-    .fontSize(10)
-    .text(round.label, x, startY - 22, { width: slotWidth + 40, align: 'center' });
-
-  round.matches.forEach((match, index) => {
-    const y = startY + index * (roundBlockHeight + roundSpacing);
-    const result = drawBracketMatch(doc, x, y, slotWidth, slotHeight, matchGap, match, palette, fonts);
-    centers.push(result.centerY);
-  });
-
-  return centers;
-}
-
-function drawChampionCard(doc, x, y, champion, palette, fonts) {
-  const width = 148;
-  const height = 92;
-  doc.save();
-  doc.roundedRect(x, y, width, height, 14).fill('#fef3c7');
-  doc.roundedRect(x, y, width, height, 14).strokeColor('#b45309').lineWidth(1.5).stroke();
-  doc.restore();
-  doc.fillColor('#b45309').font(fonts.headingBold).fontSize(10).text('Champion', x + 12, y + 12);
-  doc.fillColor('#111827').font(fonts.headingBold).fontSize(13).text(champion?.name || 'TBD', x + 12, y + 32, {
-    width: width - 24,
-    ellipsis: true,
-  });
-  doc.fillColor('#6b7280').font(fonts.body).fontSize(9).text(champion?.club || 'Independent', x + 12, y + 52, {
-    width: width - 24,
-    ellipsis: true,
-  });
-}
+// Bracket primitives (slot, match, tree, champion card) now live in
+// pdfComposition.js — see drawBracketTree / drawBracketChampionCard.
 
 async function bracketToPdf(res, bracketId, actor, ctx = {}) {
   if (!actor || actor.role !== 'admin') {
@@ -1787,63 +1589,79 @@ async function bracketToPdf(res, bracketId, actor, ctx = {}) {
     }),
     size: 'A4',
     layout: 'landscape',
-    margin: 28,
+    margins: { top: 28, bottom: 32, left: 28, right: 28 },
   });
   doc.pipe(res);
   const fonts = resolvePdfFonts(doc);
 
-  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  // Paper wash
   doc.save();
   doc.rect(0, 0, doc.page.width, doc.page.height).fill(palette.paper);
   doc.restore();
-  doc.save();
-  doc.roundedRect(doc.page.margins.left, doc.page.margins.top, pageWidth, 72, 16).fill(palette.surface);
-  doc.roundedRect(doc.page.margins.left, doc.page.margins.top, pageWidth, 72, 16).strokeColor(palette.line).lineWidth(1.5).stroke();
-  doc.restore();
 
-  drawLogoMark(doc, {
-    x: doc.page.margins.left + 16,
-    y: doc.page.margins.top + 14,
-    size: 40,
-    logoPath: config.pdf?.logoPath,
-    brandName,
-    accent: palette.primary,
-    fonts,
+  // Header band (brand + tournament + category + meta)
+  drawBracketHeader(doc, {
+    palette, fonts, brandName,
+    tournamentName: tournament?.name,
+    categoryLabel: bracket.categoryLabel,
+    statusText: `Status: ${statusLabel(bracket.status)}`,
+    seedingLabel: `Draw: ${bracket.seedingLabel || bracket.seeding || '—'}`,
+    exportedAt: `Exported ${formatDateOnly(new Date())}`,
   });
-  doc.fillColor(palette.text)
-    .font(fonts.headingBold)
-    .fontSize(20)
-    .text(tournament?.name || 'Tournament', doc.page.margins.left + 68, doc.page.margins.top + 15);
-  doc.fillColor(palette.accent)
-    .font(fonts.headingBold)
-    .fontSize(13)
-    .text(bracket.categoryLabel, doc.page.margins.left + 68, doc.page.margins.top + 40, { width: pageWidth - 220 });
-  doc.fillColor(palette.textMuted)
-    .font(fonts.body)
-    .fontSize(9)
-    .text(`Status: ${statusLabel(bracket.status)}   |   Draw: ${bracket.seedingLabel || bracket.seeding}   |   Exported: ${formatDateOnly(new Date())}`, doc.page.margins.left + 68, doc.page.margins.top + 58);
 
+  // Classical elimination tree area
   const rounds = bracket.rounds || [];
-  const startX = doc.page.margins.left + 22;
-  const startY = doc.page.margins.top + 120;
-  const roundWidth = 145;
-  rounds.forEach((round, roundIndex) => {
-    drawBracketRound(doc, startX + roundIndex * roundWidth, startY + roundIndex * 28, round, roundIndex, rounds.length, palette, fonts);
-  });
+  const ML = doc.page.margins.left;
+  const MT = doc.page.margins.top;
+  const MR = doc.page.margins.right;
+  const MB = doc.page.margins.bottom;
+  const headerH = 90;
+  const treeTop = MT + headerH;
+  const treeBottom = doc.page.height - MB - 32; // leave room for ribbon
+  const treeHeight = treeBottom - treeTop;
+  const championW = rounds.length ? 160 : 0;
+  const gutter = rounds.length ? 16 : 0;
+  const treeLeft = ML;
+  const treeWidth = doc.page.width - ML - MR - championW - gutter;
 
-  const finalMatch = rounds[rounds.length - 1]?.matches?.[0];
-  const champion = finalMatch?.winnerIndex !== undefined ? finalMatch.sides?.[finalMatch.winnerIndex] : null;
-  if (finalMatch) {
-    const slotHeight = getBracketSlotHeight(rounds.length);
-    const championX = startX + rounds.length * roundWidth + 18;
-    const championY = startY + (slotHeight / 2) + 18;
-    const connectorStartX = startX + (rounds.length - 1) * roundWidth + 126;
-    const connectorY = championY + 46;
+  if (rounds.length) {
+    drawBracketTree(doc, {
+      rounds,
+      x: treeLeft,
+      y: treeTop,
+      width: treeWidth,
+      height: treeHeight,
+      palette, fonts,
+      slotWidth: Math.min(150, treeWidth / Math.max(1, rounds.length + 0.5)),
+      slotHeight: autoSlotHeight({
+        contentHeight: treeHeight,
+        firstRoundMatches: rounds[0].matches.length,
+      }),
+      matchGap: 0,
+    });
+
+    // Champion card to the right of the final
+    const finalMatch = rounds[rounds.length - 1]?.matches?.[0];
+    if (finalMatch) {
+      const champion = finalMatch.winnerIndex !== undefined ? finalMatch.sides?.[finalMatch.winnerIndex] : null;
+      const championX = treeLeft + treeWidth + gutter;
+      const championY = treeTop + treeHeight / 2 - 30;
+      drawBracketChampionCard(doc, {
+        x: championX, y: championY, champion, palette, fonts,
+        width: championW, height: 60,
+      });
+      // Connector from final match → champion
+      doc.save();
+      doc.lineWidth(0.9).strokeColor(palette.ink).opacity(0.75);
+      doc.moveTo(championX - gutter, championY + 30).lineTo(championX, championY + 30).stroke();
+      doc.restore();
+    }
+  } else {
+    // Empty state
     doc.save();
-    doc.lineWidth(1.5).strokeColor(palette.line);
-    doc.moveTo(connectorStartX, connectorY).lineTo(championX - 12, connectorY).stroke();
+    doc.fillColor(palette.textMuted).font(fonts.body).fontSize(TYPE_SCALE.body.size)
+      .text('No rounds have been generated for this bracket yet.', treeLeft, treeTop + 12, { width: treeWidth });
     doc.restore();
-    drawChampionCard(doc, championX, championY, champion, palette, fonts);
   }
 
   finalizePageRibbons(doc, {
@@ -1900,51 +1718,37 @@ async function divisionBracketToPdf(res, divisionId, actor, ctx = {}) {
     }),
     size: 'A4',
     layout: 'landscape',
-    margin: 28,
+    margins: { top: 28, bottom: 32, left: 28, right: 28 },
   });
   doc.pipe(res);
   const fonts = resolvePdfFonts(doc);
-  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
 
   doc.save();
   doc.rect(0, 0, doc.page.width, doc.page.height).fill(palette.paper);
   doc.restore();
 
-  doc.save();
-  doc.roundedRect(doc.page.margins.left, doc.page.margins.top, pageWidth, 76, 16).fill(palette.surface);
-  doc.roundedRect(doc.page.margins.left, doc.page.margins.top, pageWidth, 76, 16).strokeColor(palette.line).lineWidth(1.5).stroke();
-  doc.restore();
-
-  drawLogoMark(doc, {
-    x: doc.page.margins.left + 16,
-    y: doc.page.margins.top + 16,
-    size: 40,
-    logoPath: config.pdf?.logoPath,
-    brandName,
-    accent: palette.primary,
-    fonts,
+  drawBracketHeader(doc, {
+    palette, fonts, brandName,
+    tournamentName: division.tournamentName,
+    categoryLabel: division.label,
+    statusText: `Status: ${bracket.statusLabel || statusLabel(bracket.status)}`,
+    seedingLabel: `Draw: ${bracket.seedingLabel || '—'}`,
+    exportedAt: `Exported ${formatDateOnly(new Date())}`,
   });
-
-  doc.fillColor(palette.text)
-    .font(fonts.headingBold)
-    .fontSize(20)
-    .text(division.tournamentName || 'Tournament', doc.page.margins.left + 68, doc.page.margins.top + 15);
-  doc.fillColor(palette.accent)
-    .font(fonts.headingBold)
-    .fontSize(13)
-    .text(division.label, doc.page.margins.left + 68, doc.page.margins.top + 42, { width: pageWidth - 220 });
-  doc.fillColor(palette.textMuted)
-    .font(fonts.body)
-    .fontSize(9)
-    .text(`Status: ${bracket.statusLabel || statusLabel(bracket.status)}   |   Draw: ${bracket.seedingLabel}   |   Exported: ${formatDateOnly(new Date())}`, doc.page.margins.left + 68, doc.page.margins.top + 60);
 
   const rounds = bracket.rounds || [];
-  const startX = doc.page.margins.left + 22;
-  const startY = doc.page.margins.top + 120;
-  const roundWidth = 145;
-  rounds.forEach((round, roundIndex) => {
-    drawBracketRound(doc, startX + roundIndex * roundWidth, startY + roundIndex * 28, round, roundIndex, rounds.length || 1, palette, fonts);
-  });
+  const ML = doc.page.margins.left;
+  const MT = doc.page.margins.top;
+  const MR = doc.page.margins.right;
+  const MB = doc.page.margins.bottom;
+  const headerH = 90;
+  const treeTop = MT + headerH;
+  const treeBottom = doc.page.height - MB - 32;
+  const treeHeight = treeBottom - treeTop;
+  const championW = 160;
+  const gutter = 16;
+  const treeLeft = ML;
+  const treeWidth = doc.page.width - ML - MR - championW - gutter;
 
   const finalMatch = rounds[rounds.length - 1]?.matches?.[0];
   const champion = finalMatch?.winnerIndex !== undefined ? finalMatch.sides?.[finalMatch.winnerIndex] : (bracket.champion || payload.champion ? {
@@ -1952,19 +1756,41 @@ async function divisionBracketToPdf(res, divisionId, actor, ctx = {}) {
     club: bracket.champion?.club || payload.champion?.clubName,
   } : null);
 
+  if (rounds.length) {
+    drawBracketTree(doc, {
+      rounds,
+      x: treeLeft,
+      y: treeTop,
+      width: treeWidth,
+      height: treeHeight,
+      palette, fonts,
+      slotWidth: Math.min(150, treeWidth / Math.max(1, rounds.length + 0.5)),
+      slotHeight: autoSlotHeight({
+        contentHeight: treeHeight,
+        firstRoundMatches: rounds[0].matches.length,
+      }),
+      matchGap: 0,
+    });
+  } else {
+    doc.save();
+    doc.fillColor(palette.textMuted).font(fonts.body).fontSize(TYPE_SCALE.body.size)
+      .text('No rounds have been generated for this bracket yet.', treeLeft, treeTop + 12, { width: treeWidth });
+    doc.restore();
+  }
+
   if (finalMatch || champion) {
-    const slotHeight = getBracketSlotHeight(Math.max(rounds.length, 1));
-    const championX = startX + Math.max(rounds.length, 1) * roundWidth + 18;
-    const championY = startY + (slotHeight / 2) + 18;
-    const connectorStartX = startX + Math.max(rounds.length - 1, 0) * roundWidth + 126;
-    const connectorY = championY + 46;
+    const championX = treeLeft + treeWidth + gutter;
+    const championY = treeTop + treeHeight / 2 - 30;
+    drawBracketChampionCard(doc, {
+      x: championX, y: championY, champion, palette, fonts,
+      width: championW, height: 60,
+    });
     if (rounds.length) {
       doc.save();
-      doc.lineWidth(1.5).strokeColor(palette.line);
-      doc.moveTo(connectorStartX, connectorY).lineTo(championX - 12, connectorY).stroke();
+      doc.lineWidth(0.9).strokeColor(palette.ink).opacity(0.75);
+      doc.moveTo(championX - gutter, championY + 30).lineTo(championX, championY + 30).stroke();
       doc.restore();
     }
-    drawChampionCard(doc, championX, championY, champion, palette, fonts);
   }
 
   finalizePageRibbons(doc, {
@@ -2007,6 +1833,157 @@ async function applicationExportSmoke(applicationId, actor) {
   };
 }
 
+// ─── Bulk ZIP export (Phase 4) ──────────────────────────────────────────────
+//
+// Replaces the frontend's sequential `for…await` of 250+ individual PDF
+// downloads (with a native `window.confirm`) with a single streaming ZIP
+// archive assembled server-side. Uses `archiver` to pipe the ZIP directly
+// into the response — no large in-memory staging of the whole archive.
+//
+// Each entry inside the ZIP is still a canonical Primal OS application PDF
+// with the deterministic filename built by `buildExportFilename()` so the
+// archive unzips to human-readable files ready for print queues.
+
+const archiver = require('archiver');
+const { PassThrough } = require('stream');
+
+/**
+ * Render one application PDF into a Buffer. This is a thin wrapper around
+ * `applicationToPdf(res, …)` that swaps the HTTP response for a PassThrough
+ * sink so the resulting bytes can be written into a ZIP entry.
+ *
+ * Returns `{ filename, buffer }`. `filename` is the Content-Disposition
+ * filename the endpoint would have used — ideal for the ZIP entry name.
+ */
+async function applicationToPdfBuffer(applicationId, actor, ctx = {}) {
+  return new Promise((resolve, reject) => {
+    const pass = new PassThrough();
+    const chunks = [];
+    let filename = `application-${applicationId}.pdf`;
+
+    pass.on('data', (chunk) => chunks.push(chunk));
+    pass.on('end', () => resolve({ filename, buffer: Buffer.concat(chunks) }));
+    pass.on('error', reject);
+
+    const resLike = {
+      setHeader(name, value) {
+        if (String(name).toLowerCase() === 'content-disposition') {
+          const match = /filename="([^"]+)"/.exec(String(value));
+          if (match) filename = match[1];
+        }
+      },
+      write: pass.write.bind(pass),
+      end: pass.end.bind(pass),
+      on: pass.on.bind(pass),
+      once: pass.once.bind(pass),
+      emit: pass.emit.bind(pass),
+      pipe: pass.pipe.bind(pass),
+    };
+
+    applicationToPdf(resLike, applicationId, actor, ctx).catch(reject);
+  });
+}
+
+/**
+ * Stream a ZIP of every approved participant PDF for the given tournament
+ * (or across all tournaments when `tournamentId` is omitted) straight into
+ * the response.
+ *
+ * The archive name is deterministic: `primal_<tournament>_participants_<date>.zip`
+ * so the browser downloads a file with a useful name.
+ *
+ * Errors while generating an individual application PDF are swallowed per
+ * entry so one bad record never breaks the whole bulk export — a manifest
+ * file `_errors.txt` is appended at the end listing any failures.
+ */
+async function bulkApprovedParticipantsToZip(res, actor, { tournamentId } = {}, ctx = {}) {
+  const report = await approvedParticipantReport({ tournamentId });
+  const deduped = new Map();
+  [...report.clubParticipants, ...report.individualParticipants].forEach((row) => {
+    if (row?.applicationId && !deduped.has(row.applicationId)) {
+      deduped.set(row.applicationId, row);
+    }
+  });
+  const applications = Array.from(deduped.values());
+
+  const brandName = config.pdf?.brandName || 'Primal';
+  const tournamentName = applications[0]?.tournamentName || (tournamentId ? 'tournament' : 'all');
+  const archiveName = buildExportFilename({
+    type: 'participants',
+    tournamentName,
+    tournamentId: tournamentId || 'all',
+    extra: `bundle-${applications.length}`,
+    brand: brandName,
+    extension: 'zip',
+  });
+
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="${archiveName}"`);
+  res.setHeader('Cache-Control', 'no-store');
+
+  const archive = archiver('zip', {
+    zlib: { level: 5 }, // PDFs are already compressed — level 5 is a good balance
+  });
+
+  const errors = [];
+  archive.on('warning', (err) => {
+    if (err.code !== 'ENOENT') errors.push(`archive warning: ${err.message}`);
+  });
+  archive.on('error', (err) => {
+    if (!res.headersSent) res.status(500);
+    errors.push(`archive error: ${err.message}`);
+    try { res.end(); } catch (_) { /* ignore */ }
+  });
+
+  archive.pipe(res);
+
+  // Sequential generation keeps memory flat — each PDF is buffered, zipped, and released.
+  for (const row of applications) {
+    try {
+      const { filename, buffer } = await applicationToPdfBuffer(row.applicationId, actor, ctx);
+      archive.append(buffer, { name: filename });
+    } catch (err) {
+      errors.push(`${row.applicationId} (${row.participantName || 'unknown'}): ${err.message}`);
+    }
+  }
+
+  if (errors.length) {
+    archive.append(errors.join('\n') + '\n', { name: '_errors.txt' });
+  }
+
+  // Include a human-readable manifest so federation staff can audit the bundle.
+  const manifest = [
+    `${brandName} · Approved participants bundle`,
+    `Tournament: ${tournamentName}`,
+    `Count: ${applications.length} approved applications`,
+    `Generated: ${new Date().toISOString()}`,
+    '',
+    '# applicationId | name | club | discipline',
+    ...applications.map((row) => [
+      row.applicationId,
+      row.participantName || '—',
+      row.clubName || 'Independent',
+      row.discipline || '—',
+    ].join(' | ')),
+  ].join('\n');
+  archive.append(`${manifest}\n`, { name: 'manifest.txt' });
+
+  await archive.finalize();
+
+  await auditWrite({
+    actorUserId: actor?.id,
+    actorRole: actor?.role,
+    action: 'export.participants_bulk_zip',
+    entityType: 'tournament',
+    entityId: tournamentId || 'all',
+    payload: {
+      count: applications.length,
+      errors: errors.length,
+    },
+    requestIp: ctx.ip,
+  });
+}
+
 module.exports = {
   approvedToExcel,
   approvedParticipantsToExcel,
@@ -2015,6 +1992,8 @@ module.exports = {
   seasonalReportToPdf,
   applicationToPaper,
   applicationToPdf,
+  applicationToPdfBuffer,
+  bulkApprovedParticipantsToZip,
   applicationExportSmoke,
   auditToExcel,
   bracketToPdf,

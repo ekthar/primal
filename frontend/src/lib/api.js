@@ -216,6 +216,10 @@ export const api = {
   downloadApplicationPdf: (id) => downloadFile(`/api/reports/applications/${id}.pdf`, {
     filename: `primal-application-${id}.pdf`,
   }),
+  downloadApprovedParticipantsZip: (query) => downloadFile("/api/reports/participants.zip", {
+    query,
+    filename: "primal-approved-participants.zip",
+  }),
 
   verifyAudit: () => request("GET", "/api/audit/verify"),
   auditForEntity: (type, id) => request("GET", `/api/audit/entity/${type}/${id}`),

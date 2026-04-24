@@ -19,6 +19,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import StatusPill from "@/components/shared/StatusPill";
+import CredentialCard from "@/components/shared/CredentialCard";
 import EmptyState from "@/components/shared/EmptyState";
 import { SectionLoader } from "@/components/shared/PrimalLoader";
 import { StickyActionBar } from "@/components/shared/ResponsivePrimitives";
@@ -529,7 +530,49 @@ export default function ReviewerWorkbench() {
           </div>
         </header>
 
-        <div className="p-6 grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="p-6 space-y-5">
+          <CredentialCard
+            applicationDisplayId={activeApplication.application_display_id || activeApplication.id}
+            applicantName={activeApplication.applicant_display_name || formatPersonName(activeApplication.first_name, activeApplication.last_name)}
+            clubName={activeApplication.club_name}
+            category={activeApplication.form_data?.selectedDisciplines?.join(" / ") || activeApplication.discipline}
+            status={activeApplication.status}
+            identityBlocks={[
+              { label: "Full Name", value: activeApplication.applicant_display_name || formatPersonName(activeApplication.first_name, activeApplication.last_name) },
+              { label: "Application ID", value: activeApplication.application_display_id || activeApplication.id },
+              { label: "Weight class", value: activeApplication.weight_class || "—" },
+              { label: "Weight", value: activeApplication.weight_kg ? `${activeApplication.weight_kg} kg` : "—" },
+            ]}
+            verifyUrl={typeof window !== "undefined" ? `${window.location.origin}/verify/${activeApplication.application_display_id || activeApplication.id}` : undefined}
+            signatureShortId={(activeApplication.id || "").slice(-8).toUpperCase()}
+            portraitUrl={(activeApplication.documents || []).find((doc) => doc.kind === "photo_id")?.url || null}
+          />
+
+          <section className="rounded-2xl border border-border bg-surface p-6">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <h3 className="font-display text-xl font-semibold tracking-tight">Printable credential preview</h3>
+                <p className="text-sm text-secondary-muted mt-1">Live view of the Primal OS application PDF — matches exactly what prints.</p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => api.downloadApplicationPdf(activeApplication.id)}
+              >
+                <Camera className="size-4 mr-1.5" /> Download PDF
+              </Button>
+            </div>
+            <div className="mt-4 overflow-hidden rounded-2xl border border-border bg-background">
+              <iframe
+                key={activeApplication.id}
+                title={`Application PDF preview for ${activeApplication.application_display_id || activeApplication.id}`}
+                src={`${api.exportApplicationPdf ? api.exportApplicationPdf(activeApplication.id) : `/api/reports/applications/${activeApplication.id}.pdf`}#toolbar=0&navpanes=0`}
+                className="h-[70vh] w-full"
+              />
+            </div>
+          </section>
+
+        <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
           <div className="space-y-5">
             <section className="rounded-2xl border border-border bg-surface p-6">
               <h3 className="font-display text-xl font-semibold tracking-tight">Discipline entry</h3>
@@ -611,6 +654,7 @@ export default function ReviewerWorkbench() {
               </div>
             </section>
           </div>
+        </div>
         </div>
         <StickyActionBar className="lg:hidden">
           {user?.role === "admin" ? (

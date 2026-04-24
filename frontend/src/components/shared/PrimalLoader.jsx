@@ -64,6 +64,18 @@ export function RouteProgressBar({ active }) {
   );
 }
 
+/* Framer-motion stagger containers — entry animation respects the
+   global `prefers-reduced-motion` CSS reset automatically because the
+   transform/opacity transitions drop to 0.01ms via the media query. */
+const containerVariants = {
+  hidden: { opacity: 0 },
+  show:   { opacity: 1, transition: { staggerChildren: 0.06, delayChildren: 0.04 } },
+};
+const itemVariants = {
+  hidden: { opacity: 0, y: 8 },
+  show:   { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.25, 1, 0.5, 1] } },
+};
+
 export function SectionLoader({ title = "Loading", description = "Fetching the latest event data...", cards = 3, rows = 4, compact = false }) {
   return (
     <div className={cn("rounded-3xl border border-border bg-surface elev-card p-6", compact && "p-5")}>
@@ -74,28 +86,46 @@ export function SectionLoader({ title = "Loading", description = "Fetching the l
           <div className="text-sm text-secondary-muted mt-1">{description}</div>
         </div>
       </div>
-      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <motion.div
+        className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3"
+        variants={containerVariants}
+        initial="hidden"
+        animate="show"
+      >
         {Array.from({ length: cards }).map((_, index) => (
-          <div key={index} className="rounded-2xl border border-border bg-background/50 p-4 space-y-3">
+          <motion.div
+            key={index}
+            variants={itemVariants}
+            className="rounded-2xl border border-border bg-background/50 p-4 space-y-3"
+          >
             <Skeleton className="h-4 w-2/3 rounded-full" />
             <Skeleton className="h-10 w-1/3 rounded-xl" />
             <Skeleton className="h-3 w-full rounded-full" />
             <Skeleton className="h-3 w-5/6 rounded-full" />
-          </div>
+          </motion.div>
         ))}
-      </div>
-      <div className="mt-5 space-y-3">
+      </motion.div>
+      <motion.div
+        className="mt-5 space-y-3"
+        variants={containerVariants}
+        initial="hidden"
+        animate="show"
+      >
         {Array.from({ length: rows }).map((_, index) => (
-          <div key={index} className="rounded-2xl border border-border bg-background/40 px-4 py-3 flex items-center gap-4">
+          <motion.div
+            key={index}
+            variants={itemVariants}
+            className="rounded-2xl border border-border bg-background/40 px-4 py-3 flex items-center gap-4"
+          >
             <Skeleton className="h-10 w-10 rounded-full" />
             <div className="flex-1 space-y-2">
               <Skeleton className="h-3 w-2/5 rounded-full" />
               <Skeleton className="h-3 w-1/3 rounded-full" />
             </div>
             <Skeleton className="h-8 w-20 rounded-full" />
-          </div>
+          </motion.div>
         ))}
-      </div>
+      </motion.div>
     </div>
   );
 }
