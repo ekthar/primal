@@ -296,6 +296,12 @@ const schemas = {
       kind: Joi.string().max(80).required(),
       label: Joi.string().max(200).allow(null, ''),
       expiresOn: Joi.date().iso().allow(null),
+      capturedVia: Joi.string().valid('upload', 'scan', 'admin_rescan').allow(null, ''),
+      idNumberLast4: Joi.string().pattern(/^[0-9A-Za-z]{4}$/).allow(null, ''),
+    }),
+    verify: Joi.object({
+      verified: Joi.boolean().required(),
+      reason: Joi.string().max(500).allow(null, ''),
     }),
   },
 

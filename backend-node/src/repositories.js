@@ -397,16 +397,27 @@ const applications = {
 
 // --------- documents ---------
 const documents = {
-  create: async ({ applicationId = null, profileId = null, kind, label = null, mimeType = null, sizeBytes = null, storageKey, checksumSha256 = null, uploadedBy = null, expiresOn = null, originalFilename = null }) =>
+  create: async ({ applicationId = null, profileId = null, kind, label = null, mimeType = null, sizeBytes = null, storageKey, checksumSha256 = null, uploadedBy = null, expiresOn = null, originalFilename = null, capturedVia = null, idNumberLast4 = null }) =>
     (await query(
-      `INSERT INTO documents (application_id, profile_id, kind, label, mime_type, size_bytes, storage_key, checksum_sha256, uploaded_by, expires_on, original_filename)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
-      [applicationId, profileId, kind, label, mimeType, sizeBytes, storageKey, checksumSha256, uploadedBy, expiresOn, originalFilename]
+      `INSERT INTO documents (application_id, profile_id, kind, label, mime_type, size_bytes, storage_key, checksum_sha256, uploaded_by, expires_on, original_filename, captured_via, id_number_last4)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+      [applicationId, profileId, kind, label, mimeType, sizeBytes, storageKey, checksumSha256, uploadedBy, expiresOn, originalFilename, capturedVia, idNumberLast4]
     )).rows[0],
   listForApplication: async (applicationId) =>
     (await query(`SELECT * FROM documents WHERE application_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC`, [applicationId])).rows,
   findById: async (id) =>
     (await query(`SELECT * FROM documents WHERE id = $1 AND deleted_at IS NULL`, [id])).rows[0],
+  setVerification: async (id, { verifiedBy, verifyReason = null, verified }) =>
+    (await query(
+      `UPDATE documents
+         SET verified_at = CASE WHEN $3::boolean THEN NOW() ELSE NULL END,
+             verified_by = $2,
+             verify_reason = $4,
+             updated_at = NOW()
+       WHERE id = $1 AND deleted_at IS NULL
+       RETURNING *`,
+      [id, verifiedBy, verified, verifyReason]
+    )).rows[0],
 };
 
 const trash = {

@@ -97,10 +97,26 @@ function RouteFrame({ Component, pageProps }) {
   );
 }
 
+function ServiceWorkerRegister() {
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!("serviceWorker" in navigator)) return;
+    if (process.env.NODE_ENV !== "production") return;
+    const onLoad = () => {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    };
+    if (document.readyState === "complete") onLoad();
+    else window.addEventListener("load", onLoad, { once: true });
+    return () => window.removeEventListener("load", onLoad);
+  }, []);
+  return null;
+}
+
 export default function App({ Component, pageProps }) {
   return (
     <ThemeProvider>
       <AuthProvider>
+        <ServiceWorkerRegister />
         <RouteFrame Component={Component} pageProps={pageProps} />
         <Toaster position="bottom-right" />
       </AuthProvider>

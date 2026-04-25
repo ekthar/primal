@@ -14,6 +14,7 @@ import api from "@/lib/api";
 import { splitPersonName } from "@/lib/person";
 import { DISCIPLINE_DEFINITIONS, EXPERIENCE_LEVELS, GENDER_OPTIONS, createPreviewEntries } from "@/lib/tournamentWorkflow";
 import { HERO_IMAGE } from "@/lib/mockData";
+import DocumentInputField from "@/components/scanner/DocumentInputField";
 
 const STEPS = [
   { id: 1, label: "Account", icon: User },
@@ -61,6 +62,7 @@ export default function Register() {
     clubCountry: "India",
   });
   const [documents, setDocuments] = useState({ medical: null, photo_id: null, consent: null });
+  const [documentSources, setDocumentSources] = useState({ medical: null, photo_id: null, consent: null });
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
@@ -421,7 +423,8 @@ export default function Register() {
 
     const applicationId = appRes.data.application.id;
     for (const [kind, file] of Object.entries(documents)) {
-      const uploadRes = await api.uploadApplicationDocument(applicationId, { file, kind, label: file.name });
+      const capturedVia = documentSources[kind] || "upload";
+      const uploadRes = await api.uploadApplicationDocument(applicationId, { file, kind, label: file.name, capturedVia });
       if (uploadRes.error) {
         setLoading(false);
         toast.error(uploadRes.error.message || `Failed to upload ${kind}`);
@@ -705,14 +708,21 @@ export default function Register() {
                     Club onboarding does not require document uploads in this phase.
                   </div>
                 ) : (
-                  <div className="grid sm:grid-cols-3 gap-4">
+                  <div className="grid lg:grid-cols-3 gap-4">
                     {[
-                      ["medical", "Medical certificate"],
-                      ["photo_id", "Photo ID"],
-                      ["consent", "Signed consent"],
-                    ].map(([key, label]) => (
+                      ["medical", "Medical certificate", "Front page with stamp & signature."],
+                      ["photo_id", "Photo ID", "Aadhaar / PAN / passport / voter ID. Government-issued."],
+                      ["consent", "Signed consent", "Signed waiver. All pages."],
+                    ].map(([key, label, hint]) => (
                       <Field key={key} label={label} error={errors[key]}>
-                        <Input type="file" onChange={(event) => setDocuments((current) => ({ ...current, [key]: event.target.files?.[0] || null }))} className="h-11 bg-surface" />
+                        <DocumentInputField
+                          label={label}
+                          scanHint={hint}
+                          value={documents[key]}
+                          capturedVia={documentSources[key]}
+                          onChange={(file) => setDocuments((current) => ({ ...current, [key]: file }))}
+                          onCapturedViaChange={(tag) => setDocumentSources((current) => ({ ...current, [key]: tag }))}
+                        />
                       </Field>
                     ))}
                   </div>

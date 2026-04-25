@@ -57,4 +57,8 @@ router.post('/:id/documents', requireAuth, upload.single('file'), ah(async (req,
   res.status(201).json({ document: await apps.uploadDocument(req.user, req.params.id, { ...payload.value, file: req.file }, { ip: req.ip }) });
 }));
 
+router.post('/:id/documents/:docId/verify', requireAuth, validate(schemas.document.verify), ah(async (req, res) => {
+  res.json({ document: await apps.verifyDocument(req.user, req.params.id, req.params.docId, req.body, { ip: req.ip }) });
+}));
+
 module.exports = router;

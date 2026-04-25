@@ -164,14 +164,18 @@ export const api = {
   reapplyApplication: (id, body) => request("POST", `/api/applications/${id}/reapply`, { body }),
   requestApplicationCancel: (id, body) => request("POST", `/api/applications/${id}/cancel-request`, { body }),
   listApplicationDocuments: (id) => request("GET", `/api/applications/${id}/documents`),
-  uploadApplicationDocument: (id, { file, kind, label, expiresOn }) => {
+  uploadApplicationDocument: (id, { file, kind, label, expiresOn, capturedVia, idNumberLast4 }) => {
     const body = new FormData();
     body.append("file", file);
     body.append("kind", kind);
     if (label) body.append("label", label);
     if (expiresOn) body.append("expiresOn", expiresOn);
+    if (capturedVia) body.append("capturedVia", capturedVia);
+    if (idNumberLast4) body.append("idNumberLast4", idNumberLast4);
     return request("POST", `/api/applications/${id}/documents`, { body });
   },
+  verifyApplicationDocument: (id, docId, body) =>
+    request("POST", `/api/applications/${id}/documents/${docId}/verify`, { body }),
 
   assignReviewer: (id, reviewerId) => request("POST", `/api/reviews/${id}/assign`, { body: { reviewerId } }),
   startReview: (id) => request("POST", `/api/reviews/${id}/start`),
