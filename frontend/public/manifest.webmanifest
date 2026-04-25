@@ -1,0 +1,27 @@
+{
+  "name": "Primal — Fight Operations",
+  "short_name": "Primal",
+  "description": "Tournament registrations, reviews, weigh-ins and brackets for Primal MMA across India.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#FAFAF7",
+  "theme_color": "#7A1E22",
+  "lang": "en-IN",
+  "categories": ["sports", "productivity"],
+  "icons": [
+    {
+      "src": "/primal-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

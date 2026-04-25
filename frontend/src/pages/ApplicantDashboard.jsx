@@ -10,6 +10,7 @@ import { ResponsivePageShell, StickyActionBar } from "@/components/shared/Respon
 import api from "@/lib/api";
 import { formatPersonName } from "@/lib/person";
 import { toast } from "sonner";
+import LiveDocumentScanner from "@/components/scanner/LiveDocumentScanner";
 
 function getAccessMessage(application) {
   if (!application) return "";
@@ -223,10 +224,13 @@ export default function ApplicantDashboard() {
 
     setSubmittingDraftId(application.id);
     for (const kind of requiredKinds) {
+      const file = files[kind];
+      const capturedVia = typeof file?.name === "string" && file.name.startsWith("scan-") ? "scan" : "upload";
       const { error } = await api.uploadApplicationDocument(application.id, {
-        file: files[kind],
+        file,
         kind,
-        label: files[kind].name,
+        label: file.name,
+        capturedVia,
       });
       if (error) {
         setSubmittingDraftId(null);
@@ -735,8 +739,8 @@ function Detail({ label, value }) {
 
 function DraftUploadCard({ applicationId, item, file, onFileChange }) {
   const libraryInputRef = useRef(null);
-  const cameraInputRef = useRef(null);
   const Icon = item.icon;
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   function openLibraryPicker() {
     if (libraryInputRef.current) {
@@ -744,15 +748,13 @@ function DraftUploadCard({ applicationId, item, file, onFileChange }) {
     }
   }
 
-  function openCameraPicker() {
-    if (cameraInputRef.current) {
-      cameraInputRef.current.click();
-    }
-  }
-
   function handleFileSelection(event) {
     onFileChange(applicationId, item.kind, event.target.files?.[0] || null);
     event.target.value = "";
+  }
+
+  function handleScannerCapture(captured) {
+    onFileChange(applicationId, item.kind, captured);
   }
 
   return (
@@ -770,29 +772,28 @@ function DraftUploadCard({ applicationId, item, file, onFileChange }) {
       <div className="mt-4 flex flex-1 flex-col gap-3">
         <SelectedFilePreview file={file} label={item.label} />
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-1">
-          <Button type="button" variant="outline" className="w-full justify-center" onClick={openCameraPicker}>
-            <ScanLine className="size-4" /> Scan on mobile
+          <Button type="button" variant="outline" className="w-full justify-center" onClick={() => setScannerOpen(true)}>
+            <ScanLine className="size-4" /> Scan with camera
           </Button>
           <Button type="button" variant="outline" className="w-full justify-center" onClick={openLibraryPicker}>
-            <Upload className="size-4" /> Choose file
+            <Upload className="size-4" /> Upload from device
           </Button>
         </div>
       </div>
 
-      <input
-        ref={cameraInputRef}
-        type="file"
-        accept={item.accepts}
-        capture={item.capture}
-        onChange={handleFileSelection}
-        className="hidden"
-      />
       <input
         ref={libraryInputRef}
         type="file"
         accept={item.accepts}
         onChange={handleFileSelection}
         className="hidden"
+      />
+      <LiveDocumentScanner
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onCapture={handleScannerCapture}
+        title={`Scan ${item.label.toLowerCase()}`}
+        hint={item.description}
       />
     </div>
   );

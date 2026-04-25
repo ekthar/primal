@@ -154,6 +154,19 @@ async function submit(user, id, ctx = {}) {
     throw ApiError.unprocessable('Required documents missing', { missing });
   }
 
+  // Reject submission if any required document expires before the tournament starts.
+  const tournamentForExpiry = await tournamentsRepo.findById(app.tournament_id);
+  const tournamentStart = tournamentForExpiry?.starts_on ? new Date(tournamentForExpiry.starts_on) : null;
+  if (tournamentStart) {
+    const expired = documents
+      .filter((doc) => REQUIRED_DOCUMENT_KINDS.includes(doc.kind) && doc.expires_on)
+      .filter((doc) => new Date(doc.expires_on) < tournamentStart)
+      .map((doc) => ({ kind: doc.kind, expiresOn: doc.expires_on }));
+    if (expired.length) {
+      throw ApiError.unprocessable('One or more required documents expire before the event start date.', { expired });
+    }
+  }
+
   // Auto-assign a reviewer if we don't have one yet (hybrid mode).
   const patch = {
     status: STATUS.SUBMITTED,
@@ -180,7 +193,7 @@ async function submit(user, id, ctx = {}) {
   return updated;
 }
 
-async function uploadDocument(user, applicationId, { kind, label, expiresOn, file }, ctx = {}) {
+async function uploadDocument(user, applicationId, { kind, label, expiresOn, file, capturedVia, idNumberLast4 }, ctx = {}) {
   const app = await appsRepo.findById(applicationId);
   if (!app) throw ApiError.notFound();
   await assertCanEdit(user, app);
@@ -188,6 +201,7 @@ async function uploadDocument(user, applicationId, { kind, label, expiresOn, fil
 
   const checksum = createHash('sha256').update(file.buffer).digest('hex');
   const storedDocument = await documentStorage.storeDocument(applicationId, file);
+  const sourceTag = (capturedVia || 'upload').toLowerCase();
 
   const doc = await documentsRepo.create({
     applicationId,
@@ -201,10 +215,35 @@ async function uploadDocument(user, applicationId, { kind, label, expiresOn, fil
     uploadedBy: user.id,
     expiresOn: expiresOn || null,
     originalFilename: file.originalname,
+    capturedVia: ['upload', 'scan', 'admin_rescan'].includes(sourceTag) ? sourceTag : 'upload',
+    idNumberLast4: idNumberLast4 || null,
   });
   await auditWrite({ actorUserId: user.id, actorRole: user.role, action: 'document.upload',
-    entityType: 'application', entityId: applicationId, payload: { documentId: doc.id, kind }, requestIp: ctx.ip });
+    entityType: 'application', entityId: applicationId, payload: { documentId: doc.id, kind, capturedVia: doc.captured_via }, requestIp: ctx.ip });
   return { ...doc, url: documentStorage.getPublicDocumentUrl(doc.storage_key) };
+}
+
+async function verifyDocument(user, applicationId, documentId, { verified, reason }, ctx = {}) {
+  if (user.role !== 'admin' && user.role !== 'reviewer') throw ApiError.forbidden();
+  const app = await appsRepo.findById(applicationId);
+  if (!app) throw ApiError.notFound();
+  const doc = await documentsRepo.findById(documentId);
+  if (!doc || doc.application_id !== applicationId) throw ApiError.notFound('Document not found');
+  const updated = await documentsRepo.setVerification(documentId, {
+    verifiedBy: user.id,
+    verified: Boolean(verified),
+    verifyReason: verified ? null : (reason || 'Rejected'),
+  });
+  await auditWrite({
+    actorUserId: user.id,
+    actorRole: user.role,
+    action: verified ? 'document.verify' : 'document.reject',
+    entityType: 'application',
+    entityId: applicationId,
+    payload: { documentId, kind: doc.kind, reason: verified ? null : (reason || null) },
+    requestIp: ctx.ip,
+  });
+  return { ...updated, url: documentStorage.getPublicDocumentUrl(updated.storage_key) };
 }
 
 async function reapply(user, sourceApplicationId, { tournamentId }, ctx = {}) {
@@ -377,4 +416,4 @@ async function notifySubmission(app) {
   });
 }
 
-module.exports = { create, updateDraft, submit, reapply, uploadDocument, listDocuments, getById, listForMe, requestCancel, assertCanView, assertCanEdit };
+module.exports = { create, updateDraft, submit, reapply, uploadDocument, verifyDocument, listDocuments, getById, listForMe, requestCancel, assertCanView, assertCanEdit };

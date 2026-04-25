@@ -349,6 +349,30 @@ export default function ReviewerWorkbench() {
     toast.success("Notification dispatched (email + SMS fallback)");
   }
 
+  async function handleDocumentVerify(documentId, verified, reason) {
+    if (!activeId) return;
+    setActionBusy(true);
+    const { data, error } = await api.verifyApplicationDocument(activeId, documentId, {
+      verified,
+      reason: verified ? null : (reason || ""),
+    });
+    setActionBusy(false);
+    if (error) {
+      toast.error(error.message || "Verification failed");
+      return;
+    }
+    toast.success(verified ? "Document verified" : "Document marked as rejected");
+    setActiveApplication((current) => {
+      if (!current) return current;
+      const next = data?.document;
+      if (!next) return current;
+      return {
+        ...current,
+        documents: (current.documents || []).map((doc) => (doc.id === documentId ? { ...doc, ...next } : doc)),
+      };
+    });
+  }
+
   async function handleReopen(reason) {
     if (!activeId) return;
     if (!reason) return;
@@ -667,18 +691,15 @@ export default function ReviewerWorkbench() {
                 <CheckRow ok={activeApplication.status !== "draft"} label="Application submitted" />
                 <CheckRow ok={activeApplication.status !== "needs_correction"} label="No open correction request" />
               </div>
-              <div className="mt-4 space-y-2">
+              <div className="mt-4 space-y-3">
                 {(activeApplication.documents || []).map((doc) => (
-                  <a
+                  <DocumentReviewRow
                     key={doc.id}
-                    href={doc.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="block rounded-xl border border-border bg-background/60 p-3 text-sm hover:bg-surface-muted/40"
-                  >
-                    <div className="font-medium">{doc.kind}</div>
-                    <div className="text-xs text-tertiary mt-1">{doc.original_filename || doc.label || doc.storage_key}</div>
-                  </a>
+                    doc={doc}
+                    busy={actionBusy}
+                    canVerify={user?.role === "admin" || user?.role === "reviewer"}
+                    onVerify={(verified, reason) => handleDocumentVerify(doc.id, verified, reason)}
+                  />
                 ))}
                 {!activeApplication.documents?.length && <div className="text-sm text-secondary-muted">No documents uploaded yet.</div>}
               </div>
@@ -862,6 +883,82 @@ function CheckRow({ ok, label }) {
         <FileWarning className="size-4 text-orange-500 shrink-0 mt-0.5" />
       )}
       <span className={ok ? "" : "text-orange-700 dark:text-orange-300"}>{label}</span>
+    </div>
+  );
+}
+
+function DocumentReviewRow({ doc, busy, canVerify, onVerify }) {
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+  const isImage = (doc.mime_type || "").startsWith("image/");
+  const isPdf = (doc.mime_type || "") === "application/pdf";
+  const verified = !!doc.verified_at;
+  const rejected = !verified && !!doc.verify_reason;
+  const expiringClass = doc.expires_on
+    ? new Date(doc.expires_on) < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+      ? "text-orange-600"
+      : ""
+    : "";
+
+  return (
+    <div className={`rounded-xl border ${verified ? "border-emerald-300/60" : rejected ? "border-rose-300/60" : "border-border"} bg-background/60 p-3 text-sm`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="font-medium capitalize">{(doc.kind || "document").replace(/_/g, " ")}</div>
+          <div className="text-xs text-tertiary mt-0.5 truncate">{doc.original_filename || doc.label || doc.storage_key}</div>
+          <div className="mt-1 flex flex-wrap gap-1.5 text-[10px] uppercase tracking-wider">
+            {doc.captured_via === "scan" ? <span className="rounded bg-foreground/10 px-1.5 py-0.5">scanned</span> : null}
+            {doc.captured_via === "admin_rescan" ? <span className="rounded bg-foreground/10 px-1.5 py-0.5">admin scan</span> : null}
+            {verified ? <span className="rounded bg-emerald-500/15 text-emerald-700 px-1.5 py-0.5">verified</span> : null}
+            {rejected ? <span className="rounded bg-rose-500/15 text-rose-700 px-1.5 py-0.5">rejected</span> : null}
+            {doc.expires_on ? <span className={`rounded bg-foreground/5 px-1.5 py-0.5 ${expiringClass}`}>exp {String(doc.expires_on).slice(0, 10)}</span> : null}
+          </div>
+        </div>
+        <div className="flex shrink-0 gap-1.5">
+          <Button size="sm" variant="outline" onClick={() => setPreviewOpen((v) => !v)}>{previewOpen ? "Hide" : "Preview"}</Button>
+          <a href={doc.url} target="_blank" rel="noreferrer" className="inline-flex items-center rounded-md border border-border px-2.5 py-1 text-xs hover:bg-surface-muted/40">Open</a>
+        </div>
+      </div>
+
+      {previewOpen ? (
+        <div className="mt-3 overflow-hidden rounded-lg border border-border bg-black/5">
+          {isImage ? (
+            <img src={doc.url} alt={doc.kind} className="block max-h-[420px] w-full object-contain bg-white" />
+          ) : isPdf ? (
+            <iframe src={`${doc.url}#toolbar=0&navpanes=0`} title={doc.kind} className="block h-[420px] w-full bg-white" />
+          ) : (
+            <div className="p-4 text-xs text-tertiary">Preview not available for this file type.</div>
+          )}
+        </div>
+      ) : null}
+
+      {canVerify ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant={verified ? "outline" : "default"}
+            disabled={busy}
+            onClick={() => onVerify(true)}
+          >
+            <CheckCircle2 className="size-3.5 mr-1" /> {verified ? "Verified" : "Verify"}
+          </Button>
+          <Input
+            value={rejectReason}
+            placeholder="Reject reason (e.g., blurry, expired)"
+            onChange={(event) => setRejectReason(event.target.value)}
+            className="h-8 max-w-[220px] bg-surface text-xs"
+          />
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy || !rejectReason.trim()}
+            onClick={() => onVerify(false, rejectReason.trim())}
+          >
+            <XCircle className="size-3.5 mr-1" /> Reject
+          </Button>
+          {rejected ? <span className="text-xs text-rose-600">{doc.verify_reason}</span> : null}
+        </div>
+      ) : null}
     </div>
   );
 }
