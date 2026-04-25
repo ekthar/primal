@@ -55,6 +55,9 @@ router.post('/resend/:applicationId', requireAuth, requireRole('admin'), ah(asyn
   const channels = Array.isArray(req.body?.channels) && req.body.channels.length
     ? req.body.channels.filter((c) => ['email', 'sms', 'whatsapp', 'push'].includes(c))
     : ['email'];
+  if (!channels.length) {
+    return res.status(400).json({ error: 'no_valid_channels', hint: 'Allowed: email, sms, whatsapp, push' });
+  }
   const template = String(req.body?.template || '').trim();
   if (!TEMPLATES[template]) {
     return res.status(400).json({ error: 'invalid_template', templates: Object.keys(TEMPLATES) });
