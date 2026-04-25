@@ -433,8 +433,8 @@ function drawTimelineCards(doc, events, options) {
   });
 }
 
-async function approvedToExcel(res, { tournamentId } = {}) {
-  const rows = await appsRepo.query({ status: 'approved', tournamentId, limit: 10000 });
+async function approvedToExcel(res, { tournamentId, stateCode } = {}) {
+  const rows = await appsRepo.query({ status: 'approved', tournamentId, stateCode, limit: 10000 });
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Approved');
   ws.columns = [
@@ -457,8 +457,8 @@ async function approvedToExcel(res, { tournamentId } = {}) {
   res.end();
 }
 
-async function approvedParticipantsToExcel(res, { tournamentId } = {}) {
-  const report = await approvedParticipantReport({ tournamentId });
+async function approvedParticipantsToExcel(res, { tournamentId, stateCode } = {}) {
+  const report = await approvedParticipantReport({ tournamentId, stateCode });
   const wb = new ExcelJS.Workbook();
   const wsClub = wb.addWorksheet('Club Participants');
   const wsIndividual = wb.addWorksheet('Individual Participants');
@@ -511,8 +511,8 @@ function addGroupedAnalyticsWorksheet(worksheet, rows) {
   worksheet.getRow(1).font = { bold: true };
 }
 
-async function groupedAnalyticsToExcel(res, { tournamentId, discipline } = {}) {
-  const report = await groupedApplicationReport({ tournamentId, discipline });
+async function groupedAnalyticsToExcel(res, { tournamentId, discipline, stateCode } = {}) {
+  const report = await groupedApplicationReport({ tournamentId, discipline, stateCode });
   const wb = new ExcelJS.Workbook();
   const wsDiscipline = wb.addWorksheet('By Discipline');
   const wsWeight = wb.addWorksheet('By Weight');
@@ -535,8 +535,8 @@ async function groupedAnalyticsToExcel(res, { tournamentId, discipline } = {}) {
 // groupedAnalyticsToPdf now use `drawDataTable` from pdfComposition.js with
 // inline status distribution bars (drawStatusDistributionBar).
 
-async function groupedAnalyticsToPdf(res, actor, { tournamentId, discipline } = {}, ctx = {}) {
-  const report = await groupedApplicationReport({ tournamentId, discipline });
+async function groupedAnalyticsToPdf(res, actor, { tournamentId, discipline, stateCode } = {}, ctx = {}) {
+  const report = await groupedApplicationReport({ tournamentId, discipline, stateCode });
   const brandName = config.pdf?.brandName || 'Primal';
   const palette = createPalette(config);
 
@@ -837,8 +837,8 @@ async function seasonalReportToPdf(res, actor, tournamentId, ctx = {}) {
   });
 }
 
-async function approvedParticipantsToPdf(res, actor, { tournamentId } = {}, ctx = {}) {
-  const report = await approvedParticipantReport({ tournamentId });
+async function approvedParticipantsToPdf(res, actor, { tournamentId, stateCode } = {}, ctx = {}) {
+  const report = await approvedParticipantReport({ tournamentId, stateCode });
   const brandName = config.pdf?.brandName || 'Primal';
   const palette = createPalette(config);
 
@@ -2065,8 +2065,8 @@ async function applicationToPdfBuffer(applicationId, actor, ctx = {}) {
  * entry so one bad record never breaks the whole bulk export — a manifest
  * file `_errors.txt` is appended at the end listing any failures.
  */
-async function bulkApprovedParticipantsToZip(res, actor, { tournamentId } = {}, ctx = {}) {
-  const report = await approvedParticipantReport({ tournamentId });
+async function bulkApprovedParticipantsToZip(res, actor, { tournamentId, stateCode } = {}, ctx = {}) {
+  const report = await approvedParticipantReport({ tournamentId, stateCode });
   const deduped = new Map();
   [...report.clubParticipants, ...report.individualParticipants].forEach((row) => {
     if (row?.applicationId && !deduped.has(row.applicationId)) {

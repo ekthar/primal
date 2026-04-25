@@ -8,6 +8,7 @@ function routeForRole(role) {
   return {
     admin: "/admin/overview",
     reviewer: "/admin/queue",
+    state_coordinator: "/admin/queue",
     club: "/club",
     applicant: "/applicant",
   }[role] || "/";

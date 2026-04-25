@@ -20,6 +20,8 @@ import {
   useReducedMotion,
 } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import { useLocale } from "@/context/LocaleContext";
+import LocaleToggle from "@/components/shared/LocaleToggle";
 import ThemeToggle from "@/components/shared/ThemeToggle";
 import CageEnergyCanvas from "@/components/landing/CageEnergyCanvas";
 import { HERO_IMAGE, TEXTURE_IMAGE } from "@/lib/mockData";
@@ -162,6 +164,7 @@ function InfiniteTileColumn({ images, duration = 18, className = "" }) {
 // ---------- sections -----------------------------------------------------------
 
 function Nav({ registrationOpen }) {
+  const locale = useLocale();
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
@@ -181,23 +184,24 @@ function Nav({ registrationOpen }) {
           <span className="font-display font-semibold tracking-tight">Primal</span>
         </Link>
         <nav className="hidden lg:flex items-center gap-7 text-sm text-secondary-muted">
-          <a href="#paths" className="hover:text-foreground transition-colors">Who it's for</a>
-          <a href="#workflow" className="hover:text-foreground transition-colors">Workflow</a>
-          <a href="#admin" className="hover:text-foreground transition-colors">Admin</a>
-          <a href="#stats" className="hover:text-foreground transition-colors">Numbers</a>
+          <a href="#paths" className="hover:text-foreground transition-colors">{locale?.t("landing.nav.whoFor", "Who it's for")}</a>
+          <a href="#workflow" className="hover:text-foreground transition-colors">{locale?.t("landing.nav.workflow", "Workflow")}</a>
+          <a href="#admin" className="hover:text-foreground transition-colors">{locale?.t("landing.nav.admin", "Admin")}</a>
+          <a href="#stats" className="hover:text-foreground transition-colors">{locale?.t("landing.nav.numbers", "Numbers")}</a>
         </nav>
         <div className="flex items-center gap-2 shrink-0">
+          <LocaleToggle compact />
           <ThemeToggle compact />
-          <Link href="/login"><Button variant="ghost" size="sm" className="hidden sm:inline-flex" data-testid="nav-login">Sign in</Button></Link>
+          <Link href="/login"><Button variant="ghost" size="sm" className="hidden sm:inline-flex" data-testid="nav-login">{locale?.t("landing.ctaSignIn", "Sign in")}</Button></Link>
           {registrationOpen ? (
             <Link href="/register">
               <Button size="sm" className="bg-foreground text-background hover:bg-foreground/90 rounded-full px-4" data-testid="nav-register">
-                Register
+                {locale?.t("landing.ctaRegister", "Register")}
               </Button>
             </Link>
           ) : (
             <Button size="sm" disabled className="rounded-full px-4 opacity-70" data-testid="nav-register-disabled">
-              Opens soon
+              {locale?.t("landing.ctaSoon", "Opens soon")}
             </Button>
           )}
         </div>

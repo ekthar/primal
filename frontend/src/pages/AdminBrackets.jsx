@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Download, RefreshCw, Save, Shield, Shuffle, Swords, Trophy, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import BracketView from "@/components/tournament/BracketView";
 import { ResponsivePageShell } from "@/components/shared/ResponsivePrimitives";
@@ -15,20 +19,47 @@ export default function AdminBrackets() {
   const [savingSeeds, setSavingSeeds] = useState(false);
   const [advancing, setAdvancing] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [resultDialog, setResultDialog] = useState({
+    open: false,
+    matchId: "",
+    winnerEntryId: "",
+    method: "DEC",
+    resultRound: "",
+    resultTime: "",
+  });
   const [tournaments, setTournaments] = useState([]);
   const [selectedTournamentId, setSelectedTournamentId] = useState("");
   const [divisions, setDivisions] = useState([]);
-  const [selectedDivisionId, setSelectedDivisionId] = useState("");
-  const [divisionPayload, setDivisionPayload] = useState(null);
-  const [seedDrafts, setSeedDrafts] = useState({});
-
-  useEffect(() => {
-    initialize();
-  }, []);
-
-  async function initialize() {
-    setLoading(true);
+    const match = divisionPayload?.bracket?.rounds?.flatMap((round) => round.matches || []).find((item) => item.id === matchId);
+    setResultDialog({
+      open: true,
+      matchId,
+      winnerEntryId,
+        method: "DEC",
+      resultRound: match?.roundLabel || match?.round || "",
+      resultTime: "",
+    });
     const { data, error } = await api.adminTournaments();
+
+  async function handleSubmitResult() {
+    if (!resultDialog.matchId || !resultDialog.winnerEntryId) return;
+    setAdvancing(true);
+    const { data, error } = await api.submitMatchResult(resultDialog.matchId, {
+      winnerEntryId: resultDialog.winnerEntryId,
+      method: resultDialog.method,
+      resultRound: resultDialog.resultRound,
+      resultTime: resultDialog.resultTime,
+    });
+    setAdvancing(false);
+    if (error) {
+      toast.error(error.message || "Failed to record match result");
+      return;
+    }
+
+    setResultDialog({ open: false, matchId: "", winnerEntryId: "", method: "DEC", resultRound: "", resultTime: "" });
+    setDivisionPayload(data);
+    await refreshDivisionList(false);
+  }
     if (error) {
       setLoading(false);
       toast.error(error.message || "Failed to load tournaments");
@@ -159,16 +190,16 @@ export default function AdminBrackets() {
 
   async function handleAdvanceWinner(matchId, winnerEntryId) {
     if (!matchId || !winnerEntryId) return;
-    setAdvancing(true);
-    const { data, error } = await api.submitMatchResult(matchId, { winnerEntryId });
-    setAdvancing(false);
-    if (error) {
-      toast.error(error.message || "Failed to record match result");
-      return;
-    }
-
-    setDivisionPayload(data);
-    await refreshDivisionList(false);
+    const matches = divisionPayload?.bracket?.rounds?.flatMap((round) => round.matches || []) || [];
+    const match = matches.find((item) => item.id === matchId);
+    setResultDialog({
+      open: true,
+      matchId,
+      winnerEntryId,
+      method: "DEC",
+      resultRound: match?.roundNumber ? String(match.roundNumber) : "",
+      resultTime: "",
+    });
   }
 
   async function handleDownload() {
@@ -416,6 +447,61 @@ export default function AdminBrackets() {
           </section>
         </div>
       )}
+
+      <Dialog open={resultDialog.open} onOpenChange={(open) => setResultDialog((current) => ({ ...current, open }))}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Record match result</DialogTitle>
+            <DialogDescription>Set the winner method, round number, and finish time before saving.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label className="text-[11px] uppercase tracking-wider font-semibold text-secondary-muted">Method</Label>
+              <Select value={resultDialog.method} onValueChange={(value) => setResultDialog((current) => ({ ...current, method: value }))}>
+                <SelectTrigger className="mt-1.5 h-11 bg-background">
+                  <SelectValue placeholder="Select method" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="KO">KO</SelectItem>
+                  <SelectItem value="TKO">TKO</SelectItem>
+                  <SelectItem value="SUB">Submission</SelectItem>
+                  <SelectItem value="DEC">Decision</SelectItem>
+                  <SelectItem value="DQ">DQ</SelectItem>
+                  <SelectItem value="NC">NC</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-[11px] uppercase tracking-wider font-semibold text-secondary-muted">Round</Label>
+              <Input
+                type="number"
+                min="1"
+                value={resultDialog.resultRound}
+                onChange={(event) => setResultDialog((current) => ({ ...current, resultRound: event.target.value }))}
+                placeholder="1"
+                className="mt-1.5 h-11 bg-background"
+              />
+            </div>
+            <div>
+              <Label className="text-[11px] uppercase tracking-wider font-semibold text-secondary-muted">Time</Label>
+              <Input
+                value={resultDialog.resultTime}
+                onChange={(event) => setResultDialog((current) => ({ ...current, resultTime: event.target.value }))}
+                placeholder="01:24"
+                className="mt-1.5 h-11 bg-background"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setResultDialog({ open: false, matchId: "", winnerEntryId: "", method: "DEC", resultRound: "", resultTime: "" })}>
+                Cancel
+              </Button>
+              <Button onClick={handleSubmitResult} disabled={advancing}>
+                {advancing ? "Saving..." : "Save result"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </ResponsivePageShell>
   );
 }

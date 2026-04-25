@@ -3,12 +3,15 @@ import Link from "next/link";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import ThemeToggle from "@/components/shared/ThemeToggle";
+import LocaleToggle from "@/components/shared/LocaleToggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import api from "@/lib/api";
+import { useLocale } from "@/context/LocaleContext";
 
 export default function ForgotPassword() {
+  const locale = useLocale();
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [devResetUrl, setDevResetUrl] = useState("");
@@ -29,7 +32,7 @@ export default function ForgotPassword() {
   const submit = async (event) => {
     event.preventDefault();
     if (!email.trim()) {
-      toast.error("Please enter your email");
+      toast.error(locale?.t("common.email", "Email") + " required");
       return;
     }
 
@@ -50,18 +53,21 @@ export default function ForgotPassword() {
     <div className="min-h-screen bg-background">
       <div className="max-w-xl mx-auto px-6 py-10">
         <div className="flex items-center justify-between">
-          <Link href="/login" className="text-sm text-secondary-muted hover:text-foreground">Back to login</Link>
-          <ThemeToggle compact />
+          <Link href="/login" className="text-sm text-secondary-muted hover:text-foreground">{locale?.t("common.backToLogin", "Back to login")}</Link>
+          <div className="flex items-center gap-2">
+            <LocaleToggle compact />
+            <ThemeToggle compact />
+          </div>
         </div>
 
         <div className="rounded-3xl border border-border bg-surface elev-card p-7 mt-6">
           <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">Account recovery</div>
-          <h1 className="font-display text-3xl font-semibold tracking-tight mt-2">Reset your password</h1>
+          <h1 className="font-display text-3xl font-semibold tracking-tight mt-2">{locale?.t("auth.resetPassword", "Reset your password")}</h1>
           <p className="text-sm text-secondary-muted mt-2">Enter your account email and we will send a password reset link.</p>
 
           <form onSubmit={submit} className="space-y-4 mt-6">
             <div>
-              <Label className="text-[11px] uppercase tracking-wider font-semibold text-secondary-muted">Email</Label>
+              <Label className="text-[11px] uppercase tracking-wider font-semibold text-secondary-muted">{locale?.t("common.email", "Email")}</Label>
               <Input
                 type="email"
                 value={email}
@@ -72,7 +78,7 @@ export default function ForgotPassword() {
             </div>
 
             <Button type="submit" disabled={loading} className="w-full h-11 bg-primary hover:bg-primary-hover text-primary-foreground">
-              {loading ? <Loader2 className="size-4 animate-spin" /> : <>Send reset link <ArrowRight className="size-4 ml-1" /></>}
+              {loading ? <Loader2 className="size-4 animate-spin" /> : <>{locale?.t("auth.sendReset", "Send reset link")} <ArrowRight className="size-4 ml-1" /></>}
             </Button>
           </form>
 

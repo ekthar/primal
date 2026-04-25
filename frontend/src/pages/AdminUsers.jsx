@@ -8,7 +8,7 @@ import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/api";
 import { toast } from "sonner";
 
-const ROLE_OPTIONS = ["reviewer", "club", "applicant", "admin"];
+const ROLE_OPTIONS = ["reviewer", "state_coordinator", "club", "applicant", "admin"];
 
 export default function AdminUsers() {
   const { user } = useAuth();
@@ -17,16 +17,24 @@ export default function AdminUsers() {
   const [saving, setSaving] = useState(false);
   const [roleFilter, setRoleFilter] = useState("all");
   const [query, setQuery] = useState("");
+  const [stateOptions, setStateOptions] = useState([]);
   const [draft, setDraft] = useState({
     name: "",
     email: "",
     password: "",
     role: "reviewer",
+    stateCode: "",
   });
 
   useEffect(() => {
     loadUsers();
   }, [roleFilter]);
+
+  useEffect(() => {
+    api.publicIndiaStates().then(({ data }) => {
+      setStateOptions(data?.states || []);
+    }).catch(() => setStateOptions([]));
+  }, []);
 
   async function loadUsers() {
     setLoading(true);
@@ -57,6 +65,7 @@ export default function AdminUsers() {
       email: draft.email.trim().toLowerCase(),
       password: draft.password,
       role: draft.role,
+      stateCode: draft.role === "state_coordinator" ? draft.stateCode : undefined,
       locale: "en",
     });
     setSaving(false);
@@ -67,7 +76,7 @@ export default function AdminUsers() {
     }
 
     toast.success(`${draft.role} account created`);
-    setDraft({ name: "", email: "", password: "", role: "reviewer" });
+    setDraft({ name: "", email: "", password: "", role: "reviewer", stateCode: "" });
     loadUsers();
   }
 
@@ -133,6 +142,21 @@ export default function AdminUsers() {
               </SelectContent>
             </Select>
           </div>
+          {draft.role === "state_coordinator" ? (
+            <div>
+              <Label className="text-[11px] uppercase tracking-wider font-semibold text-secondary-muted">State</Label>
+              <Select value={draft.stateCode} onValueChange={(value) => setDraft((prev) => ({ ...prev, stateCode: value }))}>
+                <SelectTrigger className="mt-1.5 h-11 bg-background">
+                  <SelectValue placeholder="Select state" />
+                </SelectTrigger>
+                <SelectContent>
+                  {stateOptions.map((state) => (
+                    <SelectItem key={state} value={state}>{state}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
           <div className="md:col-span-2">
             <Button type="submit" className="h-11" disabled={saving}>
               <UserPlus className="size-4 mr-1.5" /> {saving ? "Creating..." : "Create user"}
@@ -179,6 +203,7 @@ export default function AdminUsers() {
                   <th className="py-3">Name</th>
                   <th className="py-3">Email</th>
                   <th className="py-3">Role</th>
+                  <th className="py-3">State</th>
                 </tr>
               </thead>
               <tbody>
@@ -187,6 +212,7 @@ export default function AdminUsers() {
                     <td className="py-3 text-sm">{entry.name}</td>
                     <td className="py-3 text-sm">{entry.email}</td>
                     <td className="py-3 text-sm capitalize">{entry.role}</td>
+                    <td className="py-3 text-sm">{entry.stateCode || "-"}</td>
                   </tr>
                 ))}
               </tbody>

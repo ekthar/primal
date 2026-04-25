@@ -6,24 +6,32 @@ const { STATUS } = require('./statusMachine');
 
 const ACTIVE = 'deleted_at IS NULL';
 
+function applyStateFilter(where, args, stateCode, profileAlias = 'p') {
+  const normalized = String(stateCode || '').trim();
+  if (!normalized) return;
+  args.push(normalized);
+  where.push(`COALESCE(NULLIF(${profileAlias}.metadata #>> '{address,state}', ''), NULLIF(${profileAlias}.metadata #>> '{address,state_code}', '')) = $${args.length}`);
+}
+
 // --------- users ---------
 const users = {
   findByEmail: async (email) => (await query(`SELECT * FROM users WHERE email=$1 AND ${ACTIVE}`, [email])).rows[0],
   findById: async (id) => (await query(`SELECT * FROM users WHERE id=$1 AND ${ACTIVE}`, [id])).rows[0],
   findByGoogleSub: async (sub) => (await query(`SELECT * FROM users WHERE google_sub=$1 AND ${ACTIVE}`, [sub])).rows[0],
-  list: async ({ role, q, limit = 50, offset = 0 } = {}) => {
+  list: async ({ role, stateCode, q, limit = 50, offset = 0 } = {}) => {
     const where = [`${ACTIVE}`]; const args = [];
     if (role) { args.push(role); where.push(`role = $${args.length}`); }
+    if (stateCode) { args.push(stateCode); where.push(`state_code = $${args.length}`); }
     if (q) { args.push(`%${q}%`); where.push(`(name ILIKE $${args.length} OR email ILIKE $${args.length})`); }
     args.push(limit); args.push(offset);
     const sql = `SELECT * FROM users WHERE ${where.join(' AND ')} ORDER BY created_at DESC LIMIT $${args.length - 1} OFFSET $${args.length}`;
     return (await query(sql, args)).rows;
   },
-  create: async ({ email, passwordHash, role, name, locale = 'en', googleSub = null, emailVerified = false, avatarUrl = null }) => {
+  create: async ({ email, passwordHash, role, name, locale = 'en', googleSub = null, emailVerified = false, avatarUrl = null, stateCode = null }) => {
     const { rows } = await query(
-      `INSERT INTO users (email, password_hash, role, name, locale, google_sub, email_verified, avatar_url)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-      [email, passwordHash, role, name, locale, googleSub, emailVerified, avatarUrl]
+      `INSERT INTO users (email, password_hash, role, name, locale, google_sub, email_verified, avatar_url, state_code)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [email, passwordHash, role, name, locale, googleSub, emailVerified, avatarUrl, stateCode]
     );
     return rows[0];
   },
@@ -162,13 +170,14 @@ const profiles = {
     );
     return rows[0];
   },
-  listForAdminReweigh: async ({ clubId, tournamentId, q, limit = 200, offset = 0 } = {}) => {
+  listForAdminReweigh: async ({ clubId, tournamentId, stateCode, q, limit = 200, offset = 0 } = {}) => {
     const args = [];
     const where = [`p.${ACTIVE}`, `a.status = 'approved'`, `a.deleted_at IS NULL`];
     if (tournamentId) {
       args.push(tournamentId);
       where.push(`a.tournament_id = $${args.length}`);
     }
+    applyStateFilter(where, args, stateCode, 'p');
     if (clubId) {
       args.push(clubId);
       where.push(`p.club_id = $${args.length}`);
@@ -331,12 +340,13 @@ const applications = {
     return rows;
   },
   query: async (filters = {}) => {
-    const { status, tournamentId, clubId, reviewerId, overdue, dueSoon, q, limit = 50, offset = 0 } = filters;
+    const { status, tournamentId, clubId, reviewerId, stateCode, overdue, dueSoon, q, limit = 50, offset = 0 } = filters;
     const where = [`a.${ACTIVE}`]; const args = [];
     if (status && status !== 'all') { args.push(status); where.push(`a.status = $${args.length}`); }
     if (tournamentId) { args.push(tournamentId); where.push(`a.tournament_id = $${args.length}`); }
     if (clubId) { args.push(clubId); where.push(`a.club_id = $${args.length}`); }
     if (reviewerId) { args.push(reviewerId); where.push(`a.reviewer_id = $${args.length}`); }
+    applyStateFilter(where, args, stateCode, 'p');
     if (overdue === true) where.push(`a.review_due_at < NOW() AND a.status IN ('submitted','under_review')`);
     if (dueSoon === true) where.push(`a.review_due_at BETWEEN NOW() AND NOW() + INTERVAL '6 hours' AND a.status IN ('submitted','under_review')`);
     if (q) {
@@ -359,9 +369,17 @@ const applications = {
       LIMIT $${args.length - 1} OFFSET $${args.length}`;
     return (await query(sql, args)).rows;
   },
-  counts: async () => {
+  counts: async ({ stateCode } = {}) => {
+    const args = [];
+    const where = [`a.${ACTIVE}`];
+    applyStateFilter(where, args, stateCode, 'p');
     const { rows } = await query(
-      `SELECT status, COUNT(*)::int AS n FROM applications WHERE ${ACTIVE} GROUP BY status`
+      `SELECT a.status, COUNT(*)::int AS n
+       FROM applications a
+       JOIN profiles p ON p.id = a.profile_id
+       WHERE ${where.join(' AND ')}
+       GROUP BY a.status`,
+      args
     );
     return Object.fromEntries(rows.map((r) => [r.status, r.n]));
   },

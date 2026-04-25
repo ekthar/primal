@@ -104,14 +104,21 @@ async function getProfileById(id) {
 }
 
 async function listForAdminReweigh(actor, query = {}) {
-  if (actor.role !== 'admin') throw ApiError.forbidden();
-  return profilesRepo.listForAdminReweigh(query);
+  if (!['admin', 'state_coordinator'].includes(actor.role)) throw ApiError.forbidden();
+  const stateCode = actor.role === 'state_coordinator' ? actor.stateCode : query.stateCode;
+  return profilesRepo.listForAdminReweigh({ ...query, stateCode: stateCode || null });
 }
 
 async function adminReweigh(actor, profileId, { weightKg }, ctx = {}) {
-  if (actor.role !== 'admin') throw ApiError.forbidden();
+  if (!['admin', 'state_coordinator'].includes(actor.role)) throw ApiError.forbidden();
   const profile = await profilesRepo.findById(profileId);
   if (!profile) throw ApiError.notFound('Profile not found');
+  if (actor.role === 'state_coordinator') {
+    const profileState = String(profile.metadata?.address?.state || '').trim();
+    if (!actor.stateCode || profileState !== actor.stateCode) {
+      throw ApiError.forbidden();
+    }
+  }
   const weightClass = deriveWeightClass(profile.gender, weightKg);
   const updated = await profilesRepo.updateWeightByProfileId(profileId, { weightKg, weightClass });
   await auditWrite({

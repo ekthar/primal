@@ -3,9 +3,10 @@ const { query } = require('../db');
 const { STATUS } = require('../statusMachine');
 const { formatPersonName, applicationDisplayId, reviewerDisplayId } = require('./identity.service');
 
-async function board(filters = {}) {
-  const items = await appsRepo.query(filters);
-  const counts = await appsRepo.counts();
+async function board(filters = {}, actor = null) {
+  const stateCode = String(filters.stateCode || actor?.stateCode || '').trim() || null;
+  const items = await appsRepo.query({ ...filters, stateCode });
+  const counts = await appsRepo.counts({ stateCode });
   const queueCounts = { ...counts };
   delete queueCounts[STATUS.SEASON_CLOSED];
   return {
@@ -19,8 +20,15 @@ async function board(filters = {}) {
   };
 }
 
-async function slaSummary() {
+async function slaSummary(filters = {}, actor = null) {
   const now = new Date();
+  const stateCode = String(filters.stateCode || actor?.stateCode || '').trim() || null;
+  const where = [`a.deleted_at IS NULL`];
+  const args = [];
+  if (stateCode) {
+    args.push(stateCode);
+    where.push(`COALESCE(NULLIF(p.metadata #>> '{address,state}', ''), NULLIF(p.metadata #>> '{address,state_code}', '')) = $${args.length}`);
+  }
   const { rows } = await query(`
     SELECT
       COUNT(*) FILTER (WHERE status = 'submitted')                                                         AS submitted_open,
@@ -33,9 +41,10 @@ async function slaSummary() {
         FILTER (WHERE review_started_at IS NOT NULL AND submitted_at IS NOT NULL AND submitted_at > NOW() - INTERVAL '30 days') AS avg_first_review_hours_30d,
       AVG(EXTRACT(EPOCH FROM (decided_at - submitted_at))/3600)
         FILTER (WHERE decided_at IS NOT NULL AND submitted_at IS NOT NULL AND decided_at > NOW() - INTERVAL '30 days') AS avg_review_hours_30d
-    FROM applications
-    WHERE deleted_at IS NULL
-  `);
+    FROM applications a
+    JOIN profiles p ON p.id = a.profile_id
+    WHERE ${where.join(' AND ')}
+  `, args);
   return {
     now: now.toISOString(),
     submittedOpen: parseInt(rows[0].submitted_open, 10),

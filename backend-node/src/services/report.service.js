@@ -34,12 +34,16 @@ function normalizeParticipantRow(row) {
   };
 }
 
-async function listApprovedParticipants({ tournamentId } = {}) {
+async function listApprovedParticipants({ tournamentId, stateCode } = {}) {
   const args = [];
   const where = [`a.deleted_at IS NULL`, `a.status = 'approved'`];
   if (tournamentId) {
     args.push(tournamentId);
     where.push(`a.tournament_id = $${args.length}`);
+  }
+  if (stateCode) {
+    args.push(stateCode);
+    where.push(`COALESCE(NULLIF(p.metadata #>> '{address,state}', ''), NULLIF(p.metadata #>> '{address,state_code}', '')) = $${args.length}`);
   }
 
   const sql = `
@@ -132,6 +136,11 @@ async function groupedApplicationReport(filters = {}) {
     where.push(`COALESCE(discipline.name, p.discipline, 'Open') = $${args.length}`);
   }
 
+  if (filters.stateCode) {
+    args.push(filters.stateCode);
+    where.push(`COALESCE(NULLIF(p.metadata #>> '{address,state}', ''), NULLIF(p.metadata #>> '{address,state_code}', '')) = $${args.length}`);
+  }
+
   const { rows } = await query(`
     SELECT
       a.id AS application_id,
@@ -217,6 +226,7 @@ async function groupedApplicationReport(filters = {}) {
     filters: {
       tournamentId: filters.tournamentId || null,
       discipline: filters.discipline || null,
+      stateCode: filters.stateCode || null,
     },
     totals: rows.reduce((accumulator, row) => incrementStatusBucket(accumulator, row.status), emptyStatusTotals()),
     disciplineGroups: normalizeGroupRows(disciplineGroups),

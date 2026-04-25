@@ -47,11 +47,13 @@ const schemas = {
       email: email.required(),
       password: password.required(),
       name: Joi.string().min(2).max(120).required(),
-      role: Joi.string().valid('admin', 'reviewer', 'club', 'applicant').required(),
+      role: Joi.string().valid('admin', 'reviewer', 'state_coordinator', 'club', 'applicant').required(),
+      stateCode: Joi.string().min(2).max(120).allow(null, ''),
       locale: Joi.string().length(2).default('en'),
     }),
     adminListUsers: Joi.object({
-      role: Joi.string().valid('admin', 'reviewer', 'club', 'applicant'),
+      role: Joi.string().valid('admin', 'reviewer', 'state_coordinator', 'club', 'applicant'),
+      stateCode: Joi.string().min(2).max(120).allow(null, ''),
       q: Joi.string().max(200).allow(''),
       limit: Joi.number().integer().min(1).max(200).default(50),
       offset: Joi.number().integer().min(0).default(0),
@@ -174,6 +176,9 @@ const schemas = {
   match: {
     result: Joi.object({
       winnerEntryId: uuid.required(),
+      method: Joi.string().valid('KO', 'TKO', 'SUB', 'DEC', 'DQ', 'NC').required(),
+      resultRound: Joi.number().integer().min(1).max(20).required(),
+      resultTime: Joi.string().pattern(/^\d{1,2}:\d{2}$/).required(),
     }),
   },
 
@@ -283,6 +288,7 @@ const schemas = {
       tournamentId: uuid,
       clubId: uuid,
       reviewerId: uuid,
+      stateCode: Joi.string().min(2).max(120).allow(null, ''),
       overdue: Joi.boolean(),
       dueSoon: Joi.boolean(),
       q: Joi.string().max(200).allow(''),

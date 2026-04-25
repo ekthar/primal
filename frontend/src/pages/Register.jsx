@@ -10,6 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/context/AuthContext";
+import { useLocale } from "@/context/LocaleContext";
+import LocaleToggle from "@/components/shared/LocaleToggle";
 import api from "@/lib/api";
 import { splitPersonName } from "@/lib/person";
 import { DISCIPLINE_DEFINITIONS, EXPERIENCE_LEVELS, GENDER_OPTIONS, createPreviewEntries } from "@/lib/tournamentWorkflow";
@@ -26,6 +28,7 @@ const STEPS = [
 export default function Register() {
   const router = useRouter();
   const { register: registerUser } = useAuth();
+  const locale = useLocale();
   const isClubTrack = router.query.track === "club";
   const [step, setStep] = useState(1);
   const [tournaments, setTournaments] = useState([]);
@@ -335,7 +338,7 @@ export default function Register() {
       password: form.password,
       name: form.fullName,
       role: isClubTrack ? "club" : "applicant",
-      locale: "en",
+      locale: locale?.locale || "en",
     });
     if (error) {
       setLoading(false);
@@ -452,7 +455,10 @@ export default function Register() {
             <img src="/primal-logo.png" alt="Primal" className="size-7 rounded-lg object-cover" />
             <span className="font-display font-semibold tracking-tight text-sm">Primal</span>
           </Link>
-          <ThemeToggle compact />
+          <div className="flex items-center gap-2">
+            <LocaleToggle compact />
+            <ThemeToggle compact />
+          </div>
         </div>
       </div>
 

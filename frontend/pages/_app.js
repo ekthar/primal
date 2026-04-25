@@ -5,6 +5,7 @@ import "@/index.css";
 import "@/App.css";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { LocaleProvider } from "@/context/LocaleContext";
 import { Toaster } from "@/components/ui/sonner";
 import AppShell from "@/components/layout/AppShell";
 import { FullPageLoader, RouteProgressBar } from "@/components/shared/PrimalLoader";
@@ -116,9 +117,11 @@ export default function App({ Component, pageProps }) {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <ServiceWorkerRegister />
-        <RouteFrame Component={Component} pageProps={pageProps} />
-        <Toaster position="bottom-right" />
+        <LocaleProvider>
+          <ServiceWorkerRegister />
+          <RouteFrame Component={Component} pageProps={pageProps} />
+          <Toaster position="bottom-right" />
+        </LocaleProvider>
       </AuthProvider>
     </ThemeProvider>
   );

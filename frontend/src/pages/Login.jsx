@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/AuthContext";
+import { useLocale } from "@/context/LocaleContext";
+import LocaleToggle from "@/components/shared/LocaleToggle";
 import ThemeToggle from "@/components/shared/ThemeToggle";
 import { InlineLoadingLabel } from "@/components/shared/PrimalLoader";
 import { toast } from "sonner";
@@ -20,6 +22,7 @@ const ROLES = [
 
 export default function Login() {
   const { login } = useAuth();
+  const locale = useLocale();
   const router = useRouter();
   const [role, setRole] = useState("admin");
   const [email, setEmail] = useState("");
@@ -33,14 +36,14 @@ export default function Login() {
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (!email || !password) {
-      toast.error("Please enter your email and password");
+      toast.error(locale?.t("common.email", "Email") + " " + locale?.t("common.password", "Password") + " required");
       return;
     }
     setLoading(true);
     const { user, error, nextRoute } = await login({ email, password });
     setLoading(false);
     if (error) {
-      toast.error(error.message || "Sign in failed");
+      toast.error(error.message || locale?.t("common.signIn", "Sign in") + " failed");
       return;
     }
     toast.success(`Welcome back - signed in as ${user.role}`);
@@ -55,15 +58,18 @@ export default function Login() {
             <img src="/primal-logo.png" alt="Primal" className="size-8 rounded-lg object-cover" />
             <span className="font-display font-semibold tracking-tight">Primal</span>
           </Link>
-          <ThemeToggle compact />
+          <div className="flex items-center gap-2">
+            <LocaleToggle compact />
+            <ThemeToggle compact />
+          </div>
         </div>
 
         <div className="flex-1 flex items-center justify-center px-6 sm:px-10 pb-10">
           <div className="w-full max-w-md">
             <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">Sign in</div>
-            <h1 className="font-display mt-2 text-3xl sm:text-4xl font-semibold tracking-tight">Welcome back.</h1>
+            <h1 className="font-display mt-2 text-3xl sm:text-4xl font-semibold tracking-tight">{locale?.t("login.title", "Welcome back.")}</h1>
             <p className="mt-2 text-sm text-secondary-muted">
-              Choose your account type, then sign in with your own email and password.
+              {locale?.t("login.subtitle", "Choose your account type, then sign in with your own email and password.")}
             </p>
 
             <div className="grid grid-cols-2 gap-2 mt-7">
@@ -80,14 +86,14 @@ export default function Login() {
                   }`}
                 >
                   <div className="text-sm font-medium">{item.label}</div>
-                  <div className="text-[11px] text-tertiary">{item.sub}</div>
+                  <div className="text-[11px] text-tertiary">{locale?.t(`login.roleSubs.${item.id}`, item.sub)}</div>
                 </button>
               ))}
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4 mt-6">
               <div>
-                <Label className="text-[11px] uppercase tracking-wider font-semibold text-secondary-muted">Email</Label>
+                <Label className="text-[11px] uppercase tracking-wider font-semibold text-secondary-muted">{locale?.t("common.email", "Email")}</Label>
                 <Input
                   type="email"
                   value={email}
@@ -98,7 +104,7 @@ export default function Login() {
                 />
               </div>
               <div>
-                <Label className="text-[11px] uppercase tracking-wider font-semibold text-secondary-muted">Password</Label>
+                <Label className="text-[11px] uppercase tracking-wider font-semibold text-secondary-muted">{locale?.t("common.password", "Password")}</Label>
                 <Input
                   type="password"
                   value={password}
@@ -109,7 +115,7 @@ export default function Login() {
                 />
                 <div className="mt-2 text-right">
                   <Link href="/forgot-password" className="text-xs text-secondary-muted hover:text-foreground hover:underline">
-                    Forgot password?
+                    {locale?.t("login.forgot", "Forgot password?")}
                   </Link>
                 </div>
               </div>
@@ -121,14 +127,14 @@ export default function Login() {
               >
                 <InlineLoadingLabel loading={loading} loadingText="Signing in...">
                   <>
-                    Sign in <ArrowRight className="size-4 ml-1" />
+                      {locale?.t("common.signIn", "Sign in")} <ArrowRight className="size-4 ml-1" />
                   </>
                 </InlineLoadingLabel>
               </Button>
             </form>
 
             <p className="mt-6 text-xs text-tertiary text-center">
-              <Link href="/register" className="text-foreground hover:underline">Register instead</Link>
+                <Link href="/register" className="text-foreground hover:underline">{locale?.t("login.registerInstead", "Register instead")}</Link>
             </p>
           </div>
         </div>

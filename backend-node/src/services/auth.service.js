@@ -128,7 +128,7 @@ async function issueTokens(user, ctx = {}) {
   });
   return {
     user: publicUser(user),
-    accessToken: signAccess({ id: user.id, role: user.role, email: user.email }),
+    accessToken: signAccess({ id: user.id, role: user.role, email: user.email, stateCode: user.state_code || null }),
     refreshToken,
   };
 }
@@ -144,6 +144,7 @@ function publicUser(user) {
   return {
     id: user.id, email: user.email, role: user.role, name: user.name,
     locale: user.locale, avatarUrl: resolvedAvatarUrl, emailVerified: user.email_verified,
+    stateCode: user.state_code || null,
   };
 }
 
@@ -189,12 +190,12 @@ async function logout(user, { refreshToken } = {}, ctx = {}) {
   return { ok: true };
 }
 
-async function createUserByAdmin(actor, { email, password, name, role, locale }, ctx = {}) {
+async function createUserByAdmin(actor, { email, password, name, role, stateCode, locale }, ctx = {}) {
   if (actor.role !== 'admin') throw ApiError.forbidden();
   const existing = await usersRepo.findByEmail(email);
   if (existing) throw ApiError.conflict('Email already registered', { field: 'email' });
   const passwordHash = await hashPassword(password);
-  const user = await usersRepo.create({ email, passwordHash, role, name, locale });
+  const user = await usersRepo.create({ email, passwordHash, role, name, locale, stateCode: stateCode || null });
   await auditWrite({
     actorUserId: actor.id,
     actorRole: actor.role,

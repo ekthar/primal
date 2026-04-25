@@ -4,13 +4,16 @@ import { useRouter } from "next/router";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import ThemeToggle from "@/components/shared/ThemeToggle";
+import LocaleToggle from "@/components/shared/LocaleToggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import api from "@/lib/api";
+import { useLocale } from "@/context/LocaleContext";
 
 export default function ResetPassword() {
   const router = useRouter();
+  const locale = useLocale();
   const token = useMemo(() => {
     const raw = Array.isArray(router.query.token) ? router.query.token[0] : router.query.token;
     if (typeof raw === "string" && raw.trim()) return raw.trim();
@@ -67,18 +70,21 @@ export default function ResetPassword() {
     <div className="min-h-screen bg-background">
       <div className="max-w-xl mx-auto px-6 py-10">
         <div className="flex items-center justify-between">
-          <Link href="/login" className="text-sm text-secondary-muted hover:text-foreground">Back to login</Link>
-          <ThemeToggle compact />
+          <Link href="/login" className="text-sm text-secondary-muted hover:text-foreground">{locale?.t("common.backToLogin", "Back to login")}</Link>
+          <div className="flex items-center gap-2">
+            <LocaleToggle compact />
+            <ThemeToggle compact />
+          </div>
         </div>
 
         <div className="rounded-3xl border border-border bg-surface elev-card p-7 mt-6">
           <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">Account recovery</div>
-          <h1 className="font-display text-3xl font-semibold tracking-tight mt-2">Set a new password</h1>
+          <h1 className="font-display text-3xl font-semibold tracking-tight mt-2">{locale?.t("auth.setPassword", "Set a new password")}</h1>
           <p className="text-sm text-secondary-muted mt-2">Choose a new password for your account.</p>
 
           <form onSubmit={submit} className="space-y-4 mt-6">
             <div>
-              <Label className="text-[11px] uppercase tracking-wider font-semibold text-secondary-muted">New password</Label>
+              <Label className="text-[11px] uppercase tracking-wider font-semibold text-secondary-muted">{locale?.t("auth.newPassword", "New password")}</Label>
               <Input
                 type="password"
                 value={newPassword}
@@ -88,7 +94,7 @@ export default function ResetPassword() {
               />
             </div>
             <div>
-              <Label className="text-[11px] uppercase tracking-wider font-semibold text-secondary-muted">Confirm password</Label>
+              <Label className="text-[11px] uppercase tracking-wider font-semibold text-secondary-muted">{locale?.t("auth.confirmPassword", "Confirm password")}</Label>
               <Input
                 type="password"
                 value={confirmPassword}
@@ -99,7 +105,7 @@ export default function ResetPassword() {
             </div>
 
             <Button type="submit" disabled={loading} className="w-full h-11 bg-primary hover:bg-primary-hover text-primary-foreground">
-              {loading ? <Loader2 className="size-4 animate-spin" /> : <>Reset password <ArrowRight className="size-4 ml-1" /></>}
+              {loading ? <Loader2 className="size-4 animate-spin" /> : <>{locale?.t("auth.reset", "Reset password")} <ArrowRight className="size-4 ml-1" /></>}
             </Button>
           </form>
         </div>

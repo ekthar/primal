@@ -598,6 +598,9 @@ function transformDivisionBracket(division, entries, matches) {
       label: match.roundNumber === 1 ? `Bout ${match.matchNumber}` : `Match ${match.matchNumber}`,
       matchNumber: match.matchNumber,
       status: match.status,
+      resultMethod: match.result_method || null,
+      resultRound: match.result_round === null || match.result_round === undefined ? null : Number(match.result_round),
+      resultTime: match.result_time || null,
       sides,
       conflict: match.conflict || null,
       ...(winnerIndex >= 0 ? { winnerIndex } : {}),
@@ -659,9 +662,12 @@ async function getDivisionBracket(actor, divisionId) {
   return transformDivisionBracket(division, entries, matches);
 }
 
-async function submitMatchResult(actor, matchId, { winnerEntryId }, ctx = {}) {
+async function submitMatchResult(actor, matchId, { winnerEntryId, method, resultRound, resultTime }, ctx = {}) {
   assertAdmin(actor);
   if (!winnerEntryId) throw ApiError.unprocessable('Winner entry is required', { field: 'winnerEntryId' });
+  if (!method) throw ApiError.unprocessable('Result method is required', { field: 'method' });
+  if (!resultRound) throw ApiError.unprocessable('Result round is required', { field: 'resultRound' });
+  if (!resultTime) throw ApiError.unprocessable('Result time is required', { field: 'resultTime' });
 
   let divisionId = null;
   await transaction(async (client) => {
@@ -689,11 +695,14 @@ async function submitMatchResult(actor, matchId, { winnerEntryId }, ctx = {}) {
       `
         UPDATE matches
         SET winner_entry_id = $2,
+            result_method = $3,
+            result_round = $4,
+            result_time = $5,
             status = 'completed',
             updated_at = NOW()
         WHERE id = $1
       `,
-      [matchId, winnerEntryId]
+      [matchId, winnerEntryId, method, Number(resultRound), resultTime]
     );
 
     if (match.next_match_id && match.next_match_slot) {
@@ -724,7 +733,7 @@ async function submitMatchResult(actor, matchId, { winnerEntryId }, ctx = {}) {
     action: 'match.result',
     entityType: 'match',
     entityId: matchId,
-    payload: { winnerEntryId },
+    payload: { winnerEntryId, method, resultRound: Number(resultRound), resultTime },
     requestIp: ctx.ip,
   });
 

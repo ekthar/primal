@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import EmptyState from "@/components/shared/EmptyState";
 import { SectionLoader } from "@/components/shared/PrimalLoader";
 import { PageSectionHeader, ResponsivePageShell, StickyActionBar } from "@/components/shared/ResponsivePrimitives";
@@ -12,6 +13,7 @@ import StatusPill from "@/components/shared/StatusPill";
 import api, { isApiLive } from "@/lib/api";
 import { formatPersonName } from "@/lib/person";
 import { toast } from "sonner";
+import { useAuth } from "@/context/AuthContext";
 
 const STATUS_FILTERS = [
   { id: "all", label: "All" },
@@ -25,12 +27,15 @@ const STATUS_FILTERS = [
 
 export default function AdminQueue() {
   const router = useRouter();
+  const { user } = useAuth();
   const [items, setItems] = useState([]);
   const [counts, setCounts] = useState({});
   const [loading, setLoading] = useState(true);
   const [runningBulkAction, setRunningBulkAction] = useState(false);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [stateFilter, setStateFilter] = useState(user?.role === "state_coordinator" ? (user.stateCode || "all") : "all");
+  const [stateOptions, setStateOptions] = useState([]);
   const [selected, setSelected] = useState(new Set());
   const [bulkDialog, setBulkDialog] = useState({ open: false, action: null, reason: "", fields: "" });
 
@@ -39,7 +44,13 @@ export default function AdminQueue() {
       loadQueue();
     }, 250);
     return () => clearTimeout(timer);
-  }, [statusFilter, query]);
+  }, [statusFilter, stateFilter, query]);
+
+  useEffect(() => {
+    api.publicIndiaStates().then(({ data }) => {
+      setStateOptions(data?.states || []);
+    }).catch(() => setStateOptions([]));
+  }, []);
 
   useEffect(() => {
     isApiLive().then((live) => {
@@ -53,6 +64,7 @@ export default function AdminQueue() {
     setLoading(true);
     const { data, error } = await api.queueBoard({
       status: statusFilter,
+      stateCode: stateFilter === "all" ? undefined : stateFilter,
       q: query || undefined,
       limit: 200,
       offset: 0,
@@ -185,6 +197,17 @@ export default function AdminQueue() {
               className="pl-9 h-10 bg-surface"
             />
           </div>
+          <Select value={stateFilter} onValueChange={setStateFilter} disabled={user?.role === "state_coordinator"}>
+            <SelectTrigger className="h-10 w-56 bg-surface">
+              <SelectValue placeholder="All states" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All states</SelectItem>
+              {stateOptions.map((state) => (
+                <SelectItem key={state} value={state}>{state}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="pb-4 flex items-center gap-2 overflow-x-auto mobile-scroll-snap">

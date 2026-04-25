@@ -12,7 +12,7 @@ function requireAuth(req, _res, next) {
     if (decoded.type && decoded.type !== 'access') {
       return next(ApiError.unauthorized('Wrong token type'));
     }
-    req.user = { id: decoded.sub, role: decoded.role, email: decoded.email };
+    req.user = { id: decoded.sub, role: decoded.role, email: decoded.email, stateCode: decoded.stateCode || null };
     next();
   } catch (err) {
     next(ApiError.unauthorized('Invalid or expired token'));
@@ -26,7 +26,7 @@ function optionalAuth(req, _res, next) {
   if (scheme === 'Bearer' && token) {
     try {
       const decoded = verifyToken(token);
-      req.user = { id: decoded.sub, role: decoded.role, email: decoded.email };
+      req.user = { id: decoded.sub, role: decoded.role, email: decoded.email, stateCode: decoded.stateCode || null };
     } catch { /* ignore */ }
   }
   next();

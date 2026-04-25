@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Download, Timer, AlertTriangle, Users, Gauge, RefreshCcw, ShieldCheck, QrCode, MailWarning } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { InlineLoadingLabel, SectionLoader } from "@/components/shared/PrimalLoader";
 import { PageSectionHeader, ResponsivePageShell } from "@/components/shared/ResponsivePrimitives";
 import api from "@/lib/api";
@@ -21,6 +22,8 @@ export default function Reports() {
   const [tournaments, setTournaments] = useState([]);
   const [selectedTournamentId, setSelectedTournamentId] = useState("");
   const [selectedDiscipline, setSelectedDiscipline] = useState("");
+  const [stateOptions, setStateOptions] = useState([]);
+  const [selectedState, setSelectedState] = useState(user?.role === "state_coordinator" ? (user.stateCode || "all") : "all");
 
   const [loadingParticipants, setLoadingParticipants] = useState(false);
   const [downloadingAllPdfs, setDownloadingAllPdfs] = useState(false);
@@ -41,6 +44,18 @@ export default function Reports() {
       loadTournaments();
     }
   }, [isAdmin]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    loadParticipantReport();
+    loadAnalytics("");
+  }, [isAdmin, selectedState]);
+
+  useEffect(() => {
+    api.publicIndiaStates().then(({ data }) => {
+      setStateOptions(data?.states || []);
+    }).catch(() => setStateOptions([]));
+  }, []);
 
   async function loadSummary() {
     setLoading(true);
@@ -66,7 +81,9 @@ export default function Reports() {
 
   async function loadParticipantReport() {
     setLoadingParticipants(true);
-    const { data, error } = await api.reportParticipants();
+    const { data, error } = await api.reportParticipants({
+      stateCode: selectedState === "all" ? undefined : selectedState,
+    });
     setLoadingParticipants(false);
     if (error) {
       toast.error(error.message || "Failed to load approved participant report");
@@ -88,6 +105,7 @@ export default function Reports() {
     const { data, error } = await api.reportAnalytics({
       tournamentId: tournamentId || undefined,
       discipline: selectedDiscipline || undefined,
+      stateCode: selectedState === "all" ? undefined : selectedState,
     });
     setLoadingAnalytics(false);
     if (error) {
@@ -98,7 +116,9 @@ export default function Reports() {
   }
 
   async function handleApprovedExport() {
-    const { error } = await api.downloadApprovedXlsx();
+    const { error } = await api.downloadApprovedXlsx({
+      stateCode: selectedState === "all" ? undefined : selectedState,
+    });
     if (error) {
       toast.error(error.message || "Failed to export approved applications");
       return;
@@ -107,7 +127,9 @@ export default function Reports() {
   }
 
   async function handleParticipantsExport() {
-    const { error } = await api.downloadApprovedParticipantsXlsx();
+    const { error } = await api.downloadApprovedParticipantsXlsx({
+      stateCode: selectedState === "all" ? undefined : selectedState,
+    });
     if (error) {
       toast.error(error.message || "Failed to export approved participants");
       return;
@@ -128,6 +150,7 @@ export default function Reports() {
     const { error } = await api.downloadApplicationAnalyticsXlsx({
       tournamentId: selectedTournamentId || undefined,
       discipline: selectedDiscipline || undefined,
+      stateCode: selectedState === "all" ? undefined : selectedState,
     });
     if (error) {
       toast.error(error.message || "Failed to export grouped analytics");
@@ -140,6 +163,7 @@ export default function Reports() {
     const { error } = await api.downloadApplicationAnalyticsPdf({
       tournamentId: selectedTournamentId || undefined,
       discipline: selectedDiscipline || undefined,
+      stateCode: selectedState === "all" ? undefined : selectedState,
     });
     if (error) {
       toast.error(error.message || "Failed to export grouped analytics PDF");
@@ -163,7 +187,10 @@ export default function Reports() {
 
   async function handleParticipantsPdfExport() {
     const { error } = await api.downloadApprovedParticipantsPdf(
-      selectedTournamentId ? { tournamentId: selectedTournamentId } : undefined,
+      {
+        tournamentId: selectedTournamentId || undefined,
+        stateCode: selectedState === "all" ? undefined : selectedState,
+      },
     );
     if (error) {
       toast.error(error.message || "Failed to export participant roster PDF");
@@ -221,7 +248,10 @@ export default function Reports() {
     // Server-side streams a single ZIP bundle of every approved PDF plus a
     // human-readable manifest, replacing the old sequential per-row loop.
     const { error } = await api.downloadApprovedParticipantsZip(
-      selectedTournamentId ? { tournamentId: selectedTournamentId } : undefined,
+      {
+        tournamentId: selectedTournamentId || undefined,
+        stateCode: selectedState === "all" ? undefined : selectedState,
+      },
     );
     setDownloadingAllPdfs(false);
     if (error) {
@@ -417,6 +447,19 @@ export default function Reports() {
                 <div className="mb-3 rounded-xl border border-border bg-surface px-3 py-2 text-xs text-secondary-muted flex items-center justify-between gap-3 flex-wrap">
                   <span className="font-medium text-foreground">Season scope</span>
                   <span>{selectedTournament ? `${selectedTournament.name}${selectedTournament.deleted_at ? " (Archived)" : ""}` : "All tournaments"}</span>
+                </div>
+                <div className="mb-3 grid gap-3 sm:grid-cols-2">
+                  <Select value={selectedState} onValueChange={setSelectedState} disabled={user?.role === "state_coordinator"}>
+                    <SelectTrigger className="h-10 bg-surface">
+                      <SelectValue placeholder="All states" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All states</SelectItem>
+                      {stateOptions.map((state) => (
+                        <SelectItem key={state} value={state}>{state}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="grid gap-3 lg:grid-cols-[1.15fr_1fr_auto_auto]">
                   <select

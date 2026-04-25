@@ -20,6 +20,7 @@ import {
   Image as ImageIcon,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import LocaleToggle from "@/components/shared/LocaleToggle";
 import ThemeToggle from "@/components/shared/ThemeToggle";
 import CommandPalette from "@/components/shared/CommandPalette";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -67,6 +68,13 @@ const NAV = {
     { to: "/admin/review", icon: Inbox, label: "Workbench", shortLabel: "Desk", testid: "nav-workbench" },
     { to: "/admin/appeals", icon: Gavel, label: "Appeals", shortLabel: "Appeals", testid: "nav-appeals" },
   ],
+  state_coordinator: [
+    { to: "/admin/queue", icon: ListChecks, label: "State Queue", shortLabel: "Queue", testid: "nav-queue" },
+    { to: "/admin/review", icon: Inbox, label: "Workbench", shortLabel: "Desk", testid: "nav-workbench" },
+    { to: "/admin/settings", icon: SlidersHorizontal, label: "Settings", shortLabel: "Settings", testid: "nav-settings" },
+    { to: "/admin/weighin", icon: Scale, label: "Weigh-In", shortLabel: "Weigh-in", testid: "nav-weighin" },
+    { to: "/admin/reports", icon: BarChart3, label: "Reports", shortLabel: "Reports", testid: "nav-reports" },
+  ],
   club: [
     { to: "/club", icon: LayoutDashboard, label: "Club Dashboard", shortLabel: "Club", testid: "nav-club" },
   ],
@@ -78,6 +86,7 @@ const NAV = {
 const HOME_BY_ROLE = {
   admin: "/admin/overview",
   reviewer: "/admin/queue",
+  state_coordinator: "/admin/queue",
   club: "/club",
   applicant: "/applicant",
 };
@@ -182,6 +191,9 @@ function DesktopSidebar() {
           <span className="text-[10px] uppercase tracking-wider text-tertiary">Theme</span>
           <ThemeToggle />
         </div>
+        <div className="flex items-center justify-between px-1 pt-1">
+          <LocaleToggle compact />
+        </div>
       </div>
     </aside>
   );
@@ -215,6 +227,7 @@ function MobileNavSheet({ nav }) {
               <span className="text-[10px] uppercase tracking-wider text-tertiary">Theme</span>
               <ThemeToggle compact />
             </div>
+            <LocaleToggle compact />
           </div>
         </div>
       </SheetContent>
