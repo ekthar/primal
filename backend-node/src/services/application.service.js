@@ -229,10 +229,11 @@ async function verifyDocument(user, applicationId, documentId, { verified, reaso
   if (!app) throw ApiError.notFound();
   const doc = await documentsRepo.findById(documentId);
   if (!doc || doc.application_id !== applicationId) throw ApiError.notFound('Document not found');
+  const effectiveReason = verified ? null : (reason || 'Rejected');
   const updated = await documentsRepo.setVerification(documentId, {
     verifiedBy: user.id,
     verified: Boolean(verified),
-    verifyReason: verified ? null : (reason || 'Rejected'),
+    verifyReason: effectiveReason,
   });
   await auditWrite({
     actorUserId: user.id,
@@ -240,7 +241,7 @@ async function verifyDocument(user, applicationId, documentId, { verified, reaso
     action: verified ? 'document.verify' : 'document.reject',
     entityType: 'application',
     entityId: applicationId,
-    payload: { documentId, kind: doc.kind, reason: verified ? null : (reason || null) },
+    payload: { documentId, kind: doc.kind, reason: effectiveReason },
     requestIp: ctx.ip,
   });
   return { ...updated, url: documentStorage.getPublicDocumentUrl(updated.storage_key) };

@@ -412,8 +412,7 @@ const documents = {
       `UPDATE documents
          SET verified_at = CASE WHEN $3::boolean THEN NOW() ELSE NULL END,
              verified_by = $2,
-             verify_reason = $4,
-             updated_at = NOW()
+             verify_reason = $4
        WHERE id = $1 AND deleted_at IS NULL
        RETURNING *`,
       [id, verifiedBy, verified, verifyReason]
