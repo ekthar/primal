@@ -20,15 +20,21 @@ export default function PublicAlbums() {
       setLoading(true);
       try {
         if (id) {
-          const { album } = await api.publicGetAlbum(id);
-          if (!cancel) setAlbum(album);
+          const { data, error } = await api.publicGetAlbum(id);
+          if (error) throw new Error(error.message || "Failed to load album");
+          if (!cancel) setAlbum(data?.album || null);
         } else {
-          const { albums } = await api.publicListAlbums();
-          if (!cancel) setAlbums(albums || []);
+          const { data, error } = await api.publicListAlbums();
+          if (error) throw new Error(error.message || "Failed to load albums");
+          if (!cancel) setAlbums((data?.albums || []).filter(Boolean));
         }
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn("album load failed", err);
+        if (!cancel) {
+          setAlbum(null);
+          setAlbums([]);
+        }
       } finally {
         if (!cancel) setLoading(false);
       }

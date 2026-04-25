@@ -37,13 +37,21 @@ export default function AdminAlbums() {
   async function refresh() {
     setLoading(true);
     try {
-      const [{ items }, tournRes] = await Promise.all([
+      const [{ data: albumsData, error: albumsError }, { data: tournamentsData, error: tournamentsError }] = await Promise.all([
         api.adminListAlbums(),
-        api.adminTournaments().catch(() => ({ tournaments: [] })),
+        api.adminTournaments({ includeArchived: true }),
       ]);
-      setAlbums(items || []);
-      setTournaments(tournRes?.tournaments || tournRes?.items || []);
-      if (selectedId && !items?.some((a) => a.id === selectedId)) {
+      if (albumsError) throw new Error(albumsError.message || "Failed to load albums");
+
+      const nextAlbums = (albumsData?.items || []).filter(Boolean);
+      setAlbums(nextAlbums);
+      if (tournamentsError) {
+        setTournaments([]);
+      } else {
+        setTournaments((tournamentsData?.tournaments || tournamentsData?.items || []).filter(Boolean));
+      }
+
+      if (selectedId && !nextAlbums.some((a) => a?.id === selectedId)) {
         setSelectedId(null);
       }
     } catch (err) {
@@ -60,8 +68,9 @@ export default function AdminAlbums() {
     let cancel = false;
     (async () => {
       try {
-        const { album } = await api.adminGetAlbum(selectedId);
-        if (!cancel) setDetail(album);
+        const { data, error } = await api.adminGetAlbum(selectedId);
+        if (error) throw new Error(error.message || "Failed to load album");
+        if (!cancel) setDetail(data?.album || null);
       } catch (err) {
         if (!cancel) toast.error(err?.message || "Failed to load album");
       }
@@ -98,12 +107,16 @@ export default function AdminAlbums() {
         isPublic: !!draft.isPublic,
       };
       if (selectedId) {
-        await api.adminUpdateAlbum(selectedId, body);
+        const { error } = await api.adminUpdateAlbum(selectedId, body);
+        if (error) throw new Error(error.message || "Failed to update album");
         toast.success("Album updated");
       } else {
-        const { album } = await api.adminCreateAlbum(body);
+        const { data, error } = await api.adminCreateAlbum(body);
+        if (error) throw new Error(error.message || "Failed to create album");
+        const createdAlbumId = data?.album?.id;
+        if (!createdAlbumId) throw new Error("Album created but response was incomplete");
         toast.success("Album created");
-        setSelectedId(album.id);
+        setSelectedId(createdAlbumId);
       }
       await refresh();
     } catch (err) {
@@ -116,7 +129,8 @@ export default function AdminAlbums() {
   async function remove(album) {
     if (!confirm(`Delete album "${album.name}"? Photos will be hidden. Data is preserved (soft delete).`)) return;
     try {
-      await api.adminDeleteAlbum(album.id);
+      const { error } = await api.adminDeleteAlbum(album.id);
+      if (error) throw new Error(error.message || "Delete failed");
       toast.success("Album deleted");
       if (selectedId === album.id) setSelectedId(null);
       await refresh();
@@ -130,12 +144,14 @@ export default function AdminAlbums() {
     setUploading(true);
     try {
       for (const file of Array.from(files)) {
-        await api.adminUploadAlbumPhoto(selectedId, { file });
+        const { error } = await api.adminUploadAlbumPhoto(selectedId, { file });
+        if (error) throw new Error(error.message || "Upload failed");
       }
       toast.success(`${files.length} photo(s) uploaded`);
       // refresh detail
-      const { album } = await api.adminGetAlbum(selectedId);
-      setDetail(album);
+      const { data, error } = await api.adminGetAlbum(selectedId);
+      if (error) throw new Error(error.message || "Failed to refresh album");
+      setDetail(data?.album || null);
       await refresh();
     } catch (err) {
       toast.error(err?.message || "Upload failed");
@@ -147,10 +163,12 @@ export default function AdminAlbums() {
 
   async function setCover(photoId) {
     try {
-      await api.adminUpdateAlbum(selectedId, { coverPhotoId: photoId });
+      const { error: updateError } = await api.adminUpdateAlbum(selectedId, { coverPhotoId: photoId });
+      if (updateError) throw new Error(updateError.message || "Update failed");
       toast.success("Cover updated");
-      const { album } = await api.adminGetAlbum(selectedId);
-      setDetail(album);
+      const { data, error } = await api.adminGetAlbum(selectedId);
+      if (error) throw new Error(error.message || "Failed to refresh album");
+      setDetail(data?.album || null);
       await refresh();
     } catch (err) {
       toast.error(err?.message || "Update failed");
@@ -160,10 +178,12 @@ export default function AdminAlbums() {
   async function deletePhoto(photoId) {
     if (!confirm("Remove this photo?")) return;
     try {
-      await api.adminDeleteAlbumPhoto(selectedId, photoId);
+      const { error: deleteError } = await api.adminDeleteAlbumPhoto(selectedId, photoId);
+      if (deleteError) throw new Error(deleteError.message || "Delete failed");
       toast.success("Photo removed");
-      const { album } = await api.adminGetAlbum(selectedId);
-      setDetail(album);
+      const { data, error } = await api.adminGetAlbum(selectedId);
+      if (error) throw new Error(error.message || "Failed to refresh album");
+      setDetail(data?.album || null);
     } catch (err) {
       toast.error(err?.message || "Delete failed");
     }
