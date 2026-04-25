@@ -27,39 +27,21 @@ export default function AdminBrackets() {
     resultRound: "",
     resultTime: "",
   });
+   [tournaments, setTournaments] = useState([]);
   const [tournaments, setTournaments] = useState([]);
   const [selectedTournamentId, setSelectedTournamentId] = useState("");
   const [divisions, setDivisions] = useState([]);
-    const match = divisionPayload?.bracket?.rounds?.flatMap((round) => round.matches || []).find((item) => item.id === matchId);
-    setResultDialog({
-      open: true,
-      matchId,
-      winnerEntryId,
-        method: "DEC",
-      resultRound: match?.roundLabel || match?.round || "",
-      resultTime: "",
-    });
+  const [selectedDivisionId, setSelectedDivisionId] = useState("");
+  const [divisionPayload, setDivisionPayload] = useState(null);
+  const [seedDrafts, setSeedDrafts] = useState({});
+
+  useEffect(() => {
+    initialize();
+  }, []);
+
+  async function initialize() {
+    setLoading(true);
     const { data, error } = await api.adminTournaments();
-
-  async function handleSubmitResult() {
-    if (!resultDialog.matchId || !resultDialog.winnerEntryId) return;
-    setAdvancing(true);
-    const { data, error } = await api.submitMatchResult(resultDialog.matchId, {
-      winnerEntryId: resultDialog.winnerEntryId,
-      method: resultDialog.method,
-      resultRound: resultDialog.resultRound,
-      resultTime: resultDialog.resultTime,
-    });
-    setAdvancing(false);
-    if (error) {
-      toast.error(error.message || "Failed to record match result");
-      return;
-    }
-
-    setResultDialog({ open: false, matchId: "", winnerEntryId: "", method: "DEC", resultRound: "", resultTime: "" });
-    setDivisionPayload(data);
-    await refreshDivisionList(false);
-  }
     if (error) {
       setLoading(false);
       toast.error(error.message || "Failed to load tournaments");
@@ -70,12 +52,47 @@ export default function AdminBrackets() {
     const nextTournamentId = items[0]?.id || "";
     setTournaments(items);
     setSelectedTournamentId(nextTournamentId);
+
     if (nextTournamentId) {
       await syncAndLoadDivisions(nextTournamentId, { silent: true });
     } else {
       setDivisions([]);
+      setDivisionPayload(null);
       setLoading(false);
     }
+  }
+
+  async function handleSubmitResult() {
+    if (!resultDialog.matchId || !resultDialog.winnerEntryId) return;
+    if (!resultDialog.method || !resultDialog.resultRound || !resultDialog.resultTime) {
+      toast.error("Method, round, and time are required");
+      return;
+    }
+
+    setAdvancing(true);
+    const { data, error } = await api.submitMatchResult(resultDialog.matchId, {
+      winnerEntryId: resultDialog.winnerEntryId,
+      method: resultDialog.method,
+      resultRound: Number(resultDialog.resultRound),
+      resultTime: resultDialog.resultTime,
+    });
+    setAdvancing(false);
+
+    if (error) {
+      toast.error(error.message || "Failed to record match result");
+      return;
+    }
+
+    setResultDialog({
+      open: false,
+      matchId: "",
+      winnerEntryId: "",
+      method: "DEC",
+      resultRound: "",
+      resultTime: "",
+    });
+    setDivisionPayload(data);
+    await refreshDivisionList(false);
   }
 
   async function syncAndLoadDivisions(tournamentId, { silent = false } = {}) {
