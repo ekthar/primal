@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 
 export function ResponsivePageShell({ children, className = "" }) {
   return (
-    <div className={cn("mx-auto w-full max-w-7xl px-3 py-4 sm:px-6 sm:py-8 lg:px-8", className)}>
+    <div className={cn("relative mx-auto w-full max-w-7xl px-3 py-4 sm:px-6 sm:py-8 lg:px-8", className)}>
       {children}
     </div>
   );

@@ -16,9 +16,24 @@ import { HERO_IMAGE } from "@/lib/mockData";
 const ROLES = [
   { id: "admin", label: "Admin", sub: "Operations lead" },
   { id: "reviewer", label: "Reviewer", sub: "Evaluates applicants" },
+  { id: "state_coordinator", label: "State coordinator", sub: "State-level operations" },
   { id: "club", label: "Club", sub: "Gym/team coordinator" },
   { id: "applicant", label: "Fighter", sub: "Individual applicant" },
 ];
+
+function loginErrorMessage(error, locale) {
+  const code = String(error?.code || "").toUpperCase();
+  const rawMessage = String(error?.message || "");
+  const normalized = rawMessage.toLowerCase();
+
+  if (code === "UNAUTHORIZED" || code === "HTTP_401" || normalized.includes("invalid")) {
+    return "Invalid email or password";
+  }
+  if (code === "NETWORK") {
+    return "Cannot reach server. Check connection and try again";
+  }
+  return rawMessage || locale?.t("common.signIn", "Sign in") + " failed";
+}
 
 export default function Login() {
   const { login } = useAuth();
@@ -43,7 +58,7 @@ export default function Login() {
     const { user, error, nextRoute } = await login({ email, password });
     setLoading(false);
     if (error) {
-      toast.error(error.message || locale?.t("common.signIn", "Sign in") + " failed");
+      toast.error(loginErrorMessage(error, locale));
       return;
     }
     toast.success(`Welcome back - signed in as ${user.role}`);

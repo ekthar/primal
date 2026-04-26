@@ -5,20 +5,23 @@
 const crypto = require('crypto');
 const { query, transaction } = require('./db');
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 function canonical(obj) {
   return JSON.stringify(obj, Object.keys(obj || {}).sort());
 }
 
 async function write({ actorUserId = null, actorRole = null, action, entityType, entityId, payload = {}, requestIp = null }) {
+  const normalizedActorUserId = (typeof actorUserId === 'string' && UUID_RE.test(actorUserId)) ? actorUserId : null;
   return transaction(async (c) => {
     const { rows: last } = await c.query('SELECT hash FROM audit_log ORDER BY id DESC LIMIT 1');
     const prevHash = last[0]?.hash || '';
-    const body = canonical({ action, entityType, entityId, payload, at: new Date().toISOString(), actorUserId, actorRole });
+    const body = canonical({ action, entityType, entityId, payload, at: new Date().toISOString(), actorUserId: normalizedActorUserId, actorRole });
     const hash = crypto.createHash('sha256').update(prevHash).update(body).digest('hex');
     await c.query(
       `INSERT INTO audit_log (actor_user_id, actor_role, action, entity_type, entity_id, payload, request_ip, prev_hash, hash)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [actorUserId, actorRole, action, entityType, String(entityId), payload, requestIp, prevHash || null, hash]
+      [normalizedActorUserId, actorRole, action, entityType, String(entityId), payload, requestIp, prevHash || null, hash]
     );
     return { hash };
   });
