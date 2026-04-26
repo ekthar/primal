@@ -117,6 +117,22 @@ async function downloadFile(path, { query, filename }) {
   return { data: { ok: true }, error: null };
 }
 
+async function fetchAsBlobUrl(path, { query } = {}) {
+  const { data: res, error } = await request("GET", path, { query, raw: true });
+  if (error) return { data: null, error };
+  if (!res.ok) {
+    let apiError = { code: `HTTP_${res.status}`, message: res.statusText || "Fetch failed" };
+    try {
+      const payload = await res.json();
+      if (payload?.error) apiError = payload.error;
+    } catch { /* keep fallback */ }
+    return { data: null, error: apiError };
+  }
+  const blob = await res.blob();
+  if (typeof window === "undefined") return { data: null, error: { code: "NO_WINDOW", message: "blob url unavailable" } };
+  return { data: window.URL.createObjectURL(blob), error: null };
+}
+
 async function requestAbsolute(url, { raw = false } = {}) {
   try {
     const res = await fetch(url);
@@ -224,6 +240,7 @@ export const api = {
   downloadApplicationPdf: (id) => downloadFile(`/api/reports/applications/${id}.pdf`, {
     filename: `primal-application-${id}.pdf`,
   }),
+  applicationPdfBlobUrl: (id) => fetchAsBlobUrl(`/api/reports/applications/${id}.pdf`),
   downloadApprovedParticipantsZip: (query) => downloadFile("/api/reports/participants.zip", {
     query,
     filename: "primal-approved-participants.zip",
