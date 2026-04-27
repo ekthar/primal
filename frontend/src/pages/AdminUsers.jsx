@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ResponsivePageShell } from "@/components/shared/ResponsivePrimitives";
 import { useAuth } from "@/context/AuthContext";
 import { useLocale } from "@/context/LocaleContext";
 import api from "@/lib/api";
@@ -99,7 +100,7 @@ export default function AdminUsers() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
+    <ResponsivePageShell className="space-y-6">
       <div>
         <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">{locale?.t("roles.admin", "Admin") ?? "Admin"}</div>
         <h1 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight mt-1">{locale?.t("pages.adminUsers.title", "Users") ?? "Users"}</h1>
@@ -251,6 +252,6 @@ export default function AdminUsers() {
           )}
         </div>
       </section>
-    </div>
+    </ResponsivePageShell>
   );
 }
