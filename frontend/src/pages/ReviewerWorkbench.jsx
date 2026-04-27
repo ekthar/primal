@@ -27,10 +27,43 @@ import { SectionLoader } from "@/components/shared/PrimalLoader";
 import { StickyActionBar } from "@/components/shared/ResponsivePrimitives";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import api, { isApiLive, resolveBackendUrl } from "@/lib/api";
+import {
+  ApplicationEditFields,
+  pickEditableFormData,
+  serializeFormDataForPatch,
+} from "@/components/application/ApplicationEditFields";
 import { formatPersonName } from "@/lib/person";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { useLocale } from "@/context/LocaleContext";
+
+const CORRECTION_FIELD_OPTIONS = [
+  { id: "selectedDisciplines", label: "Disciplines" },
+  { id: "experienceLevel", label: "Experience level" },
+  { id: "yearsTraining", label: "Years training" },
+  { id: "weightKg", label: "Walking weight" },
+  { id: "cornerCoachName", label: "Corner / coach" },
+  { id: "cornerCoachPhone", label: "Coach phone" },
+  { id: "emergencyContactName", label: "Emergency contact" },
+  { id: "emergencyContactPhone", label: "Emergency phone" },
+  { id: "medicalNotes", label: "Medical notes" },
+  { id: "notes", label: "Notes" },
+  { id: "medical", label: "Medical document" },
+  { id: "photo_id", label: "Photo ID" },
+  { id: "consent", label: "Signed consent" },
+];
+
+function parseFieldTokens(fieldsString) {
+  if (!fieldsString) return [];
+  return fieldsString
+    .split(",")
+    .map((token) => token.trim())
+    .filter(Boolean);
+}
+
+function serializeFieldTokens(tokens) {
+  return Array.from(new Set(tokens)).join(", ");
+}
 
 export default function ReviewerWorkbench() {
   const { user } = useAuth();
@@ -52,7 +85,7 @@ export default function ReviewerWorkbench() {
   const [scannedValue, setScannedValue] = useState("");
   const [reviewDialog, setReviewDialog] = useState({ open: false, action: null, reason: "", fields: "" });
   const [adminEditOpen, setAdminEditOpen] = useState(false);
-  const [adminEditDraft, setAdminEditDraft] = useState({ notes: "", experienceLevel: "", selectedDisciplines: [] });
+  const [adminEditDraft, setAdminEditDraft] = useState(() => pickEditableFormData(null));
   const [adminEditSaving, setAdminEditSaving] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState(null);
   const [pdfPreviewError, setPdfPreviewError] = useState(null);
@@ -183,19 +216,16 @@ export default function ReviewerWorkbench() {
 
   function openAdminEdit() {
     if (!activeApplication) return;
-    const fd = activeApplication.form_data || {};
-    setAdminEditDraft({
-      notes: fd.notes || "",
-      experienceLevel: fd.experienceLevel || "",
-      selectedDisciplines: Array.isArray(fd.selectedDisciplines) ? [...fd.selectedDisciplines] : [],
-    });
+    setAdminEditDraft(pickEditableFormData(activeApplication));
     setAdminEditOpen(true);
   }
 
   async function saveAdminEdit() {
     if (!activeApplication) return;
     setAdminEditSaving(true);
-    const { data, error } = await api.updateApplication(activeApplication.id, { formData: adminEditDraft });
+    const { data, error } = await api.updateApplication(activeApplication.id, {
+      formData: serializeFormDataForPatch(adminEditDraft),
+    });
     setAdminEditSaving(false);
     if (error) {
       toast.error(error.message || "Failed to save changes");
@@ -914,22 +944,56 @@ export default function ReviewerWorkbench() {
           <div className="space-y-4">
             <div className="space-y-2">
               <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-tertiary">{locale?.t("reviewer.dialog.reason", "Reason") ?? "Reason"}</div>
-              <Input
+              <Textarea
+                rows={3}
                 value={reviewDialog.reason}
                 onChange={(event) => setReviewDialog((current) => ({ ...current, reason: event.target.value }))}
                 className="bg-surface"
-                placeholder={locale?.t("reviewer.dialog.reasonPlaceholder", "Enter reason") ?? "Enter reason"}
+                placeholder={locale?.t("reviewer.dialog.reasonPlaceholder", "Tell the applicant what needs to change") ?? "Tell the applicant what needs to change"}
               />
             </div>
             {reviewDialog.action === "request_correction" ? (
               <div className="space-y-2">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-tertiary">{locale?.t("reviewer.dialog.fields", "Fields to correct") ?? "Fields to correct"}</div>
+                <div className="flex items-center justify-between">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-tertiary">{locale?.t("reviewer.dialog.fields", "Fields to correct") ?? "Fields to correct"}</div>
+                  <div className="text-[10px] text-tertiary">Tap to toggle. The applicant&apos;s edit form will highlight these.</div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {CORRECTION_FIELD_OPTIONS.map((option) => {
+                    const tokens = parseFieldTokens(reviewDialog.fields);
+                    const selected = tokens.includes(option.id);
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => setReviewDialog((current) => ({
+                          ...current,
+                          fields: serializeFieldTokens(
+                            selected
+                              ? parseFieldTokens(current.fields).filter((token) => token !== option.id)
+                              : [...parseFieldTokens(current.fields), option.id]
+                          ),
+                        }))}
+                        className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                          selected
+                            ? "border-amber-500 bg-amber-100 text-amber-900"
+                            : "border-border bg-surface text-secondary-muted hover:bg-surface-muted"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
                 <Input
                   value={reviewDialog.fields}
                   onChange={(event) => setReviewDialog((current) => ({ ...current, fields: event.target.value }))}
-                  className="bg-surface"
-                  placeholder="medical,weight_class"
+                  className="bg-surface text-xs font-mono"
+                  placeholder="weightKg, emergencyContactPhone"
                 />
+                <div className="text-[10px] text-tertiary">
+                  Need a custom field? Type its key here (camelCase or snake_case both work).
+                </div>
               </div>
             ) : null}
             <div className="flex justify-end gap-2">
@@ -947,45 +1011,26 @@ export default function ReviewerWorkbench() {
       </Dialog>
 
       <Dialog open={adminEditOpen} onOpenChange={setAdminEditOpen}>
-        <DialogContent className="max-w-lg rounded-3xl border-border">
+        <DialogContent className="max-w-3xl rounded-3xl border-border max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{locale?.t("reviewer.adminEdit.title", "Correct application on behalf of applicant") ?? "Correct application on behalf of applicant"}</DialogTitle>
             <DialogDescription>{locale?.t("reviewer.adminEdit.desc", "Saves form data without changing application status. Use this to fix typos or selections an applicant cannot self-correct in time.") ?? "Saves form data without changing application status. Use this to fix typos or selections an applicant cannot self-correct in time."}</DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-tertiary">{locale?.t("reviewer.adminEdit.notes", "Notes") ?? "Notes"}</div>
-              <Textarea rows={3} className="mt-1 bg-surface" value={adminEditDraft.notes} onChange={(e) => setAdminEditDraft((c) => ({ ...c, notes: e.target.value }))} />
-            </div>
-            <div>
-              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-tertiary">{locale?.t("reviewer.adminEdit.experience", "Experience level") ?? "Experience level"}</div>
-              <select className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm" value={adminEditDraft.experienceLevel} onChange={(e) => setAdminEditDraft((c) => ({ ...c, experienceLevel: e.target.value }))}>
-                <option value="">—</option>
-                <option value="novice">Novice</option>
-                <option value="intermediate">Intermediate</option>
-                <option value="advanced">Advanced</option>
-                <option value="elite">Elite</option>
-              </select>
-            </div>
-            <div>
-              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-tertiary">{locale?.t("reviewer.adminEdit.disciplines", "Disciplines") ?? "Disciplines"}</div>
-              <div className="mt-1 flex flex-wrap gap-2">
-                {["mma", "kickboxing", "bjj", "wrestling", "boxing"].map((d) => {
-                  const selected = adminEditDraft.selectedDisciplines.includes(d);
-                  return (
-                    <button
-                      key={d}
-                      type="button"
-                      onClick={() => setAdminEditDraft((c) => ({
-                        ...c,
-                        selectedDisciplines: selected ? c.selectedDisciplines.filter((x) => x !== d) : [...c.selectedDisciplines, d],
-                      }))}
-                      className={`rounded-full border px-2.5 py-1 text-xs capitalize ${selected ? "border-primary bg-primary/10 text-primary" : "border-border bg-surface"}`}
-                    >{d}</button>
-                  );
-                })}
+          <div className="space-y-4">
+            {Array.isArray(activeApplication?.correction_fields) && activeApplication.correction_fields.length ? (
+              <div className="rounded-lg border border-amber-300/60 bg-amber-50/40 p-3 text-xs text-amber-900">
+                <span className="font-medium">Reviewer-flagged fields:</span>{" "}
+                {activeApplication.correction_fields.map((f) => (
+                  <span key={f} className="ml-1 inline-block rounded-full bg-amber-100/80 px-2 py-0.5 capitalize">{String(f).replace(/_/g, " ")}</span>
+                ))}
               </div>
-            </div>
+            ) : null}
+            <ApplicationEditFields
+              value={adminEditDraft}
+              onChange={setAdminEditDraft}
+              flaggedFields={activeApplication?.correction_fields}
+              idPrefix={activeApplication ? `admin-edit-${activeApplication.id}` : "admin-edit"}
+            />
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setAdminEditOpen(false)} disabled={adminEditSaving}>{locale?.t("actions.cancel", "Cancel") ?? "Cancel"}</Button>
               <Button onClick={saveAdminEdit} disabled={adminEditSaving}>

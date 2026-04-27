@@ -11,6 +11,11 @@ import api from "@/lib/api";
 import { formatPersonName } from "@/lib/person";
 import { toast } from "sonner";
 import LiveDocumentScanner from "@/components/scanner/LiveDocumentScanner";
+import {
+  ApplicationEditFields,
+  pickEditableFormData,
+  serializeFormDataForPatch,
+} from "@/components/application/ApplicationEditFields";
 import { useLocale } from "@/context/LocaleContext";
 
 function getAccessMessage(application) {
@@ -219,19 +224,11 @@ export default function ApplicantDashboard() {
 
   function getCorrectionEdits(application) {
     if (correctionEdits[application.id]) return correctionEdits[application.id];
-    const fd = application.form_data || {};
-    return {
-      notes: fd.notes || "",
-      experienceLevel: fd.experienceLevel || "",
-      selectedDisciplines: Array.isArray(fd.selectedDisciplines) ? fd.selectedDisciplines : [],
-    };
+    return pickEditableFormData(application);
   }
 
-  function setCorrectionField(applicationId, key, value) {
-    setCorrectionEdits((current) => {
-      const previous = current[applicationId] || getCorrectionEdits({ id: applicationId, form_data: applications.find((a) => a.id === applicationId)?.form_data });
-      return { ...current, [applicationId]: { ...previous, [key]: value } };
-    });
+  function setCorrectionEditsFor(applicationId, next) {
+    setCorrectionEdits((current) => ({ ...current, [applicationId]: next }));
   }
 
   async function saveCorrections(application, { resubmit = false } = {}) {
@@ -249,7 +246,9 @@ export default function ApplicantDashboard() {
         return;
       }
     }
-    const { data: patchData, error: patchError } = await api.updateApplication(application.id, { formData: edits });
+    const { data: patchData, error: patchError } = await api.updateApplication(application.id, {
+      formData: serializeFormDataForPatch(edits),
+    });
     if (patchError) {
       setSubmittingCorrectionId(null);
       toast.error(patchError.message || "Failed to save corrections");
@@ -601,53 +600,13 @@ export default function ApplicantDashboard() {
                         <div className="mt-2 text-sm text-secondary"><strong>Reviewer note:</strong> {application.correction_reason}</div>
                       ) : null}
 
-                      <div className="mt-4 grid gap-3">
-                        <div>
-                          <label className="text-xs uppercase tracking-wider text-tertiary">Notes for the reviewer</label>
-                          <Textarea
-                            className="mt-1 bg-background"
-                            rows={3}
-                            placeholder="Describe what you fixed or upload replacement docs below"
-                            value={getCorrectionEdits(application).notes}
-                            onChange={(e) => setCorrectionField(application.id, "notes", e.target.value)}
-                          />
-                        </div>
-                        <div className="grid sm:grid-cols-2 gap-3">
-                          <div>
-                            <label className="text-xs uppercase tracking-wider text-tertiary">Experience level</label>
-                            <select
-                              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                              value={getCorrectionEdits(application).experienceLevel}
-                              onChange={(e) => setCorrectionField(application.id, "experienceLevel", e.target.value)}
-                            >
-                              <option value="">—</option>
-                              <option value="novice">Novice</option>
-                              <option value="intermediate">Intermediate</option>
-                              <option value="advanced">Advanced</option>
-                              <option value="elite">Elite</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="text-xs uppercase tracking-wider text-tertiary">Disciplines</label>
-                            <div className="mt-1 flex flex-wrap gap-2">
-                              {["mma", "kickboxing", "bjj", "wrestling", "boxing"].map((d) => {
-                                const selected = getCorrectionEdits(application).selectedDisciplines.includes(d);
-                                return (
-                                  <button
-                                    type="button"
-                                    key={d}
-                                    onClick={() => {
-                                      const current = getCorrectionEdits(application).selectedDisciplines;
-                                      const next = selected ? current.filter((x) => x !== d) : [...current, d];
-                                      setCorrectionField(application.id, "selectedDisciplines", next);
-                                    }}
-                                    className={`rounded-full border px-2.5 py-1 text-xs capitalize ${selected ? "border-primary bg-primary/10 text-primary" : "border-border bg-background"}`}
-                                  >{d}</button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        </div>
+                      <div className="mt-4">
+                        <ApplicationEditFields
+                          value={getCorrectionEdits(application)}
+                          onChange={(next) => setCorrectionEditsFor(application.id, next)}
+                          flaggedFields={application.correction_fields}
+                          idPrefix={`applicant-correction-${application.id}`}
+                        />
                       </div>
 
                       <div className="mt-4">

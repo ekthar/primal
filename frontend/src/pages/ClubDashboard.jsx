@@ -11,6 +11,11 @@ import EmptyState from "@/components/shared/EmptyState";
 import { SectionLoader } from "@/components/shared/PrimalLoader";
 import { ResponsivePageShell, ResponsiveTable } from "@/components/shared/ResponsivePrimitives";
 import { DISCIPLINE_DEFINITIONS, GENDER_OPTIONS } from "@/lib/tournamentWorkflow";
+import {
+  ApplicationEditFields,
+  pickEditableFormData,
+  serializeFormDataForPatch,
+} from "@/components/application/ApplicationEditFields";
 import api from "@/lib/api";
 import { toast } from "sonner";
 
@@ -36,7 +41,7 @@ export default function ClubDashboard() {
   const [createdCredentials, setCreatedCredentials] = useState(null);
   const [createdCredentialsByProfile, setCreatedCredentialsByProfile] = useState({});
   const [generatedResetByProfile, setGeneratedResetByProfile] = useState({});
-  const [activeApplicationFormText, setActiveApplicationFormText] = useState("");
+  const [activeApplicationEdits, setActiveApplicationEdits] = useState(null);
   const [savingActiveApplication, setSavingActiveApplication] = useState(false);
   const [participantForm, setParticipantForm] = useState({
     fullName: "",
@@ -401,20 +406,15 @@ export default function ClubDashboard() {
       return;
     }
     setActiveApplication(data.application);
-    setActiveApplicationFormText(JSON.stringify(data.application?.form_data || {}, null, 2));
+    setActiveApplicationEdits(pickEditableFormData(data.application));
   };
 
   const saveApplicationEdits = async () => {
-    if (!activeApplication) return;
-    let parsed;
-    try {
-      parsed = JSON.parse(activeApplicationFormText || "{}");
-    } catch {
-      toast.error("Application form JSON is invalid");
-      return;
-    }
+    if (!activeApplication || !activeApplicationEdits) return;
     setSavingActiveApplication(true);
-    const { error } = await api.updateApplication(activeApplication.id, { formData: parsed });
+    const { error } = await api.updateApplication(activeApplication.id, {
+      formData: serializeFormDataForPatch(activeApplicationEdits),
+    });
     setSavingActiveApplication(false);
     if (error) {
       toast.error(error.message || "Unable to save application edits");
@@ -724,15 +724,30 @@ export default function ClubDashboard() {
                 </div>
                 <Button variant="ghost" onClick={() => setActiveApplication(null)}>Close</Button>
               </div>
-              {canEditApplication(activeApplication) ? (
-                <textarea
-                  value={activeApplicationFormText}
-                  onChange={(e) => setActiveApplicationFormText(e.target.value)}
-                  className="mt-3 w-full min-h-[220px] text-xs font-mono overflow-auto rounded-lg border border-border bg-background p-3"
+              {activeApplication.status === "needs_correction" && (Array.isArray(activeApplication.correction_fields) && activeApplication.correction_fields.length || activeApplication.correction_reason) ? (
+                <div className="mt-3 rounded-lg border border-amber-300/60 bg-amber-50/40 p-3 text-xs">
+                  {Array.isArray(activeApplication.correction_fields) && activeApplication.correction_fields.length ? (
+                    <div className="text-amber-900">
+                      <span className="font-medium">Flagged fields:</span>{" "}
+                      {activeApplication.correction_fields.map((f) => (
+                        <span key={f} className="inline-block mr-1.5 rounded-full bg-amber-100/80 px-2 py-0.5 capitalize">{String(f).replace(/_/g, " ")}</span>
+                      ))}
+                    </div>
+                  ) : null}
+                  {activeApplication.correction_reason ? (
+                    <div className="mt-1 text-secondary"><strong>Reviewer note:</strong> {activeApplication.correction_reason}</div>
+                  ) : null}
+                </div>
+              ) : null}
+              <div className="mt-3">
+                <ApplicationEditFields
+                  value={activeApplicationEdits || pickEditableFormData(activeApplication)}
+                  onChange={setActiveApplicationEdits}
+                  flaggedFields={activeApplication.correction_fields}
+                  disabled={!canEditApplication(activeApplication)}
+                  idPrefix={`club-application-${activeApplication.id}`}
                 />
-              ) : (
-                <pre className="mt-3 w-full min-h-[220px] text-xs font-mono overflow-auto rounded-lg border border-border bg-background p-3">{activeApplicationFormText}</pre>
-              )}
+              </div>
 
               {canEditApplication(activeApplication) ? (
                 <div className="mt-2 flex justify-end">
