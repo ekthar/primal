@@ -264,6 +264,8 @@ export const api = {
   }),
 
   publicTournaments: () => request("GET", "/api/public/tournaments"),
+  publicTournamentBySlug: (slug) => request("GET", `/api/public/tournaments/${encodeURIComponent(slug)}`),
+  publicAthlete: (id) => request("GET", `/api/public/athletes/${encodeURIComponent(id)}`),
   publicCurrentTournament: async () => {
     const current = await request("GET", "/api/public/tournaments/current");
     if (!current.error) return current;
@@ -322,8 +324,9 @@ export const api = {
     return request("POST", `/api/albums/${id}/photos`, { body });
   },
   adminDeleteAlbumPhoto: (albumId, photoId) => request("DELETE", `/api/albums/${albumId}/photos/${photoId}`),
-  publicListAlbums: () => request("GET", "/api/public/albums"),
+  publicListAlbums: (query) => request("GET", "/api/public/albums", { query }),
   publicGetAlbum: (id) => request("GET", `/api/public/albums/${id}`),
+  publicRecentAlbumPhotos: (limit = 12) => request("GET", "/api/public/albums/recent-photos", { query: { limit } }),
 
   // Notifications
   notificationsHealth: () => request("GET", "/api/notifications/health"),

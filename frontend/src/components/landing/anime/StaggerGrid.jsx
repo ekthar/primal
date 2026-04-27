@@ -8,6 +8,12 @@ import anime from "animejs";
  */
 export default function StaggerGrid({ children, className = "", grid = [3, 1], from = "first" }) {
   const rootRef = useRef(null);
+  const gridKey = Array.isArray(grid) ? grid.join(",") : String(grid);
+  const gridRef = useRef(grid);
+  const fromRef = useRef(from);
+
+  gridRef.current = grid;
+  fromRef.current = from;
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -21,12 +27,13 @@ export default function StaggerGrid({ children, className = "", grid = [3, 1], f
     if (reduced) return undefined;
 
     let played = false;
+    let animation = null;
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting && !played) {
             played = true;
-            anime({
+            animation = anime({
               targets: items,
               opacity: [0, 1],
               translateY: [40, 0],
@@ -35,7 +42,7 @@ export default function StaggerGrid({ children, className = "", grid = [3, 1], f
               filter: ["blur(8px)", "blur(0px)"],
               duration: 900,
               easing: "cubicBezier(.25,1,.5,1)",
-              delay: anime.stagger(70, { grid, from }),
+              delay: anime.stagger(70, { grid: gridRef.current, from: fromRef.current }),
             });
           }
         });
@@ -43,8 +50,11 @@ export default function StaggerGrid({ children, className = "", grid = [3, 1], f
       { threshold: 0.2 }
     );
     observer.observe(root);
-    return () => observer.disconnect();
-  }, [grid, from]);
+    return () => {
+      observer.disconnect();
+      if (animation) animation.pause();
+    };
+  }, [gridKey]);
 
   return (
     <div ref={rootRef} className={className}>

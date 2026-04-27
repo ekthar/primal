@@ -53,9 +53,17 @@ function mapPhotoRow(row) {
   };
 }
 
-async function listAlbums({ publicOnly = false } = {}) {
+async function listAlbums({ publicOnly = false, tournamentId = null, tournamentSlug = null } = {}) {
   const where = ['a.deleted_at IS NULL'];
+  const args = [];
   if (publicOnly) where.push('a.is_public = true');
+  if (tournamentId) {
+    args.push(tournamentId);
+    where.push(`a.tournament_id = $${args.length}`);
+  } else if (tournamentSlug) {
+    args.push(tournamentSlug);
+    where.push(`t.slug = $${args.length}`);
+  }
 
   const { rows } = await query(`
     SELECT a.*, t.name AS tournament_name,
@@ -66,8 +74,35 @@ async function listAlbums({ publicOnly = false } = {}) {
     LEFT JOIN album_photos cover ON cover.id = a.cover_photo_id AND cover.deleted_at IS NULL
     WHERE ${where.join(' AND ')}
     ORDER BY a.created_at DESC
-  `);
+  `, args);
   return rows.map(mapAlbumRow);
+}
+
+async function listRecentPublicPhotos({ limit = 12 } = {}) {
+  const { rows } = await query(`
+    SELECT p.id, p.album_id, p.url, p.thumbnail_url, p.caption,
+           a.name AS album_name, a.slug AS album_slug,
+           t.name AS tournament_name, t.slug AS tournament_slug
+    FROM album_photos p
+    JOIN albums a ON a.id = p.album_id
+    LEFT JOIN tournaments t ON t.id = a.tournament_id
+    WHERE p.deleted_at IS NULL
+      AND a.deleted_at IS NULL
+      AND a.is_public = true
+    ORDER BY p.created_at DESC
+    LIMIT $1
+  `, [limit]);
+  return rows.map((row) => ({
+    id: row.id,
+    albumId: row.album_id,
+    albumName: row.album_name,
+    albumSlug: row.album_slug,
+    url: row.url,
+    thumbnailUrl: row.thumbnail_url,
+    caption: row.caption,
+    tournamentName: row.tournament_name,
+    tournamentSlug: row.tournament_slug,
+  }));
 }
 
 async function getAlbum(id, { publicOnly = false } = {}) {
@@ -274,6 +309,7 @@ async function removePhoto(actor, albumId, photoId) {
 
 module.exports = {
   listAlbums,
+  listRecentPublicPhotos,
   getAlbum,
   createAlbum,
   updateAlbum,

@@ -221,6 +221,8 @@ const tournaments = {
   listPublic: async () => (await query(`SELECT * FROM tournaments WHERE is_public = TRUE AND ${ACTIVE} ORDER BY starts_on DESC`)).rows,
   findById: async (id) => (await query(`SELECT * FROM tournaments WHERE id=$1 AND ${ACTIVE}`, [id])).rows[0],
   findByIdAny: async (id) => (await query(`SELECT * FROM tournaments WHERE id=$1`, [id])).rows[0],
+  findBySlug: async (slug) => (await query(`SELECT * FROM tournaments WHERE slug=$1 AND ${ACTIVE}`, [slug])).rows[0],
+  findPublicBySlug: async (slug) => (await query(`SELECT * FROM tournaments WHERE slug=$1 AND is_public=TRUE AND ${ACTIVE}`, [slug])).rows[0],
   createAdmin: async ({ slug, name, season = null, startsOn = null, endsOn = null, registrationOpenAt = null, registrationCloseAt = null, correctionWindowHours = null, isPublic = true }) => {
     const { rows } = await query(
       `INSERT INTO tournaments (slug, name, season, starts_on, ends_on, registration_open_at, registration_close_at, correction_window_hours, is_public)
@@ -411,6 +413,18 @@ const applications = {
      WHERE ${where.join(' AND ')}
      ORDER BY a.decided_at DESC LIMIT $${args.length}`, args)).rows;
   },
+  publicAthlete: async (applicationId) => (await query(
+    `SELECT a.id, a.decided_at,
+            p.first_name, p.last_name, p.discipline, p.weight_class, p.weight_kg,
+            p.gender, p.date_of_birth, p.nationality, p.bio,
+            p.record_wins, p.record_losses, p.record_draws,
+            c.name AS club_name, c.slug AS club_slug,
+            t.name AS tournament_name, t.slug AS tournament_slug
+     FROM applications a
+     JOIN profiles p ON p.id = a.profile_id
+     LEFT JOIN clubs c ON c.id = a.club_id
+     JOIN tournaments t ON t.id = a.tournament_id
+     WHERE a.id = $1 AND a.status = 'approved' AND a.${ACTIVE}`, [applicationId])).rows[0],
 };
 
 // --------- documents ---------
