@@ -782,6 +782,48 @@ function Stats() {
   );
 }
 
+function LiveTournamentsRail({ tournaments }) {
+  const live = (tournaments || []).slice(0, 6);
+  if (!live.length) return null;
+  return (
+    <section className="py-16 sm:py-20">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-end justify-between gap-6 flex-wrap mb-6">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.22em] text-tertiary font-semibold">Public tournaments</div>
+            <h2 className="font-display mt-2 text-2xl sm:text-3xl font-semibold tracking-tight">
+              Conducted by Primal Academy.
+            </h2>
+          </div>
+        </div>
+        <StaggerGrid className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4" grid={[3, 2]}>
+          {live.map((tournament) => (
+            <Link
+              key={tournament.id}
+              href={`/tournaments/${tournament.slug}`}
+              className="group relative rounded-2xl border border-border bg-surface p-5 elev-card overflow-hidden block"
+            >
+              <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold flex items-center gap-2">
+                {tournament.season || "Public season"}
+                {tournament.registrationOpen ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary px-2 py-0.5">
+                    <span className="size-1 rounded-full bg-primary animate-pulse" />
+                    open
+                  </span>
+                ) : null}
+              </div>
+              <div className="mt-2 font-display text-xl font-semibold tracking-tight">{tournament.name}</div>
+              <div className="mt-3 inline-flex items-center gap-1 text-xs text-primary">
+                View tournament <ArrowUpRight className="size-3" />
+              </div>
+            </Link>
+          ))}
+        </StaggerGrid>
+      </div>
+    </section>
+  );
+}
+
 function TournamentsByPrimal() {
   const items = [
     { tag: "ALL-INDIA", title: "Primal Fight Series", body: "Pan-India MMA & striking circuit. Open registration each season for fighters and gyms." },
@@ -823,6 +865,73 @@ function TournamentsByPrimal() {
             </article>
           ))}
         </StaggerGrid>
+      </div>
+    </section>
+  );
+}
+
+function MatchDayMoments() {
+  const [photos, setPhotos] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancel = false;
+    (async () => {
+      const { data } = await api.publicRecentAlbumPhotos(14);
+      if (cancel) return;
+      setPhotos(data?.photos || []);
+      setLoaded(true);
+    })();
+    return () => { cancel = true; };
+  }, []);
+
+  if (loaded && !photos.length) return null;
+
+  return (
+    <section className="py-20 sm:py-24 border-y border-border bg-surface-muted/20">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-end justify-between gap-6 flex-wrap mb-8">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.22em] text-tertiary font-semibold">Match-day moments</div>
+            <h2 className="font-display mt-3 text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight text-balance max-w-3xl">
+              Photos straight from the cage.
+            </h2>
+          </div>
+          <Link href="/albums" className="inline-flex items-center gap-1 text-sm text-primary hover:underline self-start sm:self-auto">
+            All albums <ArrowUpRight className="size-3.5" />
+          </Link>
+        </div>
+        {!loaded ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="aspect-square rounded-xl bg-surface-muted animate-pulse" />
+            ))}
+          </div>
+        ) : (
+          <StaggerGrid className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3" grid={[4, 2]}>
+            {photos.slice(0, 8).map((photo) => (
+              <Link
+                key={photo.id}
+                href={photo.albumId ? `/albums?id=${photo.albumId}` : "/albums"}
+                className="group relative overflow-hidden rounded-xl border border-border bg-surface-muted block"
+              >
+                <div className="aspect-square overflow-hidden">
+                  <img
+                    src={photo.thumbnailUrl || photo.url}
+                    alt={photo.caption || photo.albumName || "Primal match"}
+                    loading="lazy"
+                    className="size-full object-cover transition group-hover:scale-[1.04]"
+                  />
+                </div>
+                {photo.tournamentName ? (
+                  <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/70 to-transparent text-white text-[10px] uppercase tracking-[0.18em] font-semibold opacity-0 group-hover:opacity-100 transition">
+                    {photo.tournamentName}
+                  </div>
+                ) : null}
+              </Link>
+            ))}
+          </StaggerGrid>
+        )}
       </div>
     </section>
   );
@@ -976,10 +1085,12 @@ export default function Landing() {
         "Athletes - Ready",
       ]} />
       <TournamentsByPrimal />
+      <LiveTournamentsRail tournaments={tournaments} />
       <Paths />
       <WorkflowScrollytell />
       <AdminShowcase />
       <Stats />
+      <MatchDayMoments />
       <Testimonial />
       <CTA registrationOpen={registrationOpen} />
       <Footer />

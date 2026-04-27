@@ -27,6 +27,23 @@ router.get('/tournaments', ah(async (_req, res) => {
   res.json({ tournaments: await tournamentService.listPublic() });
 }));
 
+router.get('/tournaments/:slug', ah(async (req, res) => {
+  const tournament = await tournaments.findPublicBySlug(req.params.slug);
+  if (!tournament) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'tournament not found' } });
+  const enriched = tournamentService.enrichPublicTournament(tournament);
+  const [participants, tournamentAlbums] = await Promise.all([
+    applications.publicApproved({ limit: 500, tournamentSlug: req.params.slug }),
+    albumService.listAlbums({ publicOnly: true, tournamentSlug: req.params.slug }),
+  ]);
+  res.json({ tournament: enriched, participants, albums: tournamentAlbums });
+}));
+
+router.get('/athletes/:id', ah(async (req, res) => {
+  const athlete = await applications.publicAthlete(req.params.id);
+  if (!athlete) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'athlete not found' } });
+  res.json({ athlete });
+}));
+
 /* Current season — the single tournament that client-side UIs treat as the
    default filter for season-scoped screens (weigh-in board, applicant
    dashboard's current tab, reports). Returns 200 with `tournament: null`
@@ -41,8 +58,13 @@ router.get('/clubs', ah(async (req, res) => {
 }));
 
 // Public: photo albums
-router.get('/albums', ah(async (_req, res) => {
-  res.json({ albums: await albumService.listAlbums({ publicOnly: true }) });
+router.get('/albums', ah(async (req, res) => {
+  res.json({ albums: await albumService.listAlbums({ publicOnly: true, tournamentSlug: req.query.tournament || null }) });
+}));
+
+router.get('/albums/recent-photos', ah(async (req, res) => {
+  const limit = Math.max(1, Math.min(40, parseInt(req.query.limit || '12', 10) || 12));
+  res.json({ photos: await albumService.listRecentPublicPhotos({ limit }) });
 }));
 
 router.get('/albums/:id', ah(async (req, res) => {
