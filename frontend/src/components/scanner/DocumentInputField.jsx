@@ -6,11 +6,7 @@
 import { useRef, useState } from "react";
 import LiveDocumentScanner from "./LiveDocumentScanner";
 import { Camera, Upload, FileCheck } from "lucide-react";
-
-const TABS = [
-  { id: "scan", label: "Scan with camera", icon: Camera },
-  { id: "upload", label: "Upload from device", icon: Upload },
-];
+import { useLocale } from "@/context/LocaleContext";
 
 export default function DocumentInputField({
   value,                  // File | null
@@ -24,6 +20,11 @@ export default function DocumentInputField({
   inputId,
   disabled,
 }) {
+  const locale = useLocale();
+  const TABS = [
+    { id: "scan", label: locale?.t("documentInput.scan", "Scan with camera") ?? "Scan with camera", icon: Camera },
+    { id: "upload", label: locale?.t("documentInput.upload", "Upload from device") ?? "Upload from device", icon: Upload },
+  ];
   const [tab, setTab] = useState(capturedVia === "scan" ? "scan" : "upload");
   const [scannerOpen, setScannerOpen] = useState(false);
   const fileInputRef = useRef(null);
@@ -66,7 +67,7 @@ export default function DocumentInputField({
         <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-4">
           <div className="flex items-center gap-2 text-sm text-secondary-muted">
             <Camera className="size-4 text-foreground" />
-            Use your phone&apos;s rear camera to scan this document live.
+            {locale?.t("documentInput.scanHint", "Use your phone's rear camera to scan this document live.") ?? "Use your phone's rear camera to scan this document live."}
           </div>
           <button
             type="button"
@@ -74,11 +75,11 @@ export default function DocumentInputField({
             onClick={() => setScannerOpen(true)}
             className="inline-flex items-center justify-center gap-2 rounded-lg bg-foreground px-4 py-2 text-sm text-background hover:bg-foreground/90 disabled:opacity-50"
           >
-            <Camera className="size-4" /> Open scanner
+            <Camera className="size-4" /> {locale?.t("documentInput.openScanner", "Open scanner") ?? "Open scanner"}
           </button>
           {value ? (
             <div className="flex items-center gap-2 text-xs text-secondary-muted mt-1">
-              <FileCheck className="size-4 text-emerald-600" /> Captured: {value.name} ({Math.round(value.size / 1024)} KB)
+              <FileCheck className="size-4 text-emerald-600" /> {locale?.t("documentInput.captured", "Captured") ?? "Captured"}: {value.name} ({Math.round(value.size / 1024)} KB)
             </div>
           ) : null}
         </div>
@@ -105,7 +106,7 @@ export default function DocumentInputField({
         open={scannerOpen}
         onClose={() => setScannerOpen(false)}
         onCapture={handleScannerCapture}
-        title={scanTitle || `Scan ${label.toLowerCase()}`}
+        title={scanTitle || `${locale?.t("documentInput.scanPrefix", "Scan") ?? "Scan"} ${label.toLowerCase()}`}
         hint={scanHint}
       />
     </div>

@@ -358,7 +358,7 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
     <ResponsivePageShell className="space-y-6">
       <PageSectionHeader
         eyebrow={locale?.t("adminSettings.eyebrow", "Admin settings") ?? "Admin settings"}
-        title={locale?.t("pages.adminSettings.title", "Registration windows and weigh-in control") ?? "Registration windows and weigh-in control"}
+        title={locale?.t("adminSettings.heading", "Registration windows and weigh-in control") ?? "Registration windows and weigh-in control"}
         description={locale?.t("adminSettings.description", "Manage per-tournament registration timing, correction windows, and club-wise weigh-in updates that automatically refresh weight class for grouping.") ?? "Manage per-tournament registration timing, correction windows, and club-wise weigh-in updates that automatically refresh weight class for grouping."}
       />
 

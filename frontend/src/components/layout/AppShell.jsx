@@ -129,6 +129,12 @@ function RoleSwitcher() {
           <div className="flex-1 text-left min-w-0">
             <div className="text-sm font-medium truncate">{user.name}</div>
             <div className="text-[11px] text-tertiary truncate">{tRole}</div>
+            {user.role === "state_coordinator" && user.stateCode ? (
+              <div className="mt-0.5 inline-flex items-center gap-1 rounded bg-foreground/5 px-1.5 py-0.5 text-[10px] text-tertiary">
+                <span>{locale?.t("appShell.coordinating", "Coordinating") ?? "Coordinating"}:</span>
+                <span className="font-medium text-secondary">{user.stateCode}</span>
+              </div>
+            ) : null}
           </div>
           <ChevronDown className="size-4 text-tertiary" />
         </button>

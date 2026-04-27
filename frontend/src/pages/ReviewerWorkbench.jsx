@@ -29,9 +29,11 @@ import api, { isApiLive, resolveBackendUrl } from "@/lib/api";
 import { formatPersonName } from "@/lib/person";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
+import { useLocale } from "@/context/LocaleContext";
 
 export default function ReviewerWorkbench() {
   const { user } = useAuth();
+  const locale = useLocale();
   const router = useRouter();
   const routeId = Array.isArray(router.query.id) ? router.query.id[0] : router.query.id;
   const [queue, setQueue] = useState([]);
@@ -454,18 +456,18 @@ export default function ReviewerWorkbench() {
     <div className="flex min-h-[calc(100vh-3.5rem)] md:min-h-screen">
       <aside className="hidden lg:flex w-[340px] shrink-0 flex-col border-r border-border bg-surface/40">
         <div className="p-4 border-b border-border">
-          <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">Participant review</div>
+          <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">{locale?.t("reviewer.eyebrow", "Participant review") ?? "Participant review"}</div>
           <div className="mt-2 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-tertiary" />
-            <Input value={search} onChange={(event) => setSearch(event.target.value)} className="pl-8 h-9 bg-surface" placeholder="Search queue" />
+            <Input value={search} onChange={(event) => setSearch(event.target.value)} className="pl-8 h-9 bg-surface" placeholder={locale?.t("reviewer.searchQueue", "Search queue") ?? "Search queue"} />
           </div>
         </div>
         <div className="flex-1 overflow-y-auto">
           {loadingQueue && (
             <div className="p-4">
               <SectionLoader
-                title="Loading review queue"
-                description="Fetching the next applications that need a reviewer decision."
+                title={locale?.t("reviewer.loadingQueue", "Loading review queue") ?? "Loading review queue"}
+                description={locale?.t("reviewer.loadingQueueHelper", "Fetching the next applications that need a reviewer decision.") ?? "Fetching the next applications that need a reviewer decision."}
                 cards={1}
                 rows={4}
                 compact
@@ -500,8 +502,8 @@ export default function ReviewerWorkbench() {
         {!activeApplication || loadingApplication ? (
           <div className="p-6">
             <SectionLoader
-              title="Loading application details"
-              description="Pulling the latest fighter profile, documents, and audit timeline."
+              title={locale?.t("reviewer.loadingApplication", "Loading application details") ?? "Loading application details"}
+              description={locale?.t("reviewer.loadingApplicationHelper", "Pulling the latest fighter profile, documents, and audit timeline.") ?? "Pulling the latest fighter profile, documents, and audit timeline."}
               cards={2}
               rows={4}
               compact
@@ -522,59 +524,59 @@ export default function ReviewerWorkbench() {
               </h2>
               <div className="mt-2 flex items-center gap-3 flex-wrap">
                 <StatusPill status={activeApplication.status} />
-                <span className="text-xs text-tertiary">{activeApplication.club_name || "Individual applicant"}</span>
+                <span className="text-xs text-tertiary">{activeApplication.club_name || (locale?.t("reviewer.individualApplicant", "Individual applicant") ?? "Individual applicant")}</span>
               </div>
             </div>
             <div className="hidden lg:flex items-center gap-2">
               {activeApplication.status === "submitted" && (
                 <Button variant="outline" disabled={actionBusy} onClick={handleStartReview}>
-                  <RefreshCcw className="size-4 mr-1.5" /> Start review
+                  <RefreshCcw className="size-4 mr-1.5" /> {locale?.t("reviewer.startReview", "Start review") ?? "Start review"}
                 </Button>
               )}
               {canDecide && (
                 <Button variant="outline" disabled={actionBusy} onClick={() => openReviewDialog("request_correction")}>
-                  <FileWarning className="size-4 mr-1.5" /> Correction
+                  <FileWarning className="size-4 mr-1.5" /> {locale?.t("reviewer.correction", "Correction") ?? "Correction"}
                 </Button>
               )}
               {canDecide && (
                 <Button variant="outline" disabled={actionBusy} onClick={() => openReviewDialog("reject")}>
-                  <XCircle className="size-4 mr-1.5" /> Reject
+                  <XCircle className="size-4 mr-1.5" /> {locale?.t("reviewer.reject", "Reject") ?? "Reject"}
                 </Button>
               )}
               {canDecide && (
                 <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" disabled={actionBusy} onClick={() => openReviewDialog("approve")}>
-                  <CheckCircle2 className="size-4 mr-1.5" /> Approve
+                  <CheckCircle2 className="size-4 mr-1.5" /> {locale?.t("reviewer.approve", "Approve") ?? "Approve"}
                 </Button>
               )}
               {canReopen && (
                 <Button variant="outline" disabled={actionBusy} onClick={() => openReviewDialog("reopen")}>
-                  <Undo2 className="size-4 mr-1.5" /> Reopen
+                  <Undo2 className="size-4 mr-1.5" /> {locale?.t("reviewer.reopen", "Reopen") ?? "Reopen"}
                 </Button>
               )}
               {["approved", "rejected", "needs_correction"].includes(activeApplication.status) && (
-                <Button variant="outline" disabled={actionBusy} onClick={handleResendNotification} title="Resend decision email + SMS to the applicant">
-                  <Mail className="size-4 mr-1.5" /> Resend notification
+                <Button variant="outline" disabled={actionBusy} onClick={handleResendNotification} title={locale?.t("reviewer.resendNotificationTooltip", "Resend decision email + SMS to the applicant") ?? "Resend decision email + SMS to the applicant"}>
+                  <Mail className="size-4 mr-1.5" /> {locale?.t("reviewer.resendNotification", "Resend notification") ?? "Resend notification"}
                 </Button>
               )}
               <Button variant="ghost" disabled={actionBusy} onClick={refreshAll}>
-                Refresh
+                {locale?.t("actions.refresh", "Refresh") ?? "Refresh"}
               </Button>
             </div>
             <div className="flex w-full items-center justify-between gap-2 lg:hidden">
               <Sheet>
                 <SheetTrigger asChild>
                   <Button variant="outline" className="flex-1 sm:flex-none">
-                    <ListChecks className="size-4 mr-1.5" /> Queue
+                    <ListChecks className="size-4 mr-1.5" /> {locale?.t("reviewer.queue", "Queue") ?? "Queue"}
                   </Button>
                 </SheetTrigger>
                 <SheetContent side="left" className="w-[92vw] max-w-sm p-0">
                   <SheetHeader className="border-b border-border p-4 text-left">
-                    <SheetTitle>Review queue</SheetTitle>
+                    <SheetTitle>{locale?.t("reviewer.queueHeading", "Review queue") ?? "Review queue"}</SheetTitle>
                   </SheetHeader>
                   <div className="p-4 border-b border-border">
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-tertiary" />
-                      <Input value={search} onChange={(event) => setSearch(event.target.value)} className="pl-8 h-9 bg-surface" placeholder="Search queue" />
+                      <Input value={search} onChange={(event) => setSearch(event.target.value)} className="pl-8 h-9 bg-surface" placeholder={locale?.t("reviewer.searchQueue", "Search queue") ?? "Search queue"} />
                     </div>
                   </div>
                   <div className="overflow-y-auto">
@@ -604,11 +606,11 @@ export default function ReviewerWorkbench() {
               </Sheet>
               {user?.role === "admin" ? (
                 <Button variant="outline" className="flex-1 sm:flex-none" onClick={() => setScannerOpen(true)}>
-                  <QrCode className="size-4 mr-1.5" /> Verify QR
+                  <QrCode className="size-4 mr-1.5" /> {locale?.t("reviewer.verifyQr", "Verify QR") ?? "Verify QR"}
                 </Button>
               ) : null}
               <Button variant="ghost" className="flex-1 sm:flex-none" disabled={actionBusy} onClick={refreshAll}>
-                Refresh
+                {locale?.t("actions.refresh", "Refresh") ?? "Refresh"}
               </Button>
             </div>
           </div>
@@ -635,21 +637,21 @@ export default function ReviewerWorkbench() {
           <section className="rounded-2xl border border-border bg-surface p-6">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div>
-                <h3 className="font-display text-xl font-semibold tracking-tight">Printable credential preview</h3>
-                <p className="text-sm text-secondary-muted mt-1">Live view of the Primal OS application PDF — matches exactly what prints.</p>
+                <h3 className="font-display text-xl font-semibold tracking-tight">{locale?.t("reviewer.credentialPreview", "Printable credential preview") ?? "Printable credential preview"}</h3>
+                <p className="text-sm text-secondary-muted mt-1">{locale?.t("reviewer.credentialPreviewHelper", "Live view of the Primal OS application PDF — matches exactly what prints.") ?? "Live view of the Primal OS application PDF — matches exactly what prints."}</p>
               </div>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => api.downloadApplicationPdf(activeApplication.id)}
               >
-                <Camera className="size-4 mr-1.5" /> Download PDF
+                <Camera className="size-4 mr-1.5" /> {locale?.t("reviewer.downloadPdf", "Download PDF") ?? "Download PDF"}
               </Button>
             </div>
             <div className="mt-4 overflow-hidden rounded-2xl border border-border bg-background">
               {pdfPreviewError ? (
                 <div className="flex h-[70vh] w-full items-center justify-center p-6 text-center text-sm text-secondary-muted">
-                  {pdfPreviewError}. Use <span className="mx-1 font-medium">Download PDF</span> instead.
+                  {pdfPreviewError}. {locale?.t("reviewer.usePdfInstead", "Use") ?? "Use"} <span className="mx-1 font-medium">{locale?.t("reviewer.downloadPdf", "Download PDF") ?? "Download PDF"}</span> {locale?.t("reviewer.instead", "instead") ?? "instead"}.
                 </div>
               ) : pdfPreviewUrl ? (
                 <iframe
@@ -660,7 +662,7 @@ export default function ReviewerWorkbench() {
                 />
               ) : (
                 <div className="flex h-[70vh] w-full items-center justify-center p-6 text-center text-sm text-secondary-muted">
-                  Loading credential preview…
+                  {locale?.t("reviewer.loadingCredentialPreview", "Loading credential preview\u2026") ?? "Loading credential preview\u2026"}
                 </div>
               )}
             </div>
@@ -669,16 +671,16 @@ export default function ReviewerWorkbench() {
         <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
           <div className="space-y-5">
             <section className="rounded-2xl border border-border bg-surface p-6">
-              <h3 className="font-display text-xl font-semibold tracking-tight">Discipline entry</h3>
+              <h3 className="font-display text-xl font-semibold tracking-tight">{locale?.t("reviewer.disciplineEntry", "Discipline entry") ?? "Discipline entry"}</h3>
               <Separator className="my-4" />
               <div className="grid sm:grid-cols-2 gap-4 text-sm">
-                <Detail label="Discipline" value={activeApplication.discipline || "-"} />
-                <Detail label="Selected disciplines" value={activeApplication.form_data?.selectedDisciplines?.join(", ") || activeApplication.discipline || "-"} />
-                <Detail label="Tournament" value={activeApplication.tournament_name || "-"} />
-                <Detail label="Weight class" value={activeApplication.weight_class || "-"} />
-                <Detail label="Weight" value={activeApplication.weight_kg ? `${activeApplication.weight_kg} kg` : "-"} />
-                <Detail label="Reviewer" value={activeApplication.reviewer_display_id || "Unassigned"} />
-                <Detail label="Submitted" value={activeApplication.submitted_at ? new Date(activeApplication.submitted_at).toLocaleString() : "-"} />
+                <Detail label={locale?.t("fields.discipline", "Discipline") ?? "Discipline"} value={activeApplication.discipline || "-"} />
+                <Detail label={locale?.t("reviewer.detail.selectedDisciplines", "Selected disciplines") ?? "Selected disciplines"} value={activeApplication.form_data?.selectedDisciplines?.join(", ") || activeApplication.discipline || "-"} />
+                <Detail label={locale?.t("fields.tournament", "Tournament") ?? "Tournament"} value={activeApplication.tournament_name || "-"} />
+                <Detail label={locale?.t("reviewer.detail.weightClass", "Weight class") ?? "Weight class"} value={activeApplication.weight_class || "-"} />
+                <Detail label={locale?.t("fields.weight", "Weight") ?? "Weight"} value={activeApplication.weight_kg ? `${activeApplication.weight_kg} kg` : "-"} />
+                <Detail label={locale?.t("fields.reviewer", "Reviewer") ?? "Reviewer"} value={activeApplication.reviewer_display_id || (locale?.t("reviewer.detail.unassigned", "Unassigned") ?? "Unassigned")} />
+                <Detail label={locale?.t("fields.submitted", "Submitted") ?? "Submitted"} value={activeApplication.submitted_at ? new Date(activeApplication.submitted_at).toLocaleString() : "-"} />
               </div>
             </section>
 
@@ -686,9 +688,9 @@ export default function ReviewerWorkbench() {
               <div className="flex items-start gap-3">
                 <Swords className="size-5 text-primary shrink-0 mt-0.5" />
                 <div>
-                  <h3 className="font-display text-xl font-semibold tracking-tight">Review timeline</h3>
+                  <h3 className="font-display text-xl font-semibold tracking-tight">{locale?.t("reviewer.reviewTimeline", "Review timeline") ?? "Review timeline"}</h3>
                   <p className="text-sm text-secondary-muted mt-2">
-                    Full event log for auditability from creation to current state.
+                    {locale?.t("reviewer.reviewTimelineHelper", "Full event log for auditability from creation to current state.") ?? "Full event log for auditability from creation to current state."}
                   </p>
                 </div>
               </div>
@@ -702,34 +704,34 @@ export default function ReviewerWorkbench() {
                     {event.reason && <div className="mt-1 text-secondary-muted">{event.reason}</div>}
                   </div>
                 ))}
-                {!activeApplication.statusEvents?.length && <div className="text-sm text-secondary-muted">No timeline events recorded yet.</div>}
+                {!activeApplication.statusEvents?.length && <div className="text-sm text-secondary-muted">{locale?.t("reviewer.noTimelineEvents", "No timeline events recorded yet.") ?? "No timeline events recorded yet."}</div>}
               </div>
             </section>
           </div>
 
           <div className="space-y-5">
             <section className="rounded-2xl border border-border bg-surface p-6">
-              <h3 className="font-display text-xl font-semibold tracking-tight">Participant details</h3>
+              <h3 className="font-display text-xl font-semibold tracking-tight">{locale?.t("reviewer.participantDetails", "Participant details") ?? "Participant details"}</h3>
               <Separator className="my-4" />
               <div className="space-y-3 text-sm">
-                <Detail label="Club" value={activeApplication.club_name || "Individual"} />
-                <Detail label="Applicant" value={activeApplication.applicant_display_name || formatPersonName(activeApplication.first_name, activeApplication.last_name)} />
-                <Detail label="Application ID" value={activeApplication.application_display_id || activeApplication.id} />
-                <Detail label="Correction due" value={activeApplication.correction_due_at ? new Date(activeApplication.correction_due_at).toLocaleString() : "-"} />
-                <Detail label="Rejection reason" value={activeApplication.rejection_reason || "-"} />
-                <Detail label="Reopen reason" value={activeApplication.reopen_reason || "-"} />
-                <Detail label="Decided at" value={activeApplication.decided_at ? new Date(activeApplication.decided_at).toLocaleString() : "-"} />
+                <Detail label={locale?.t("fields.club", "Club") ?? "Club"} value={activeApplication.club_name || (locale?.t("fields.individual", "Individual") ?? "Individual")} />
+                <Detail label={locale?.t("fields.applicant", "Applicant") ?? "Applicant"} value={activeApplication.applicant_display_name || formatPersonName(activeApplication.first_name, activeApplication.last_name)} />
+                <Detail label={locale?.t("reviewer.detail.applicationId", "Application ID") ?? "Application ID"} value={activeApplication.application_display_id || activeApplication.id} />
+                <Detail label={locale?.t("reviewer.detail.correctionDue", "Correction due") ?? "Correction due"} value={activeApplication.correction_due_at ? new Date(activeApplication.correction_due_at).toLocaleString() : "-"} />
+                <Detail label={locale?.t("reviewer.detail.rejectionReason", "Rejection reason") ?? "Rejection reason"} value={activeApplication.rejection_reason || "-"} />
+                <Detail label={locale?.t("reviewer.detail.reopenReason", "Reopen reason") ?? "Reopen reason"} value={activeApplication.reopen_reason || "-"} />
+                <Detail label={locale?.t("fields.decidedAt", "Decided at") ?? "Decided at"} value={activeApplication.decided_at ? new Date(activeApplication.decided_at).toLocaleString() : "-"} />
               </div>
             </section>
 
             <section className="rounded-2xl border border-border bg-surface p-6">
-              <h3 className="font-display text-xl font-semibold tracking-tight">Documents and checks</h3>
+              <h3 className="font-display text-xl font-semibold tracking-tight">{locale?.t("reviewer.documentsAndChecks", "Documents and checks") ?? "Documents and checks"}</h3>
               <Separator className="my-4" />
               <div className="space-y-3 text-sm">
-                <CheckRow ok={hasRequiredDocs} label="Required documents uploaded" />
-                <CheckRow ok={!!activeApplication.reviewer_id} label="Reviewer assigned" />
-                <CheckRow ok={activeApplication.status !== "draft"} label="Application submitted" />
-                <CheckRow ok={activeApplication.status !== "needs_correction"} label="No open correction request" />
+                <CheckRow ok={hasRequiredDocs} label={locale?.t("reviewer.checks.requiredUploaded", "Required documents uploaded") ?? "Required documents uploaded"} />
+                <CheckRow ok={!!activeApplication.reviewer_id} label={locale?.t("reviewer.checks.reviewerAssigned", "Reviewer assigned") ?? "Reviewer assigned"} />
+                <CheckRow ok={activeApplication.status !== "draft"} label={locale?.t("reviewer.checks.submitted", "Application submitted") ?? "Application submitted"} />
+                <CheckRow ok={activeApplication.status !== "needs_correction"} label={locale?.t("reviewer.checks.noOpenCorrection", "No open correction request") ?? "No open correction request"} />
               </div>
               <div className="mt-4 space-y-3">
                 {(activeApplication.documents || []).map((doc) => (
@@ -741,7 +743,7 @@ export default function ReviewerWorkbench() {
                     onVerify={(verified, reason) => handleDocumentVerify(doc.id, verified, reason)}
                   />
                 ))}
-                {!activeApplication.documents?.length && <div className="text-sm text-secondary-muted">No documents uploaded yet.</div>}
+                {!activeApplication.documents?.length && <div className="text-sm text-secondary-muted">{locale?.t("reviewer.noDocuments", "No documents uploaded yet.") ?? "No documents uploaded yet."}</div>}
               </div>
             </section>
           </div>
@@ -750,32 +752,32 @@ export default function ReviewerWorkbench() {
         <StickyActionBar className="lg:hidden">
           {user?.role === "admin" ? (
             <Button variant="outline" className="flex-1" onClick={() => setScannerOpen(true)}>
-              <QrCode className="size-4 mr-1.5" /> Verify QR
+              <QrCode className="size-4 mr-1.5" /> {locale?.t("reviewer.verifyQr", "Verify QR") ?? "Verify QR"}
             </Button>
           ) : null}
           {activeApplication.status === "submitted" && (
             <Button variant="outline" className="flex-1" disabled={actionBusy} onClick={handleStartReview}>
-              <RefreshCcw className="size-4 mr-1.5" /> Start review
+              <RefreshCcw className="size-4 mr-1.5" /> {locale?.t("reviewer.startReview", "Start review") ?? "Start review"}
             </Button>
           )}
           {canDecide && (
             <Button variant="outline" className="flex-1" disabled={actionBusy} onClick={() => openReviewDialog("request_correction")}>
-              <FileWarning className="size-4 mr-1.5" /> Correction
+              <FileWarning className="size-4 mr-1.5" /> {locale?.t("reviewer.correction", "Correction") ?? "Correction"}
             </Button>
           )}
           {canDecide && (
             <Button variant="outline" className="flex-1" disabled={actionBusy} onClick={() => openReviewDialog("reject")}>
-              <XCircle className="size-4 mr-1.5" /> Reject
+              <XCircle className="size-4 mr-1.5" /> {locale?.t("reviewer.reject", "Reject") ?? "Reject"}
             </Button>
           )}
           {canDecide && (
             <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white" disabled={actionBusy} onClick={() => openReviewDialog("approve")}>
-              <CheckCircle2 className="size-4 mr-1.5" /> Approve
+              <CheckCircle2 className="size-4 mr-1.5" /> {locale?.t("reviewer.approve", "Approve") ?? "Approve"}
             </Button>
           )}
           {canReopen && (
             <Button variant="outline" className="flex-1" disabled={actionBusy} onClick={() => openReviewDialog("reopen")}>
-              <Undo2 className="size-4 mr-1.5" /> Reopen
+              <Undo2 className="size-4 mr-1.5" /> {locale?.t("reviewer.reopen", "Reopen") ?? "Reopen"}
             </Button>
           )}
         </StickyActionBar>
@@ -786,10 +788,10 @@ export default function ReviewerWorkbench() {
         <DialogContent className="max-w-md rounded-3xl border-border p-0 sm:max-w-md">
           <DialogHeader className="border-b border-border px-5 py-4">
             <DialogTitle className="flex items-center gap-2">
-              <QrCode className="size-5 text-primary" /> Verify printed application
+              <QrCode className="size-5 text-primary" /> {locale?.t("reviewer.qr.title", "Verify printed application") ?? "Verify printed application"}
             </DialogTitle>
             <DialogDescription>
-              Scan the QR code from the printed application PDF to verify the signature and open the matching record.
+              {locale?.t("reviewer.qr.description", "Scan the QR code from the printed application PDF to verify the signature and open the matching record.") ?? "Scan the QR code from the printed application PDF to verify the signature and open the matching record."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 px-5 py-4">
@@ -798,10 +800,10 @@ export default function ReviewerWorkbench() {
             </div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <Button type="button" variant="outline" onClick={startScanner} disabled={!scannerSupported || scannerBusy}>
-                <Camera className="size-4" /> {scannerBusy ? "Starting..." : "Use camera"}
+                <Camera className="size-4" /> {scannerBusy ? (locale?.t("reviewer.qr.starting", "Starting...") ?? "Starting...") : (locale?.t("reviewer.qr.useCamera", "Use camera") ?? "Use camera")}
               </Button>
               <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
-                <QrCode className="size-4" /> Scan QR photo
+                <QrCode className="size-4" /> {locale?.t("reviewer.qr.scanPhoto", "Scan QR photo") ?? "Scan QR photo"}
               </Button>
             </div>
             <input
@@ -813,7 +815,7 @@ export default function ReviewerWorkbench() {
               className="hidden"
             />
             <div className="space-y-2">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-tertiary">Paste verification URL</div>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-tertiary">{locale?.t("reviewer.qr.pasteUrl", "Paste verification URL") ?? "Paste verification URL"}</div>
               <Input
                 value={scannedValue}
                 onChange={(event) => setScannedValue(event.target.value)}
@@ -821,7 +823,7 @@ export default function ReviewerWorkbench() {
                 className="bg-surface"
               />
               <Button type="button" className="w-full" onClick={() => verifyScannedCode(scannedValue)} disabled={!scannedValue.trim() || scannerBusy}>
-                Verify code
+                {locale?.t("reviewer.qr.verifyCode", "Verify code") ?? "Verify code"}
               </Button>
             </div>
             {scannerError ? (
@@ -832,7 +834,9 @@ export default function ReviewerWorkbench() {
             {scannerResult ? (
               <div className={`rounded-2xl border px-4 py-4 text-sm ${scannerResult.valid ? "border-emerald-200 bg-emerald-50 dark:border-emerald-900/50 dark:bg-emerald-950/30" : "border-orange-200 bg-orange-50 dark:border-orange-900/50 dark:bg-orange-950/30"}`}>
                 <div className="font-semibold">
-                  {scannerResult.valid ? "Signature verified" : "Signature check failed"}
+                  {scannerResult.valid
+                    ? (locale?.t("reviewer.qr.signatureVerified", "Signature verified") ?? "Signature verified")
+                    : (locale?.t("reviewer.qr.signatureFailed", "Signature check failed") ?? "Signature check failed")}
                 </div>
                 <div className="mt-1 text-secondary-muted">{scannerResult.reason}</div>
                 {scannerResult.application ? (
@@ -845,7 +849,7 @@ export default function ReviewerWorkbench() {
                 ) : null}
                 {scannerResult.valid && scannerResult.application?.id ? (
                   <Button type="button" className="mt-4 w-full" onClick={openVerifiedApplication}>
-                    Open verified application
+                    {locale?.t("reviewer.qr.openVerified", "Open verified application") ?? "Open verified application"}
                   </Button>
                 ) : null}
               </div>
@@ -858,32 +862,32 @@ export default function ReviewerWorkbench() {
           <DialogHeader>
             <DialogTitle>
               {reviewDialog.action === "reopen"
-                ? "Reopen application"
+                ? (locale?.t("reviewer.dialog.reopenTitle", "Reopen application") ?? "Reopen application")
                 : reviewDialog.action === "request_correction"
-                  ? "Request correction"
-                  : "Reject application"}
+                  ? (locale?.t("reviewer.dialog.correctionTitle", "Request correction") ?? "Request correction")
+                  : (locale?.t("reviewer.dialog.rejectTitle", "Reject application") ?? "Reject application")}
             </DialogTitle>
             <DialogDescription>
               {reviewDialog.action === "reopen"
-                ? "Provide the reopen reason before moving this record back to under review."
+                ? (locale?.t("reviewer.dialog.reopenDescription", "Provide the reopen reason before moving this record back to under review.") ?? "Provide the reopen reason before moving this record back to under review.")
                 : reviewDialog.action === "request_correction"
-                  ? "Record the correction reason and the fields the applicant must update."
-                  : "Record the rejection reason for the audit log and notification trail."}
+                  ? (locale?.t("reviewer.dialog.correctionDescription", "Record the correction reason and the fields the applicant must update.") ?? "Record the correction reason and the fields the applicant must update.")
+                  : (locale?.t("reviewer.dialog.rejectDescription", "Record the rejection reason for the audit log and notification trail.") ?? "Record the rejection reason for the audit log and notification trail.")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-tertiary">Reason</div>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-tertiary">{locale?.t("reviewer.dialog.reason", "Reason") ?? "Reason"}</div>
               <Input
                 value={reviewDialog.reason}
                 onChange={(event) => setReviewDialog((current) => ({ ...current, reason: event.target.value }))}
                 className="bg-surface"
-                placeholder="Enter reason"
+                placeholder={locale?.t("reviewer.dialog.reasonPlaceholder", "Enter reason") ?? "Enter reason"}
               />
             </div>
             {reviewDialog.action === "request_correction" ? (
               <div className="space-y-2">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-tertiary">Fields to correct</div>
+                <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-tertiary">{locale?.t("reviewer.dialog.fields", "Fields to correct") ?? "Fields to correct"}</div>
                 <Input
                   value={reviewDialog.fields}
                   onChange={(event) => setReviewDialog((current) => ({ ...current, fields: event.target.value }))}
@@ -893,9 +897,13 @@ export default function ReviewerWorkbench() {
               </div>
             ) : null}
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={closeReviewDialog}>Cancel</Button>
+              <Button variant="outline" onClick={closeReviewDialog}>{locale?.t("actions.cancel", "Cancel") ?? "Cancel"}</Button>
               <Button onClick={handleConfirmReviewDialog} disabled={actionBusy || !reviewDialog.reason.trim()}>
-                {reviewDialog.action === "reopen" ? "Reopen" : reviewDialog.action === "request_correction" ? "Send correction" : "Reject"}
+                {reviewDialog.action === "reopen"
+                  ? (locale?.t("reviewer.reopen", "Reopen") ?? "Reopen")
+                  : reviewDialog.action === "request_correction"
+                    ? (locale?.t("reviewer.dialog.sendCorrection", "Send correction") ?? "Send correction")
+                    : (locale?.t("reviewer.reject", "Reject") ?? "Reject")}
               </Button>
             </div>
           </div>
@@ -928,6 +936,7 @@ function CheckRow({ ok, label }) {
 }
 
 function DocumentReviewRow({ doc, busy, canVerify, onVerify }) {
+  const locale = useLocale();
   const [previewOpen, setPreviewOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const docUrl = resolveBackendUrl(doc.url);
@@ -948,16 +957,16 @@ function DocumentReviewRow({ doc, busy, canVerify, onVerify }) {
           <div className="font-medium capitalize">{(doc.kind || "document").replace(/_/g, " ")}</div>
           <div className="text-xs text-tertiary mt-0.5 truncate">{doc.original_filename || doc.label || doc.storage_key}</div>
           <div className="mt-1 flex flex-wrap gap-1.5 text-[10px] uppercase tracking-wider">
-            {doc.captured_via === "scan" ? <span className="rounded bg-foreground/10 px-1.5 py-0.5">scanned</span> : null}
-            {doc.captured_via === "admin_rescan" ? <span className="rounded bg-foreground/10 px-1.5 py-0.5">admin scan</span> : null}
-            {verified ? <span className="rounded bg-emerald-500/15 text-emerald-700 px-1.5 py-0.5">verified</span> : null}
-            {rejected ? <span className="rounded bg-rose-500/15 text-rose-700 px-1.5 py-0.5">rejected</span> : null}
-            {doc.expires_on ? <span className={`rounded bg-foreground/5 px-1.5 py-0.5 ${expiringClass}`}>exp {String(doc.expires_on).slice(0, 10)}</span> : null}
+            {doc.captured_via === "scan" ? <span className="rounded bg-foreground/10 px-1.5 py-0.5">{locale?.t("reviewer.doc.scanned", "scanned") ?? "scanned"}</span> : null}
+            {doc.captured_via === "admin_rescan" ? <span className="rounded bg-foreground/10 px-1.5 py-0.5">{locale?.t("reviewer.doc.adminScan", "admin scan") ?? "admin scan"}</span> : null}
+            {verified ? <span className="rounded bg-emerald-500/15 text-emerald-700 px-1.5 py-0.5">{locale?.t("reviewer.doc.verified", "verified") ?? "verified"}</span> : null}
+            {rejected ? <span className="rounded bg-rose-500/15 text-rose-700 px-1.5 py-0.5">{locale?.t("reviewer.doc.rejected", "rejected") ?? "rejected"}</span> : null}
+            {doc.expires_on ? <span className={`rounded bg-foreground/5 px-1.5 py-0.5 ${expiringClass}`}>{locale?.t("reviewer.doc.expPrefix", "exp") ?? "exp"} {String(doc.expires_on).slice(0, 10)}</span> : null}
           </div>
         </div>
         <div className="flex shrink-0 gap-1.5">
-          <Button size="sm" variant="outline" onClick={() => setPreviewOpen((v) => !v)}>{previewOpen ? "Hide" : "Preview"}</Button>
-          <a href={docUrl} target="_blank" rel="noreferrer" className="inline-flex items-center rounded-md border border-border px-2.5 py-1 text-xs hover:bg-surface-muted/40">Open</a>
+          <Button size="sm" variant="outline" onClick={() => setPreviewOpen((v) => !v)}>{previewOpen ? (locale?.t("reviewer.doc.hide", "Hide") ?? "Hide") : (locale?.t("reviewer.doc.preview", "Preview") ?? "Preview")}</Button>
+          <a href={docUrl} target="_blank" rel="noreferrer" className="inline-flex items-center rounded-md border border-border px-2.5 py-1 text-xs hover:bg-surface-muted/40">{locale?.t("reviewer.doc.open", "Open") ?? "Open"}</a>
         </div>
       </div>
 
@@ -968,7 +977,7 @@ function DocumentReviewRow({ doc, busy, canVerify, onVerify }) {
           ) : isPdf ? (
             <iframe src={`${docUrl}#toolbar=0&navpanes=0`} title={doc.kind} className="block h-[420px] w-full bg-white" />
           ) : (
-            <div className="p-4 text-xs text-tertiary">Preview not available for this file type.</div>
+            <div className="p-4 text-xs text-tertiary">{locale?.t("reviewer.doc.previewUnavailable", "Preview not available for this file type.") ?? "Preview not available for this file type."}</div>
           )}
         </div>
       ) : null}
@@ -981,11 +990,11 @@ function DocumentReviewRow({ doc, busy, canVerify, onVerify }) {
             disabled={busy}
             onClick={() => onVerify(true)}
           >
-            <CheckCircle2 className="size-3.5 mr-1" /> {verified ? "Verified" : "Verify"}
+            <CheckCircle2 className="size-3.5 mr-1" /> {verified ? (locale?.t("reviewer.doc.alreadyVerified", "Verified") ?? "Verified") : (locale?.t("reviewer.doc.verify", "Verify") ?? "Verify")}
           </Button>
           <Input
             value={rejectReason}
-            placeholder="Reject reason (e.g., blurry, expired)"
+            placeholder={locale?.t("reviewer.doc.rejectPlaceholder", "Reject reason (e.g., blurry, expired)") ?? "Reject reason (e.g., blurry, expired)"}
             onChange={(event) => setRejectReason(event.target.value)}
             className="h-8 max-w-[220px] bg-surface text-xs"
           />
@@ -995,7 +1004,7 @@ function DocumentReviewRow({ doc, busy, canVerify, onVerify }) {
             disabled={busy || !rejectReason.trim()}
             onClick={() => onVerify(false, rejectReason.trim())}
           >
-            <XCircle className="size-3.5 mr-1" /> Reject
+            <XCircle className="size-3.5 mr-1" /> {locale?.t("reviewer.reject", "Reject") ?? "Reject"}
           </Button>
           {rejected ? <span className="text-xs text-rose-600">{doc.verify_reason}</span> : null}
         </div>

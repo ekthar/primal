@@ -57,7 +57,7 @@ export default function AdminOverview() {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">{locale?.t("adminOverview.eyebrow", "Tournament overview") ?? "Tournament overview"}</div>
-          <h1 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight mt-1">{locale?.t("pages.adminOverview.title", "Tournament workflow command center") ?? "Tournament workflow command center"}</h1>
+          <h1 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight mt-1">{locale?.t("adminOverview.heading", "Tournament workflow command center") ?? "Tournament workflow command center"}</h1>
           <p className="text-sm text-secondary-muted mt-2 max-w-3xl">
             {locale?.t("adminOverview.description", "Live registration and review telemetry for operations, assignment load, and SLA risk.") ?? "Live registration and review telemetry for operations, assignment load, and SLA risk."}
           </p>
