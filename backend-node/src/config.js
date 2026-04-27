@@ -72,7 +72,10 @@ const config = {
   },
 
   uploadDir: process.env.UPLOAD_DIR || './uploads',
-  uploadStorageProvider: process.env.UPLOAD_STORAGE_PROVIDER || 'local',
+  // Auto-flip to vercel-blob when the token is present so the operator only
+  // needs to set BLOB_READ_WRITE_TOKEN to activate persistent storage.
+  uploadStorageProvider: process.env.UPLOAD_STORAGE_PROVIDER
+    || (process.env.BLOB_READ_WRITE_TOKEN ? 'vercel-blob' : 'local'),
   maxUploadMb: parseInt(process.env.MAX_UPLOAD_MB || '10', 10),
   blob: {
     readWriteToken: process.env.BLOB_READ_WRITE_TOKEN || '',

@@ -41,6 +41,27 @@ const {
   drawStatusDistributionBar,
 } = require('./pdfComposition');
 
+// Pipe a PDFKit document into an HTTP response and tear the doc down if the
+// response is destroyed (client disconnect, errorHandler.destroy after a
+// generation throw, etc). Without this, PDFKit keeps emitting 'data' after the
+// socket is closed and Node throws ERR_STREAM_WRITE_AFTER_END, crashing the
+// process.
+function safePipePdf(doc, res) {
+  doc.on('error', (err) => {
+    if (typeof res.destroy === 'function') {
+      try { res.destroy(err); } catch (_) { /* ignore */ }
+    } else if (typeof res.emit === 'function') {
+      try { res.emit('error', err); } catch (_) { /* ignore */ }
+    }
+  });
+  res.on('close', () => {
+    if (res.writableEnded === false) {
+      try { doc.destroy(); } catch (_) { /* ignore */ }
+    }
+  });
+  doc.pipe(res);
+}
+
 function formatDateTime(value) {
   if (!value) return '—';
   const d = new Date(value);
@@ -560,7 +581,7 @@ async function groupedAnalyticsToPdf(res, actor, { tournamentId, discipline, sta
     layout: 'landscape',
     margins: { top: 28, bottom: 32, left: 28, right: 28 },
   });
-  doc.pipe(res);
+  safePipePdf(doc, res);
   const fonts = resolvePdfFonts(doc);
 
   doc.save();
@@ -714,7 +735,7 @@ async function seasonalReportToPdf(res, actor, tournamentId, ctx = {}) {
     layout: 'landscape',
     margins: { top: 28, bottom: 32, left: 28, right: 28 },
   });
-  doc.pipe(res);
+  safePipePdf(doc, res);
   const fonts = resolvePdfFonts(doc);
 
   doc.save();
@@ -866,7 +887,7 @@ async function approvedParticipantsToPdf(res, actor, { tournamentId, stateCode }
     layout: 'landscape',
     margins: { top: 28, bottom: 32, left: 28, right: 28 },
   });
-  doc.pipe(res);
+  safePipePdf(doc, res);
   const fonts = resolvePdfFonts(doc);
 
   doc.save();
@@ -1479,7 +1500,7 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
     size: 'A4',
     margins: { top: 32, bottom: 32, left: 32, right: 32 },
   });
-  doc.pipe(res);
+  safePipePdf(doc, res);
 
   const fonts = resolvePdfFonts(doc);
   const PX   = doc.page.margins.left;                                           // page x origin
@@ -1785,7 +1806,7 @@ async function bracketToPdf(res, bracketId, actor, ctx = {}) {
     layout: 'landscape',
     margins: { top: 28, bottom: 32, left: 28, right: 28 },
   });
-  doc.pipe(res);
+  safePipePdf(doc, res);
   const fonts = resolvePdfFonts(doc);
 
   // Paper wash
@@ -1914,7 +1935,7 @@ async function divisionBracketToPdf(res, divisionId, actor, ctx = {}) {
     layout: 'landscape',
     margins: { top: 28, bottom: 32, left: 28, right: 28 },
   });
-  doc.pipe(res);
+  safePipePdf(doc, res);
   const fonts = resolvePdfFonts(doc);
 
   doc.save();
@@ -2072,6 +2093,8 @@ async function applicationToPdfBuffer(applicationId, actor, ctx = {}) {
       once: pass.once.bind(pass),
       emit: pass.emit.bind(pass),
       pipe: pass.pipe.bind(pass),
+      destroy: pass.destroy.bind(pass),
+      get writableEnded() { return pass.writableEnded; },
     };
 
     applicationToPdf(resLike, applicationId, actor, ctx).catch(reject);
