@@ -51,7 +51,13 @@ export function DataCardList({ items, renderItem, className = "" }) {
 
 export function StickyActionBar({ children, className = "" }) {
   return (
-    <div className={cn("sticky bottom-[calc(5rem+env(safe-area-inset-bottom))] z-20 mt-4 rounded-2xl border border-border bg-background/92 p-3 backdrop-blur-xl shadow-[0_16px_40px_rgba(0,0,0,0.12)] md:bottom-4", className)}>
+    <div
+      className={cn(
+        "sticky z-20 mt-4 rounded-2xl border border-border bg-background/92 p-3 backdrop-blur-xl shadow-[0_16px_40px_rgba(0,0,0,0.12)]",
+        "bottom-[calc(0.75rem+env(safe-area-inset-bottom))] md:bottom-4",
+        className,
+      )}
+    >
       <div className="flex flex-wrap gap-2">{children}</div>
     </div>
   );
