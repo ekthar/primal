@@ -219,6 +219,7 @@ export default function ReviewerWorkbench() {
   async function verifyScannedCode(rawValue) {
     setScannerBusy(true);
     setScannerError("");
+    setScannerResult(null);
     setScannedValue(rawValue);
 
     let verificationUrl;
