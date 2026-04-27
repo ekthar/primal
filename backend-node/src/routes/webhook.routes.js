@@ -76,7 +76,12 @@ router.get('/:id/deliveries', ah(async (req, res) => {
 
 router.post('/:id/test', ah(async (req, res) => {
   const event = req.body?.event || 'application.approved';
-  const result = await webhookService.emit(event, { test: true, triggeredBy: req.user.id });
+  const result = await webhookService.emitToSubscription(req.params.id, event, {
+    test: true, triggeredBy: req.user.id,
+  });
+  if (result.reason === 'not_found') {
+    return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'webhook not found' } });
+  }
   res.json(result);
 }));
 

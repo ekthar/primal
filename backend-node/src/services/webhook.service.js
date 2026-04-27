@@ -169,6 +169,21 @@ function emitAsync(event, payload) {
   emit(event, payload).catch((err) => logger.warn({ err, event }, 'webhook.emitAsync error'));
 }
 
+/**
+ * Send a single test/triggered event to ONE subscription only. Used by the
+ * admin "Test" button so an operator can verify a specific endpoint without
+ * fanning the synthetic payload out to every other subscription listening
+ * for the same event in production.
+ */
+async function emitToSubscription(subscriptionId, event, payload) {
+  const sub = await webhookSubscriptions.findById(subscriptionId);
+  if (!sub) return { ok: false, reason: 'not_found' };
+  const enriched = { event, emittedAt: new Date().toISOString(), data: payload };
+  const delivery = await webhookDeliveries.create({ subscriptionId: sub.id, event, payload: enriched });
+  const result = await deliverOne(sub, delivery);
+  return { ok: result.ok, status: result.status, deliveryId: delivery.id };
+}
+
 module.exports = {
   WEBHOOK_EVENTS,
   listSubscriptions,
@@ -178,5 +193,6 @@ module.exports = {
   listDeliveries,
   emit,
   emitAsync,
+  emitToSubscription,
   signPayload,
 };

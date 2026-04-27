@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Camera, CheckCircle2, RefreshCcw, Scale, X } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
@@ -33,11 +33,11 @@ export default function WeighInTablet() {
     })();
   }, []);
 
-  useEffect(() => {
-    if (!tournamentSlug) return;
+  const loadTournament = useCallback(async (slug) => {
+    if (!slug) return;
     setLoading(true);
-    (async () => {
-      const { data } = await api.publicTournamentBySlug(tournamentSlug);
+    try {
+      const { data } = await api.publicTournamentBySlug(slug);
       const t = data?.tournament;
       const id = t?.id || "";
       setTournamentId(id);
@@ -48,9 +48,14 @@ export default function WeighInTablet() {
       } else {
         setRecords([]);
       }
+    } finally {
       setLoading(false);
-    })();
-  }, [tournamentSlug]);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadTournament(tournamentSlug);
+  }, [tournamentSlug, loadTournament]);
 
   const recordsByApp = useMemo(() => {
     const map = new Map();
@@ -138,10 +143,11 @@ export default function WeighInTablet() {
             className="h-11 flex-1 min-w-[200px] rounded-xl border border-border bg-surface px-4 text-base"
           />
           <button
-            onClick={() => tournamentSlug && setTournamentSlug(tournamentSlug)}
-            className="h-11 rounded-xl border border-border bg-surface px-4 text-sm flex items-center gap-2"
+            onClick={() => loadTournament(tournamentSlug)}
+            disabled={loading || !tournamentSlug}
+            className="h-11 rounded-xl border border-border bg-surface px-4 text-sm flex items-center gap-2 disabled:opacity-50"
           >
-            <RefreshCcw className="size-4" /> Refresh
+            <RefreshCcw className={`size-4 ${loading ? "animate-spin" : ""}`} /> Refresh
           </button>
           <div className="text-sm text-secondary-muted">
             <span className="font-mono">{recordsByApp.size}</span>/<span className="font-mono">{participants.length}</span> weighed
