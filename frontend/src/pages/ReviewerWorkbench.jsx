@@ -32,6 +32,7 @@ import {
   serializeFormDataForPatch,
 } from "@/components/application/ApplicationEditFields";
 import { ApplicationFormEditor } from "@/components/application/ApplicationFormEditor";
+import LiveQrScanner from "@/components/scanner/LiveQrScanner";
 import { formatPersonName } from "@/lib/person";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
@@ -79,7 +80,6 @@ export default function ReviewerWorkbench() {
   const [loadingApplication, setLoadingApplication] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
-  const [scannerSupported, setScannerSupported] = useState(false);
   const [scannerBusy, setScannerBusy] = useState(false);
   const [scannerError, setScannerError] = useState("");
   const [scannerResult, setScannerResult] = useState(null);
@@ -90,11 +90,7 @@ export default function ReviewerWorkbench() {
   const [adminEditSaving, setAdminEditSaving] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState(null);
   const [pdfPreviewError, setPdfPreviewError] = useState(null);
-  const videoRef = useRef(null);
-  const fileInputRef = useRef(null);
-  const streamRef = useRef(null);
-  const detectorRef = useRef(null);
-  const frameRequestRef = useRef(null);
+  // QR scanner refs are owned by <LiveQrScanner /> now.
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -150,11 +146,6 @@ export default function ReviewerWorkbench() {
   }, [activeApplication?.id]);
 
   useEffect(() => {
-    const supported = typeof window !== "undefined" && "BarcodeDetector" in window && typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
-    setScannerSupported(supported);
-  }, []);
-
-  useEffect(() => {
     isApiLive().then((live) => {
       if (!live) {
         const marker = "review-workbench-api-unreachable-toast-shown";
@@ -168,23 +159,11 @@ export default function ReviewerWorkbench() {
 
   useEffect(() => {
     if (!scannerOpen) {
-      stopScanner();
       setScannerError("");
       setScannerBusy(false);
-      return;
+      setScannerResult(null);
     }
-
-    if (!scannerSupported) {
-      setScannerError("Live camera scanning is not supported on this device. Paste the QR verification URL instead.");
-      return;
-    }
-
-    startScanner();
-
-    return () => {
-      stopScanner();
-    };
-  }, [scannerOpen, scannerSupported]);
+  }, [scannerOpen]);
 
   async function loadQueue() {
     setLoadingQueue(true);
@@ -237,65 +216,10 @@ export default function ReviewerWorkbench() {
     toast.success("Application updated");
   }
 
-  function stopScanner() {
-    if (frameRequestRef.current) {
-      cancelAnimationFrame(frameRequestRef.current);
-      frameRequestRef.current = null;
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-  }
-
-  async function startScanner() {
-    stopScanner();
+  async function verifyScannedCode(rawValue) {
+    setScannerBusy(true);
     setScannerError("");
     setScannerResult(null);
-    setScannerBusy(true);
-
-    try {
-      if (!detectorRef.current) {
-        detectorRef.current = new window.BarcodeDetector({ formats: ["qr_code"] });
-      }
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" } },
-        audio: false,
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
-      setScannerBusy(false);
-      frameRequestRef.current = requestAnimationFrame(scanVideoFrame);
-    } catch (error) {
-      setScannerBusy(false);
-      setScannerError(error.message || "Unable to start the camera scanner.");
-    }
-  }
-
-  async function scanVideoFrame() {
-    if (!videoRef.current || !detectorRef.current) return;
-
-    try {
-      const barcodes = await detectorRef.current.detect(videoRef.current);
-      if (barcodes.length > 0 && barcodes[0].rawValue) {
-        await verifyScannedCode(barcodes[0].rawValue);
-        return;
-      }
-    } catch (error) {
-      setScannerError(error.message || "Failed to read the QR code.");
-      return;
-    }
-
-    frameRequestRef.current = requestAnimationFrame(scanVideoFrame);
-  }
-
-  async function verifyScannedCode(rawValue) {
-    stopScanner();
-    setScannerBusy(true);
-    setScannerError("");
     setScannedValue(rawValue);
 
     let verificationUrl;
@@ -322,33 +246,6 @@ export default function ReviewerWorkbench() {
     }
 
     setScannerResult(data);
-  }
-
-  async function handleQrPhotoSelection(event) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-
-    if (!file) return;
-    if (!scannerSupported || !detectorRef.current) {
-      setScannerError("Photo QR decoding is not supported on this device. Paste the verification URL instead.");
-      return;
-    }
-
-    try {
-      setScannerBusy(true);
-      setScannerError("");
-      const imageBitmap = await createImageBitmap(file);
-      const barcodes = await detectorRef.current.detect(imageBitmap);
-      if (!barcodes.length || !barcodes[0].rawValue) {
-        setScannerBusy(false);
-        setScannerError("No QR code was found in that image.");
-        return;
-      }
-      await verifyScannedCode(barcodes[0].rawValue);
-    } catch (error) {
-      setScannerBusy(false);
-      setScannerError(error.message || "Failed to scan the QR photo.");
-    }
   }
 
   function openVerifiedApplication() {
@@ -862,24 +759,10 @@ export default function ReviewerWorkbench() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 px-5 py-4">
-            <div className="overflow-hidden rounded-2xl border border-border bg-surface-muted">
-              <video ref={videoRef} className="aspect-square w-full bg-black object-cover" muted playsInline />
-            </div>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <Button type="button" variant="outline" onClick={startScanner} disabled={!scannerSupported || scannerBusy}>
-                <Camera className="size-4" /> {scannerBusy ? (locale?.t("reviewer.qr.starting", "Starting...") ?? "Starting...") : (locale?.t("reviewer.qr.useCamera", "Use camera") ?? "Use camera")}
-              </Button>
-              <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
-                <QrCode className="size-4" /> {locale?.t("reviewer.qr.scanPhoto", "Scan QR photo") ?? "Scan QR photo"}
-              </Button>
-            </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={handleQrPhotoSelection}
-              className="hidden"
+            <LiveQrScanner
+              active={scannerOpen}
+              onScan={(value) => verifyScannedCode(value)}
+              onError={(message) => setScannerError(message)}
             />
             <div className="space-y-2">
               <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-tertiary">{locale?.t("reviewer.qr.pasteUrl", "Paste verification URL") ?? "Paste verification URL"}</div>
