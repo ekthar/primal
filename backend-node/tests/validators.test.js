@@ -124,6 +124,18 @@ describe('validators', () => {
       registrationCloseAt: '2026-05-09T10:00:00.000Z',
     });
     expect(error).toBeTruthy();
+    expect(error.message).toMatch(/registrationOpenAt must be before registrationCloseAt/);
+  });
+
+  it('returns a readable slug pattern message on tournament create', () => {
+    const { error } = schemas.tournament.adminCreate.validate({
+      name: 'Season 2027',
+      slug: 'Season 2027!',
+    });
+    expect(error).toBeTruthy();
+    const slugDetail = error.details.find((d) => d.path.join('.') === 'slug');
+    expect(slugDetail).toBeTruthy();
+    expect(slugDetail.message).toMatch(/slug may only contain lowercase letters, digits, and hyphens/);
   });
 
   it('accepts admin reweigh payload', () => {

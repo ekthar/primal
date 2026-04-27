@@ -108,7 +108,14 @@ const schemas = {
     }),
     adminCreate: Joi.object({
       name: Joi.string().min(3).max(160).required(),
-      slug: Joi.string().pattern(/^[a-z0-9-]+$/).min(2).max(80).required(),
+      slug: Joi.string()
+        .pattern(/^[a-z0-9-]+$/)
+        .min(2)
+        .max(80)
+        .required()
+        .messages({
+          'string.pattern.base': 'slug may only contain lowercase letters, digits, and hyphens',
+        }),
       season: Joi.string().max(80).allow(null, ''),
       registrationOpenAt: Joi.date().iso().allow(null),
       registrationCloseAt: Joi.date().iso().allow(null),
@@ -118,13 +125,19 @@ const schemas = {
       isPublic: Joi.boolean().default(true),
     }).custom((value, helpers) => {
       if (value.registrationOpenAt && value.registrationCloseAt && new Date(value.registrationOpenAt) > new Date(value.registrationCloseAt)) {
-        return helpers.error('any.invalid');
+        return helpers.message({ custom: 'registrationOpenAt must be before registrationCloseAt' });
       }
       return value;
     }, 'registration window validation'),
     adminUpdate: Joi.object({
       name: Joi.string().min(3).max(160),
-      slug: Joi.string().pattern(/^[a-z0-9-]+$/).min(2).max(80),
+      slug: Joi.string()
+        .pattern(/^[a-z0-9-]+$/)
+        .min(2)
+        .max(80)
+        .messages({
+          'string.pattern.base': 'slug may only contain lowercase letters, digits, and hyphens',
+        }),
       season: Joi.string().max(80).allow(null, ''),
       registrationOpenAt: Joi.date().iso().allow(null),
       registrationCloseAt: Joi.date().iso().allow(null),
@@ -135,7 +148,7 @@ const schemas = {
     }).min(1).custom((value, helpers) => {
       if (value.registrationOpenAt && value.registrationCloseAt) {
         if (new Date(value.registrationOpenAt) > new Date(value.registrationCloseAt)) {
-          return helpers.error('any.invalid');
+          return helpers.message({ custom: 'registrationOpenAt must be before registrationCloseAt' });
         }
       }
       return value;
