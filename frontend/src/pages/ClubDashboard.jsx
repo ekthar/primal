@@ -12,10 +12,10 @@ import { SectionLoader } from "@/components/shared/PrimalLoader";
 import { ResponsivePageShell, ResponsiveTable } from "@/components/shared/ResponsivePrimitives";
 import { DISCIPLINE_DEFINITIONS, GENDER_OPTIONS } from "@/lib/tournamentWorkflow";
 import {
-  ApplicationEditFields,
   pickEditableFormData,
   serializeFormDataForPatch,
 } from "@/components/application/ApplicationEditFields";
+import { ApplicationFormEditor } from "@/components/application/ApplicationFormEditor";
 import api from "@/lib/api";
 import { toast } from "sonner";
 
@@ -740,9 +740,10 @@ export default function ClubDashboard() {
                 </div>
               ) : null}
               <div className="mt-3">
-                <ApplicationEditFields
-                  value={activeApplicationEdits || pickEditableFormData(activeApplication)}
-                  onChange={setActiveApplicationEdits}
+                <ApplicationFormEditor
+                  mode="club"
+                  formDataValue={activeApplicationEdits || pickEditableFormData(activeApplication)}
+                  onFormDataChange={setActiveApplicationEdits}
                   flaggedFields={activeApplication.correction_fields}
                   disabled={!canEditApplication(activeApplication)}
                   idPrefix={`club-application-${activeApplication.id}`}
