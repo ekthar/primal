@@ -88,7 +88,8 @@ export default function AdminWebhooks() {
   async function test(sub) {
     const { data, error } = await api.testWebhook(sub.id, { event: sub.events[0] || "application.approved" });
     if (error) { toast.error(error.message || "Test failed"); return; }
-    toast.success(`Dispatched: ${data?.delivered ?? 0} delivered`);
+    if (data?.ok) toast.success(`Test delivered · ${data.status}`);
+    else toast.warning(`Test dispatched · ${data?.status || "unknown"}`);
     loadDeliveries(sub.id);
   }
 
