@@ -57,10 +57,18 @@ function validate(schema, source = 'body') {
 
 function notFound(_req, _res, next) { next(ApiError.notFound('Route not found')); }
 
-function errorHandler(err, req, res, _next) {
+function errorHandler(err, req, res, next) {
   const status = err.status || 500;
   const code = err.code || (status >= 500 ? 'INTERNAL' : 'ERROR');
   if (status >= 500) logger.error({ err, path: req.path, user: req.user?.id }, 'Unhandled error');
+  // If the response is already streaming (e.g. a PDF route called res.setHeader
+  // + doc.pipe(res) before throwing), we cannot send a JSON body. Closing the
+  // socket here prevents the stream from triggering ERR_STREAM_WRITE_AFTER_END
+  // on the next tick, which would crash the process.
+  if (res.headersSent) {
+    try { res.destroy(err); } catch (_) { /* ignore */ }
+    return next(err);
+  }
   res.status(status).json({
     error: {
       code,
