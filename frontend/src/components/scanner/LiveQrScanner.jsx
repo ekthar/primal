@@ -76,6 +76,11 @@ export default function LiveQrScanner({
   const fileInputRef = useRef(null);
   const scannerRef = useRef(null);
   const consumedRef = useRef(false);
+  // Set true by stop() to abort an in-flight start(). Without this, if the
+  // parent flips active=false during the await loadQrScanner() / hasCamera()
+  // gap, stop() runs early (scannerRef is still null), then start() resumes
+  // and leaves a live camera stream behind that nothing ever cleans up.
+  const cancelledRef = useRef(false);
   const [starting, setStarting] = useState(false);
   const [running, setRunning] = useState(false);
   const [hasFlash, setHasFlash] = useState(false);
@@ -111,6 +116,7 @@ export default function LiveQrScanner({
   );
 
   const stop = useCallback(async () => {
+    cancelledRef.current = true;
     const scanner = scannerRef.current;
     if (!scanner) return;
     try {
@@ -133,13 +139,22 @@ export default function LiveQrScanner({
     if (!videoRef.current) return;
     setLocalError("");
     consumedRef.current = false;
+    cancelledRef.current = false;
     setStarting(true);
     try {
       const QrScanner = await loadQrScanner();
+      if (cancelledRef.current) {
+        setStarting(false);
+        return;
+      }
       // Some browsers (older Safari) need user gesture before getUserMedia;
       // the parent only sets active=true after the user has clicked, so we
       // can attempt directly. If not allowed, we surface the error.
       const supported = await QrScanner.hasCamera();
+      if (cancelledRef.current) {
+        setStarting(false);
+        return;
+      }
       if (!supported) {
         reportError(
           "No camera detected on this device. Use \"Scan QR photo\" or paste the verification URL instead.",
@@ -156,6 +171,14 @@ export default function LiveQrScanner({
       });
       scannerRef.current = scanner;
       await scanner.start();
+      // If stop() ran while scanner.start() was awaiting, tear it down.
+      if (cancelledRef.current) {
+        try { await scanner.stop(); } catch { /* noop */ }
+        try { scanner.destroy(); } catch { /* noop */ }
+        scannerRef.current = null;
+        setStarting(false);
+        return;
+      }
       const flashAvailable = await scanner.hasFlash().catch(() => false);
       setHasFlash(Boolean(flashAvailable));
       setRunning(true);
