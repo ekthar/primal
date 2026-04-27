@@ -671,7 +671,30 @@ export default function ClubDashboard() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-tertiary" />
             <Input placeholder="Search applications..." value={query} onChange={(event) => setQuery(event.target.value)} className="pl-9 h-9 bg-surface" />
           </div>
-          <div className="rounded-2xl border border-border bg-surface overflow-hidden">
+          <div className="space-y-2 md:hidden">
+            {filtered.map((application) => (
+              <article key={application.id} className="rounded-2xl border border-border bg-surface p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium truncate">{application.first_name} {application.last_name}</div>
+                    <div className="text-[11px] text-tertiary font-mono truncate">{application.id}</div>
+                  </div>
+                  <StatusPill status={application.status} size="xs" />
+                </div>
+                <div className="mt-2 text-xs text-secondary-muted truncate">{application.tournament_name}</div>
+                <div className="mt-0.5 text-xs text-secondary-muted truncate">{application.discipline || "—"}</div>
+                <div className="mt-3 flex gap-2">
+                  <Button variant="outline" size="sm" className="flex-1" onClick={() => openApplication(application.id)}>
+                    <Pencil className="size-3.5 mr-1" /> {canEditApplication(application) ? "View / Edit" : "View"}
+                  </Button>
+                  <Button variant="outline" size="sm" className="flex-1" onClick={() => api.downloadApplicationPdf(application.id)}>
+                    <Download className="size-3.5 mr-1" /> PDF
+                  </Button>
+                </div>
+              </article>
+            ))}
+          </div>
+          <div className="hidden md:block rounded-2xl border border-border bg-surface overflow-hidden">
             <table className="w-full text-left">
               <thead>
                 <tr className="text-[10px] uppercase tracking-wider text-tertiary font-semibold border-b border-border">
@@ -800,47 +823,85 @@ export default function ClubDashboard() {
           ) : participants.length === 0 ? (
             <EmptyState icon={Plus} title="No participants yet" description="Use the onboarding form to add participants under this club." />
           ) : (
-            <ResponsiveTable>
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="text-[10px] uppercase tracking-wider text-tertiary font-semibold border-b border-border">
-                    <th className="px-5 py-3">Participant</th>
-                    <th className="px-5 py-3 hidden md:table-cell">Email</th>
-                    <th className="px-5 py-3 hidden sm:table-cell">Location</th>
-                    <th className="px-5 py-3">Discipline</th>
-                    <th className="px-5 py-3 text-right">Application</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {participants.map((participant) => {
-                    const address = participant.metadata?.address || {};
-                    const selectedDisciplines = participant.metadata?.selectedDisciplines || [];
-                    const participantApps = applicationsByProfile[participant.id] || [];
-                    const latestApp = participantApps[0];
-                    return (
-                      <tr key={participant.id} className="border-b border-border hover:bg-surface-muted/50 transition-colors">
-                        <td className="px-5 py-3">
-                          <div className="text-sm font-medium">{participant.first_name} {participant.last_name}</div>
-                          <div className="text-[11px] text-tertiary font-mono">{participant.id}</div>
-                        </td>
-                        <td className="px-5 py-3 hidden md:table-cell text-sm">{participant.email || "-"}</td>
-                        <td className="px-5 py-3 hidden sm:table-cell text-sm">{address.state || "-"} / {address.district || "-"}</td>
-                        <td className="px-5 py-3 text-sm">{selectedDisciplines.length ? selectedDisciplines.join(", ") : (participant.discipline || "-")}</td>
-                        <td className="px-5 py-3 text-right">
-                          {latestApp ? (
-                            <Button variant="ghost" className="h-8" onClick={() => api.downloadApplicationPdf(latestApp.id)}>
-                              <Printer className="size-3.5 mr-1" /> Print form
-                            </Button>
-                          ) : (
-                            <span className="text-xs text-tertiary">No application</span>
-                          )}
-                        </td>
+            <>
+              <div className="space-y-2 md:hidden">
+                {participants.map((participant) => {
+                  const address = participant.metadata?.address || {};
+                  const selectedDisciplines = participant.metadata?.selectedDisciplines || [];
+                  const participantApps = applicationsByProfile[participant.id] || [];
+                  const latestApp = participantApps[0];
+                  return (
+                    <article key={participant.id} className="rounded-2xl border border-border bg-surface p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium truncate">{participant.first_name} {participant.last_name}</div>
+                          <div className="text-[11px] text-tertiary font-mono truncate">{participant.id}</div>
+                        </div>
+                      </div>
+                      {participant.email ? (
+                        <div className="mt-2 text-xs text-secondary-muted truncate">{participant.email}</div>
+                      ) : null}
+                      <div className="mt-0.5 text-xs text-secondary-muted truncate">
+                        {address.state || "—"} / {address.district || "—"}
+                      </div>
+                      <div className="mt-2 text-xs">
+                        {selectedDisciplines.length ? selectedDisciplines.join(", ") : (participant.discipline || "—")}
+                      </div>
+                      {latestApp ? (
+                        <Button variant="outline" size="sm" className="mt-3 w-full" onClick={() => api.downloadApplicationPdf(latestApp.id)}>
+                          <Printer className="size-3.5 mr-1" /> Print form
+                        </Button>
+                      ) : (
+                        <div className="mt-3 text-xs text-tertiary">No application</div>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
+              <div className="hidden md:block">
+                <ResponsiveTable>
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="text-[10px] uppercase tracking-wider text-tertiary font-semibold border-b border-border">
+                        <th className="px-5 py-3">Participant</th>
+                        <th className="px-5 py-3 hidden md:table-cell">Email</th>
+                        <th className="px-5 py-3 hidden sm:table-cell">Location</th>
+                        <th className="px-5 py-3">Discipline</th>
+                        <th className="px-5 py-3 text-right">Application</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </ResponsiveTable>
+                    </thead>
+                    <tbody>
+                      {participants.map((participant) => {
+                        const address = participant.metadata?.address || {};
+                        const selectedDisciplines = participant.metadata?.selectedDisciplines || [];
+                        const participantApps = applicationsByProfile[participant.id] || [];
+                        const latestApp = participantApps[0];
+                        return (
+                          <tr key={participant.id} className="border-b border-border hover:bg-surface-muted/50 transition-colors">
+                            <td className="px-5 py-3">
+                              <div className="text-sm font-medium">{participant.first_name} {participant.last_name}</div>
+                              <div className="text-[11px] text-tertiary font-mono">{participant.id}</div>
+                            </td>
+                            <td className="px-5 py-3 hidden md:table-cell text-sm">{participant.email || "-"}</td>
+                            <td className="px-5 py-3 hidden sm:table-cell text-sm">{address.state || "-"} / {address.district || "-"}</td>
+                            <td className="px-5 py-3 text-sm">{selectedDisciplines.length ? selectedDisciplines.join(", ") : (participant.discipline || "-")}</td>
+                            <td className="px-5 py-3 text-right">
+                              {latestApp ? (
+                                <Button variant="ghost" className="h-8" onClick={() => api.downloadApplicationPdf(latestApp.id)}>
+                                  <Printer className="size-3.5 mr-1" /> Print form
+                                </Button>
+                              ) : (
+                                <span className="text-xs text-tertiary">No application</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </ResponsiveTable>
+              </div>
+            </>
           )}
         </TabsContent>
 
