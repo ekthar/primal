@@ -14,20 +14,22 @@ import api, { isApiLive } from "@/lib/api";
 import { formatPersonName } from "@/lib/person";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
+import { useLocale } from "@/context/LocaleContext";
 
 const STATUS_FILTERS = [
-  { id: "all", label: "All" },
-  { id: "draft", label: "Draft" },
-  { id: "submitted", label: "Submitted" },
-  { id: "under_review", label: "Under review" },
-  { id: "needs_correction", label: "Needs correction" },
-  { id: "approved", label: "Approved" },
-  { id: "rejected", label: "Rejected" },
+  { id: "all", labelKey: "status.all", label: "All" },
+  { id: "draft", labelKey: "status.draft", label: "Draft" },
+  { id: "submitted", labelKey: "status.submitted", label: "Submitted" },
+  { id: "under_review", labelKey: "status.under_review", label: "Under review" },
+  { id: "needs_correction", labelKey: "status.needs_correction", label: "Needs correction" },
+  { id: "approved", labelKey: "status.approved", label: "Approved" },
+  { id: "rejected", labelKey: "status.rejected", label: "Rejected" },
 ];
 
 export default function AdminQueue() {
   const router = useRouter();
   const { user } = useAuth();
+  const locale = useLocale();
   const [items, setItems] = useState([]);
   const [counts, setCounts] = useState({});
   const [loading, setLoading] = useState(true);
@@ -170,9 +172,9 @@ export default function AdminQueue() {
       <header className="sticky top-0 z-20 border-b border-border bg-background/85 backdrop-blur-xl">
         <div className="py-5">
           <PageSectionHeader
-            eyebrow="Admin queue"
-            title="Discipline-by-discipline review"
-            description={`${items.length} queued application${items.length === 1 ? "" : "s"} - live from review API`}
+            eyebrow={locale?.t("pages.adminQueue.eyebrow", "Admin queue") ?? "Admin queue"}
+            title={locale?.t("pages.adminQueue.title", "Discipline-by-discipline review") ?? "Discipline-by-discipline review"}
+            description={`${items.length} ${locale?.t(items.length === 1 ? "pages.adminQueue.queued" : "pages.adminQueue.queuedPlural", items.length === 1 ? "queued application" : "queued applications") ?? (items.length === 1 ? "queued application" : "queued applications")} — ${locale?.t("pages.adminQueue.liveFromApi", "live from review API") ?? "live from review API"}`}
             actions={(
               <Button
                 variant="outline"
@@ -180,7 +182,7 @@ export default function AdminQueue() {
                 className="h-9 w-full sm:w-auto"
                 onClick={handleExportApproved}
               >
-                <Download className="size-4" /> Export approved
+                <Download className="size-4" /> {locale?.t("pages.adminQueue.exportApproved", "Export approved") ?? "Export approved"}
               </Button>
             )}
             compact
@@ -191,7 +193,7 @@ export default function AdminQueue() {
           <div className="relative flex-1 max-w-xl">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-tertiary" />
             <Input
-              placeholder="Search applicant, club, or application ID"
+              placeholder={locale?.t("pages.adminQueue.searchPlaceholder", "Search applicant, club, or application ID") ?? "Search applicant, club, or application ID"}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               className="pl-9 h-10 bg-surface"
@@ -199,10 +201,10 @@ export default function AdminQueue() {
           </div>
           <Select value={stateFilter} onValueChange={setStateFilter} disabled={user?.role === "state_coordinator"}>
             <SelectTrigger className="h-10 w-56 bg-surface">
-              <SelectValue placeholder="All states" />
+              <SelectValue placeholder={locale?.t("pages.adminQueue.allStates", "All states") ?? "All states"} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All states</SelectItem>
+              <SelectItem value="all">{locale?.t("pages.adminQueue.allStates", "All states") ?? "All states"}</SelectItem>
               {stateOptions.map((state) => (
                 <SelectItem key={state} value={state}>{state}</SelectItem>
               ))}
@@ -217,14 +219,14 @@ export default function AdminQueue() {
               onClick={() => setStatusFilter(filter.id)}
               className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium whitespace-nowrap ${statusFilter === filter.id ? "bg-surface-muted text-foreground shadow-inner-top" : "text-secondary-muted hover:text-foreground hover:bg-surface-muted/60"}`}
             >
-              {filter.label}
+              {locale?.t(filter.labelKey, filter.label) ?? filter.label}
               <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-mono ${statusFilter === filter.id ? "bg-foreground text-background" : "bg-surface text-tertiary"}`}>
                 {countByStatus[filter.id] || 0}
               </span>
             </button>
           ))}
           <span className="inline-flex items-center gap-1 text-xs text-tertiary ml-auto">
-            <Filter className="size-3.5" /> Status filter {statusFilter === "all" ? "off" : "on"}
+            <Filter className="size-3.5" /> {locale?.t("pages.adminQueue.statusFilter", "Status filter") ?? "Status filter"} {statusFilter === "all" ? (locale?.t("pages.adminQueue.filterOff", "off") ?? "off") : (locale?.t("pages.adminQueue.filterOn", "on") ?? "on")}
           </span>
         </div>
       </header>
@@ -233,15 +235,15 @@ export default function AdminQueue() {
         {loading ? (
           <div className="py-2">
             <SectionLoader
-              title="Loading review queue"
-              description="Pulling the latest fighters, filters, and queue counts from the live review API."
+              title={locale?.t("pages.adminQueue.loadingTitle", "Loading review queue") ?? "Loading review queue"}
+              description={locale?.t("pages.adminQueue.loadingDescription", "Pulling the latest fighters, filters, and queue counts from the live review API.") ?? "Pulling the latest fighters, filters, and queue counts from the live review API."}
               cards={3}
               rows={6}
             />
           </div>
         ) : items.length === 0 ? (
           <div className="py-10">
-            <EmptyState icon={Search} title="No entries match these filters" description="Clear the search or switch the discipline and status filters." />
+            <EmptyState icon={Search} title={locale?.t("pages.adminQueue.noEntries", "No entries match these filters") ?? "No entries match these filters"} description={locale?.t("pages.adminQueue.clearOrSwitch", "Clear the search or switch the discipline and status filters.") ?? "Clear the search or switch the discipline and status filters."} />
           </div>
         ) : (
           <>
@@ -256,7 +258,7 @@ export default function AdminQueue() {
                     <div className="text-sm font-medium">{entry.applicant_display_name || formatPersonName(entry.first_name, entry.last_name)}</div>
                     <div className="mt-1 text-[11px] text-tertiary break-all">{entry.application_display_id || entry.id}</div>
                     <div className="mt-2 text-sm text-secondary-muted">{entry.tournament_name}</div>
-                    <div className="text-sm text-secondary-muted">{entry.club_name || "Individual"}</div>
+                    <div className="text-sm text-secondary-muted">{entry.club_name || (locale?.t("fields.individual", "Individual") ?? "Individual")}</div>
                   </div>
                   <div className="flex flex-col items-end gap-2">
                     <Checkbox checked={selected.has(entry.id)} onCheckedChange={() => toggleSelect(entry.id)} />
@@ -265,7 +267,7 @@ export default function AdminQueue() {
                 </div>
                 <div className="mt-4 flex gap-2">
                   <Button variant="outline" size="sm" className="flex-1" onClick={() => router.push(`/admin/review/${entry.id}`)}>
-                    Open
+                    {locale?.t("actions.open", "Open") ?? "Open"}
                   </Button>
                 </div>
               </article>
@@ -277,11 +279,11 @@ export default function AdminQueue() {
                 <th className="pl-6 py-3 w-10">
                   <Checkbox checked={selected.size > 0 && selected.size === items.length} onCheckedChange={selectAll} />
                 </th>
-                <th className="py-3">Applicant</th>
-                <th className="py-3 hidden lg:table-cell">Tournament</th>
-                <th className="py-3 hidden md:table-cell">Club</th>
-                <th className="py-3">Status</th>
-                <th className="py-3 pr-6 text-right">Actions</th>
+                <th className="py-3">{locale?.t("fields.applicant", "Applicant") ?? "Applicant"}</th>
+                <th className="py-3 hidden lg:table-cell">{locale?.t("fields.tournament", "Tournament") ?? "Tournament"}</th>
+                <th className="py-3 hidden md:table-cell">{locale?.t("fields.club", "Club") ?? "Club"}</th>
+                <th className="py-3">{locale?.t("fields.status", "Status") ?? "Status"}</th>
+                <th className="py-3 pr-6 text-right">{locale?.t("fields.action", "Action") ?? "Action"}</th>
               </tr>
             </thead>
             <tbody>
@@ -298,10 +300,10 @@ export default function AdminQueue() {
                     <div className="text-[11px] text-tertiary font-mono mt-1">{entry.application_display_id || entry.id}</div>
                   </td>
                   <td className="py-3 hidden lg:table-cell text-sm">{entry.tournament_name}</td>
-                  <td className="py-3 hidden md:table-cell text-sm">{entry.club_name || "Individual"}</td>
+                  <td className="py-3 hidden md:table-cell text-sm">{entry.club_name || (locale?.t("fields.individual", "Individual") ?? "Individual")}</td>
                   <td className="py-3"><StatusPill status={entry.status} size="xs" /></td>
                   <td className="py-3 pr-6 text-right">
-                    <Button variant="ghost" size="sm" onClick={() => router.push(`/admin/review/${entry.id}`)}>Open</Button>
+                    <Button variant="ghost" size="sm" onClick={() => router.push(`/admin/review/${entry.id}`)}>{locale?.t("actions.open", "Open") ?? "Open"}</Button>
                   </td>
                 </tr>
               ))}
@@ -317,13 +319,13 @@ export default function AdminQueue() {
             <span className="font-mono tabular-nums">{selected.size}</span> selected
           </div>
           <Button size="sm" variant="ghost" className="flex-1 sm:flex-none" disabled={runningBulkAction} onClick={() => openBulkDialog("approve")}>
-            <CheckCheck className="size-3.5" /> Approve
+            <CheckCheck className="size-3.5" /> {locale?.t("actions.approve", "Approve") ?? "Approve"}
           </Button>
           <Button size="sm" variant="ghost" className="flex-1 sm:flex-none" disabled={runningBulkAction} onClick={() => openBulkDialog("request_correction")}>
-            <Filter className="size-3.5" /> Correction
+            <Filter className="size-3.5" /> {locale?.t("actions.requestCorrection", "Request correction") ?? "Request correction"}
           </Button>
           <Button size="sm" variant="ghost" className="flex-1 sm:flex-none" disabled={runningBulkAction} onClick={() => openBulkDialog("reject")}>
-            <XCircle className="size-3.5" /> Reject
+            <XCircle className="size-3.5" /> {locale?.t("actions.reject", "Reject") ?? "Reject"}
           </Button>
         </StickyActionBar>
       )}

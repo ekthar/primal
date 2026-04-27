@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SectionLoader } from "@/components/shared/PrimalLoader";
 import { PageSectionHeader, ResponsivePageShell } from "@/components/shared/ResponsivePrimitives";
+import { useLocale } from "@/context/LocaleContext";
 
 function emptyDraft() {
   return {
@@ -22,6 +23,7 @@ function emptyDraft() {
 }
 
 export default function AdminAlbums() {
+  const locale = useLocale();
   const [albums, setAlbums] = useState([]);
   const [tournaments, setTournaments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -192,28 +194,28 @@ export default function AdminAlbums() {
   return (
     <ResponsivePageShell className="space-y-6">
       <PageSectionHeader
-        eyebrow="Primal Academy"
-        title="Photo albums"
-        description="Curate tournament photo albums. Albums can be tied to a season and published to the public site."
+        eyebrow={locale?.t("adminAlbums.eyebrow", "Primal Academy") ?? "Primal Academy"}
+        title={locale?.t("pages.adminAlbums.title", "Photo albums") ?? "Photo albums"}
+        description={locale?.t("adminAlbums.description", "Curate tournament photo albums. Albums can be tied to a season and published to the public site.") ?? "Curate tournament photo albums. Albums can be tied to a season and published to the public site."}
       />
 
       <div className="grid gap-6 lg:grid-cols-[380px_minmax(0,1fr)]">
         <aside className="rounded-3xl border border-border bg-surface elev-card p-4 space-y-3">
           <div className="flex items-center justify-between gap-2">
-            <h2 className="font-display text-lg font-semibold">Albums ({albums.length})</h2>
+            <h2 className="font-display text-lg font-semibold">{locale?.t("nav.albums", "Albums") ?? "Albums"} ({albums.length})</h2>
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="sm" onClick={refresh}>
                 <RefreshCcw className="size-4" />
               </Button>
               <Button size="sm" onClick={startNew}>
-                <Plus className="size-4" /> New
+                <Plus className="size-4" /> {locale?.t("adminAlbums.new", "New") ?? "New"}
               </Button>
             </div>
           </div>
           {loading ? <SectionLoader /> : (
             <ul className="space-y-2">
               {albums.length === 0 && (
-                <li className="text-sm text-secondary-muted px-2 py-4 text-center">No albums yet.</li>
+                <li className="text-sm text-secondary-muted px-2 py-4 text-center">{locale?.t("adminAlbums.empty", "No albums yet.") ?? "No albums yet."}</li>
               )}
               {albums.map((a) => (
                 <li key={a.id}>
@@ -252,8 +254,8 @@ export default function AdminAlbums() {
         <section className="rounded-3xl border border-border bg-surface elev-card p-6 space-y-5">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div>
-              <h2 className="font-display text-xl font-semibold">{selectedId ? "Edit album" : "New album"}</h2>
-              <p className="text-xs text-secondary-muted">Albums power `/albums` on the public site.</p>
+              <h2 className="font-display text-xl font-semibold">{selectedId ? (locale?.t("adminAlbums.editAlbum", "Edit album") ?? "Edit album") : (locale?.t("adminAlbums.newAlbum", "New album") ?? "New album")}</h2>
+              <p className="text-xs text-secondary-muted">{locale?.t("adminAlbums.publicHint", "Albums power `/albums` on the public site.") ?? "Albums power `/albums` on the public site."}</p>
             </div>
             <div className="flex items-center gap-2">
               {selected && (

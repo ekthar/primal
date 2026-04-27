@@ -1,4 +1,5 @@
 import { STATUS_LABELS } from "@/lib/mockData";
+import { useLocale } from "@/context/LocaleContext";
 
 const DOT_COLORS = {
   draft: "bg-zinc-400",
@@ -12,7 +13,9 @@ const DOT_COLORS = {
 };
 
 export function StatusPill({ status, size = "sm", showDot = true, testId }) {
-  const label = STATUS_LABELS[status] || status;
+  const locale = useLocale();
+  const fallback = STATUS_LABELS[status] || status;
+  const label = locale?.t(`status.${status}`, fallback) ?? fallback;
   return (
     <span
       data-testid={testId || `status-pill-${status}`}

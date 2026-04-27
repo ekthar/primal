@@ -20,6 +20,7 @@ import {
   Image as ImageIcon,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { useLocale } from "@/context/LocaleContext";
 import LocaleToggle from "@/components/shared/LocaleToggle";
 import ThemeToggle from "@/components/shared/ThemeToggle";
 import CommandPalette from "@/components/shared/CommandPalette";
@@ -51,35 +52,35 @@ function isActivePath(pathname, target) {
 
 const NAV = {
   admin: [
-    { to: "/admin/overview", icon: LayoutDashboard, label: "Overview", shortLabel: "Home", testid: "nav-overview" },
-    { to: "/admin/queue", icon: ListChecks, label: "Review Queue", shortLabel: "Queue", testid: "nav-queue" },
-    { to: "/admin/review", icon: Inbox, label: "Workbench", shortLabel: "Desk", testid: "nav-workbench" },
-    { to: "/admin/settings", icon: SlidersHorizontal, label: "Settings", shortLabel: "Settings", testid: "nav-settings" },
-    { to: "/admin/weighin", icon: Scale, label: "Weigh-In", shortLabel: "Weigh-in", testid: "nav-weighin" },
-    { to: "/admin/users", icon: Users, label: "Users", shortLabel: "Users", testid: "nav-users" },
-    { to: "/admin/brackets", icon: Trophy, label: "Brackets", shortLabel: "Brackets", testid: "nav-brackets" },
-    { to: "/admin/appeals", icon: Gavel, label: "Appeals", shortLabel: "Appeals", testid: "nav-appeals" },
-    { to: "/admin/reports", icon: BarChart3, label: "Reports", shortLabel: "Reports", testid: "nav-reports" },
-    { to: "/admin/circulars", icon: Newspaper, label: "Circulars", shortLabel: "Circulars", testid: "nav-circulars" },
-    { to: "/admin/albums", icon: ImageIcon, label: "Albums", shortLabel: "Albums", testid: "nav-albums" },
+    { to: "/admin/overview", icon: LayoutDashboard, label: "Overview", labelKey: "nav.adminOverview", shortLabel: "Home", testid: "nav-overview" },
+    { to: "/admin/queue", icon: ListChecks, label: "Review Queue", labelKey: "nav.queue", shortLabel: "Queue", testid: "nav-queue" },
+    { to: "/admin/review", icon: Inbox, label: "Workbench", labelKey: "nav.workbench", shortLabel: "Desk", testid: "nav-workbench" },
+    { to: "/admin/settings", icon: SlidersHorizontal, label: "Settings", labelKey: "nav.settings", shortLabel: "Settings", testid: "nav-settings" },
+    { to: "/admin/weighin", icon: Scale, label: "Weigh-In", labelKey: "nav.weighIn", shortLabel: "Weigh-in", testid: "nav-weighin" },
+    { to: "/admin/users", icon: Users, label: "Users", labelKey: "nav.users", shortLabel: "Users", testid: "nav-users" },
+    { to: "/admin/brackets", icon: Trophy, label: "Brackets", labelKey: "nav.brackets", shortLabel: "Brackets", testid: "nav-brackets" },
+    { to: "/admin/appeals", icon: Gavel, label: "Appeals", labelKey: "nav.appeals", shortLabel: "Appeals", testid: "nav-appeals" },
+    { to: "/admin/reports", icon: BarChart3, label: "Reports", labelKey: "nav.reports", shortLabel: "Reports", testid: "nav-reports" },
+    { to: "/admin/circulars", icon: Newspaper, label: "Circulars", labelKey: "nav.circulars", shortLabel: "Circulars", testid: "nav-circulars" },
+    { to: "/admin/albums", icon: ImageIcon, label: "Albums", labelKey: "nav.albums", shortLabel: "Albums", testid: "nav-albums" },
   ],
   reviewer: [
-    { to: "/admin/queue", icon: ListChecks, label: "Review Queue", shortLabel: "Queue", testid: "nav-queue" },
-    { to: "/admin/review", icon: Inbox, label: "Workbench", shortLabel: "Desk", testid: "nav-workbench" },
-    { to: "/admin/appeals", icon: Gavel, label: "Appeals", shortLabel: "Appeals", testid: "nav-appeals" },
+    { to: "/admin/queue", icon: ListChecks, label: "Review Queue", labelKey: "nav.queue", shortLabel: "Queue", testid: "nav-queue" },
+    { to: "/admin/review", icon: Inbox, label: "Workbench", labelKey: "nav.workbench", shortLabel: "Desk", testid: "nav-workbench" },
+    { to: "/admin/appeals", icon: Gavel, label: "Appeals", labelKey: "nav.appeals", shortLabel: "Appeals", testid: "nav-appeals" },
   ],
   state_coordinator: [
-    { to: "/admin/queue", icon: ListChecks, label: "State Queue", shortLabel: "Queue", testid: "nav-queue" },
-    { to: "/admin/review", icon: Inbox, label: "Workbench", shortLabel: "Desk", testid: "nav-workbench" },
-    { to: "/admin/settings", icon: SlidersHorizontal, label: "Settings", shortLabel: "Settings", testid: "nav-settings" },
-    { to: "/admin/weighin", icon: Scale, label: "Weigh-In", shortLabel: "Weigh-in", testid: "nav-weighin" },
-    { to: "/admin/reports", icon: BarChart3, label: "Reports", shortLabel: "Reports", testid: "nav-reports" },
+    { to: "/admin/queue", icon: ListChecks, label: "State Queue", labelKey: "nav.stateQueue", shortLabel: "Queue", testid: "nav-queue" },
+    { to: "/admin/review", icon: Inbox, label: "Workbench", labelKey: "nav.workbench", shortLabel: "Desk", testid: "nav-workbench" },
+    { to: "/admin/settings", icon: SlidersHorizontal, label: "Settings", labelKey: "nav.settings", shortLabel: "Settings", testid: "nav-settings" },
+    { to: "/admin/weighin", icon: Scale, label: "Weigh-In", labelKey: "nav.weighIn", shortLabel: "Weigh-in", testid: "nav-weighin" },
+    { to: "/admin/reports", icon: BarChart3, label: "Reports", labelKey: "nav.reports", shortLabel: "Reports", testid: "nav-reports" },
   ],
   club: [
-    { to: "/club", icon: LayoutDashboard, label: "Club Dashboard", shortLabel: "Club", testid: "nav-club" },
+    { to: "/club", icon: LayoutDashboard, label: "Club Dashboard", labelKey: "nav.club", shortLabel: "Club", testid: "nav-club" },
   ],
   applicant: [
-    { to: "/applicant", icon: LayoutDashboard, label: "My Application", shortLabel: "My app", testid: "nav-applicant" },
+    { to: "/applicant", icon: LayoutDashboard, label: "My Application", labelKey: "nav.applicant", shortLabel: "My app", testid: "nav-applicant" },
   ],
 };
 
@@ -92,12 +93,14 @@ const HOME_BY_ROLE = {
 };
 
 function Brand({ compact = false }) {
+  const locale = useLocale();
+  const operations = locale?.t("appShell.operations", "Fight operations") ?? "Fight operations";
   return (
     <div className="flex items-center gap-2">
       <img src="/primal-logo.png" alt="Primal" className="size-8 rounded-lg object-cover" />
       <div className={`leading-tight ${compact ? "hidden min-[420px]:block" : ""}`}>
         <div className="font-display font-semibold tracking-tight text-[15px]">Primal</div>
-        <div className="text-[10px] uppercase tracking-[0.14em] text-tertiary">Fight operations</div>
+        <div className="text-[10px] uppercase tracking-[0.14em] text-tertiary">{operations}</div>
       </div>
     </div>
   );
@@ -106,7 +109,9 @@ function Brand({ compact = false }) {
 function RoleSwitcher() {
   const { user, logout } = useAuth();
   const router = useRouter();
+  const locale = useLocale();
   if (!user) return null;
+  const tRole = locale?.t(`roles.${user.role}`, user.role) ?? user.role;
 
   return (
     <DropdownMenu>
@@ -123,14 +128,14 @@ function RoleSwitcher() {
           </Avatar>
           <div className="flex-1 text-left min-w-0">
             <div className="text-sm font-medium truncate">{user.name}</div>
-            <div className="text-[11px] text-tertiary capitalize truncate">{user.role}</div>
+            <div className="text-[11px] text-tertiary truncate">{tRole}</div>
           </div>
           <ChevronDown className="size-4 text-tertiary" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" side="top" className="w-60">
         <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-tertiary">
-          Signed in
+          {locale?.t("appShell.signedIn", "Signed in") ?? "Signed in"}
         </DropdownMenuLabel>
         <DropdownMenuItem disabled>
           {user.email}
@@ -138,11 +143,11 @@ function RoleSwitcher() {
         <DropdownMenuSeparator />
         <DropdownMenuItem>
           <Settings className="size-3.5" />
-          Settings
+          {locale?.t("appShell.settings", "Settings") ?? "Settings"}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => { logout(); router.push("/login"); }} data-testid="logout-btn">
           <LogOut className="size-3.5" />
-          Log out
+          {locale?.t("appShell.logOut", "Log out") ?? "Log out"}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -151,7 +156,9 @@ function RoleSwitcher() {
 
 function NavLink({ item, compact = false, onNavigate }) {
   const router = useRouter();
+  const locale = useLocale();
   const active = isActivePath(router.pathname, item.to);
+  const label = item.labelKey ? (locale?.t(item.labelKey, item.label) ?? item.label) : item.label;
   return (
     <Link
       href={item.to}
@@ -164,13 +171,14 @@ function NavLink({ item, compact = false, onNavigate }) {
       }`}
     >
       <item.icon className={`size-[18px] shrink-0 ${active ? "text-primary" : ""}`} strokeWidth={1.75} />
-      {!compact ? <span className="truncate">{item.label}</span> : <span className="sr-only">{item.label}</span>}
+      {!compact ? <span className="truncate">{label}</span> : <span className="sr-only">{label}</span>}
     </Link>
   );
 }
 
 function DesktopSidebar() {
   const { user } = useAuth();
+  const locale = useLocale();
   const nav = NAV[user?.role] || [];
   return (
     <aside className="hidden md:sticky md:top-0 md:flex md:h-screen md:self-start md:w-72 shrink-0 flex-col border-r border-border bg-surface/40 backdrop-blur-xl">
@@ -179,7 +187,7 @@ function DesktopSidebar() {
       </div>
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         <div className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-tertiary">
-          Workspace
+          {locale?.t("appShell.workspace", "Workspace") ?? "Workspace"}
         </div>
         {nav.map((n) => (
           <NavLink key={n.to} item={n} />
@@ -188,7 +196,9 @@ function DesktopSidebar() {
       <div className="p-3 border-t border-border space-y-2">
         <RoleSwitcher />
         <div className="flex items-center justify-between px-1 pt-1">
-          <span className="text-[10px] uppercase tracking-wider text-tertiary">Theme</span>
+          <span className="text-[10px] uppercase tracking-wider text-tertiary">
+            {locale?.t("appShell.theme", "Theme") ?? "Theme"}
+          </span>
           <ThemeToggle />
         </div>
         <div className="flex items-center justify-between px-1 pt-1">
@@ -201,12 +211,13 @@ function DesktopSidebar() {
 
 function MobileNavSheet({ nav }) {
   const [open, setOpen] = useState(false);
+  const locale = useLocale();
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
         <button className="inline-flex size-10 items-center justify-center rounded-xl border border-border bg-surface hover:bg-surface-muted focus-ring">
           <Menu className="size-4" />
-          <span className="sr-only">Open navigation</span>
+          <span className="sr-only">{locale?.t("appShell.openNav", "Open navigation") ?? "Open navigation"}</span>
         </button>
       </SheetTrigger>
       <SheetContent side="left" className="w-[88vw] max-w-sm border-r border-border bg-background p-0">
@@ -224,7 +235,9 @@ function MobileNavSheet({ nav }) {
           <div className="border-t border-border p-4 space-y-3">
             <RoleSwitcher />
             <div className="flex items-center justify-between px-1">
-              <span className="text-[10px] uppercase tracking-wider text-tertiary">Theme</span>
+              <span className="text-[10px] uppercase tracking-wider text-tertiary">
+                {locale?.t("appShell.theme", "Theme") ?? "Theme"}
+              </span>
               <ThemeToggle compact />
             </div>
             <LocaleToggle compact />

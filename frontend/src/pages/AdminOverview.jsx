@@ -5,8 +5,10 @@ import { Button } from "@/components/ui/button";
 import { InlineLoadingLabel, SectionLoader } from "@/components/shared/PrimalLoader";
 import api from "@/lib/api";
 import { toast } from "sonner";
+import { useLocale } from "@/context/LocaleContext";
 
 export default function AdminOverview() {
+  const locale = useLocale();
   const [loading, setLoading] = useState(true);
   const [sla, setSla] = useState(null);
   const [workload, setWorkload] = useState([]);
@@ -54,21 +56,21 @@ export default function AdminOverview() {
     <div className="max-w-7xl mx-auto px-6 py-8">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">Tournament overview</div>
-          <h1 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight mt-1">Tournament workflow command center</h1>
+          <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">{locale?.t("adminOverview.eyebrow", "Tournament overview") ?? "Tournament overview"}</div>
+          <h1 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight mt-1">{locale?.t("pages.adminOverview.title", "Tournament workflow command center") ?? "Tournament workflow command center"}</h1>
           <p className="text-sm text-secondary-muted mt-2 max-w-3xl">
-            Live registration and review telemetry for operations, assignment load, and SLA risk.
+            {locale?.t("adminOverview.description", "Live registration and review telemetry for operations, assignment load, and SLA risk.") ?? "Live registration and review telemetry for operations, assignment load, and SLA risk."}
           </p>
         </div>
         <div className="flex gap-2">
-          <Link href="/admin/queue"><Button variant="outline"><ListChecks className="size-4" /> Review queue</Button></Link>
-          <Link href="/admin/weighin"><Button variant="outline"><Scale className="size-4" /> Weigh-in updates</Button></Link>
-          <Link href="/admin/settings"><Button variant="outline"><SlidersHorizontal className="size-4" /> Tournament settings</Button></Link>
-          <Button variant="outline" onClick={handleApprovedParticipantsExport}><Download className="size-4" /> Approved participants</Button>
+          <Link href="/admin/queue"><Button variant="outline"><ListChecks className="size-4" /> {locale?.t("nav.queue", "Review queue") ?? "Review queue"}</Button></Link>
+          <Link href="/admin/weighin"><Button variant="outline"><Scale className="size-4" /> {locale?.t("adminOverview.weighInUpdates", "Weigh-in updates") ?? "Weigh-in updates"}</Button></Link>
+          <Link href="/admin/settings"><Button variant="outline"><SlidersHorizontal className="size-4" /> {locale?.t("adminOverview.tournamentSettings", "Tournament settings") ?? "Tournament settings"}</Button></Link>
+          <Button variant="outline" onClick={handleApprovedParticipantsExport}><Download className="size-4" /> {locale?.t("adminOverview.approvedParticipants", "Approved participants") ?? "Approved participants"}</Button>
           <Button variant="outline" onClick={loadOverview}>
-            <InlineLoadingLabel loading={loading} loadingText="Refreshing...">
+            <InlineLoadingLabel loading={loading} loadingText={locale?.t("adminOverview.refreshing", "Refreshing...") ?? "Refreshing..."}>
               <>
-                <RefreshCcw className="size-4" /> Refresh
+                <RefreshCcw className="size-4" /> {locale?.t("actions.refresh", "Refresh") ?? "Refresh"}
               </>
             </InlineLoadingLabel>
           </Button>
@@ -87,22 +89,22 @@ export default function AdminOverview() {
       ) : (
         <>
       <div className="mt-8 grid sm:grid-cols-2 xl:grid-cols-5 gap-3">
-        <Kpi label="Applications" value={loading ? "-" : totalApplications} helper="All workflow states" />
-        <Kpi label="Open queue" value={loading ? "-" : sla?.openTotal ?? 0} helper="Submitted + under review" tone="amber" />
-        <Kpi label="Approved" value={loading ? "-" : counts.approved ?? 0} helper="Finalized approvals" tone="emerald" />
-        <Kpi label="Rejected" value={loading ? "-" : counts.rejected ?? 0} helper="Finalized rejections" tone="blue" />
-        <Kpi label="Overdue SLA" value={loading ? "-" : sla?.overdue ?? 0} helper="Needs immediate action" tone="amber" />
+        <Kpi label={locale?.t("adminOverview.kpi.applications", "Applications") ?? "Applications"} value={loading ? "-" : totalApplications} helper={locale?.t("adminOverview.kpi.applicationsHelper", "All workflow states") ?? "All workflow states"} />
+        <Kpi label={locale?.t("adminOverview.kpi.openQueue", "Open queue") ?? "Open queue"} value={loading ? "-" : sla?.openTotal ?? 0} helper={locale?.t("adminOverview.kpi.openQueueHelper", "Submitted + under review") ?? "Submitted + under review"} tone="amber" />
+        <Kpi label={locale?.t("status.approved", "Approved") ?? "Approved"} value={loading ? "-" : counts.approved ?? 0} helper={locale?.t("adminOverview.kpi.approvedHelper", "Finalized approvals") ?? "Finalized approvals"} tone="emerald" />
+        <Kpi label={locale?.t("status.rejected", "Rejected") ?? "Rejected"} value={loading ? "-" : counts.rejected ?? 0} helper={locale?.t("adminOverview.kpi.rejectedHelper", "Finalized rejections") ?? "Finalized rejections"} tone="blue" />
+        <Kpi label={locale?.t("adminOverview.kpi.overdueSla", "Overdue SLA") ?? "Overdue SLA"} value={loading ? "-" : sla?.overdue ?? 0} helper={locale?.t("adminOverview.kpi.overdueSlaHelper", "Needs immediate action") ?? "Needs immediate action"} tone="amber" />
       </div>
 
       <div className="mt-6 grid lg:grid-cols-[1.2fr_0.8fr] gap-5">
         <section className="rounded-3xl border border-border bg-surface elev-card p-6">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="font-display text-2xl font-semibold tracking-tight">Queue distribution</h2>
-              <p className="text-sm text-secondary-muted mt-1">Current volume by workflow status.</p>
+              <h2 className="font-display text-2xl font-semibold tracking-tight">{locale?.t("adminOverview.queueDistribution", "Queue distribution") ?? "Queue distribution"}</h2>
+              <p className="text-sm text-secondary-muted mt-1">{locale?.t("adminOverview.queueDistributionHelper", "Current volume by workflow status.") ?? "Current volume by workflow status."}</p>
             </div>
             <Link href="/admin/reports" className="text-sm font-medium inline-flex items-center gap-1 text-foreground">
-              Open full report <ArrowRight className="size-4" />
+              {locale?.t("adminOverview.openFullReport", "Open full report") ?? "Open full report"} <ArrowRight className="size-4" />
             </Link>
           </div>
 
@@ -110,8 +112,8 @@ export default function AdminOverview() {
             <table className="w-full text-left">
               <thead>
                 <tr className="text-[10px] uppercase tracking-wider text-tertiary font-semibold border-b border-border">
-                  <th className="py-3">Status</th>
-                  <th className="py-3">Count</th>
+                  <th className="py-3">{locale?.t("fields.status", "Status") ?? "Status"}</th>
+                  <th className="py-3">{locale?.t("adminOverview.count", "Count") ?? "Count"}</th>
                 </tr>
               </thead>
               <tbody>
@@ -131,8 +133,8 @@ export default function AdminOverview() {
           <div className="flex items-center gap-2">
             <Layers3 className="size-5 text-primary" />
             <div>
-              <h2 className="font-display text-2xl font-semibold tracking-tight">Reviewer load</h2>
-              <p className="text-sm text-secondary-muted mt-1">Who is carrying open queue and recent decisions.</p>
+              <h2 className="font-display text-2xl font-semibold tracking-tight">{locale?.t("adminOverview.reviewerLoad", "Reviewer load") ?? "Reviewer load"}</h2>
+              <p className="text-sm text-secondary-muted mt-1">{locale?.t("adminOverview.reviewerLoadHelper", "Who is carrying open queue and recent decisions.") ?? "Who is carrying open queue and recent decisions."}</p>
             </div>
           </div>
           <div className="mt-5 space-y-3">

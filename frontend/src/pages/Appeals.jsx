@@ -8,9 +8,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { useLocale } from "@/context/LocaleContext";
 
 export default function Appeals() {
   const { user } = useAuth();
+  const locale = useLocale();
   const [loading, setLoading] = useState(true);
   const [appeals, setAppeals] = useState([]);
   const [applicationById, setApplicationById] = useState({});
@@ -130,7 +132,7 @@ export default function Appeals() {
               <ChevronRight className="size-3" />
               <span className="font-mono">{selected.id}</span>
             </div>
-            <h1 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight mt-2">Appeal hearing</h1>
+            <h1 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight mt-2">{locale?.t("adminAppeals.heading", "Appeal hearing") ?? "Appeal hearing"}</h1>
             <p className="text-sm text-secondary-muted mt-1">Filed {new Date(selected.filedAt).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}</p>
 
             <div className="mt-8 rounded-2xl border border-border bg-surface p-6">
