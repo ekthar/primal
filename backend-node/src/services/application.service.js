@@ -68,6 +68,13 @@ async function assertCanView(user, app) {
 
 async function assertCanEdit(user, app) {
   await assertCanView(user, app);
+  // Admins can correct on behalf of an applicant in any status that isn't archived.
+  if (user.role === 'admin') {
+    if (app.status === STATUS.SEASON_CLOSED) {
+      throw ApiError.forbidden('Application is locked because the season has closed');
+    }
+    return;
+  }
   if (app.status === STATUS.DRAFT) {
     const tournament = await tournamentsRepo.findById(app.tournament_id);
     assertRegistrationWindowOpen(tournament);

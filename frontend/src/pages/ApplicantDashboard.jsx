@@ -82,6 +82,8 @@ export default function ApplicantDashboard() {
   const [startingSeasonId, setStartingSeasonId] = useState(null);
   const [draftUploads, setDraftUploads] = useState({});
   const [submittingDraftId, setSubmittingDraftId] = useState(null);
+  const [correctionEdits, setCorrectionEdits] = useState({});
+  const [submittingCorrectionId, setSubmittingCorrectionId] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -213,6 +215,62 @@ export default function ApplicantDashboard() {
         [kind]: file || null,
       },
     }));
+  }
+
+  function getCorrectionEdits(application) {
+    if (correctionEdits[application.id]) return correctionEdits[application.id];
+    const fd = application.form_data || {};
+    return {
+      notes: fd.notes || "",
+      experienceLevel: fd.experienceLevel || "",
+      selectedDisciplines: Array.isArray(fd.selectedDisciplines) ? fd.selectedDisciplines : [],
+    };
+  }
+
+  function setCorrectionField(applicationId, key, value) {
+    setCorrectionEdits((current) => {
+      const previous = current[applicationId] || getCorrectionEdits({ id: applicationId, form_data: applications.find((a) => a.id === applicationId)?.form_data });
+      return { ...current, [applicationId]: { ...previous, [key]: value } };
+    });
+  }
+
+  async function saveCorrections(application, { resubmit = false } = {}) {
+    const edits = getCorrectionEdits(application);
+    setSubmittingCorrectionId(application.id);
+    const filesByKind = draftUploads[application.id] || {};
+    for (const kind of Object.keys(filesByKind)) {
+      const file = filesByKind[kind];
+      if (!file) continue;
+      const capturedVia = typeof file?.name === "string" && file.name.startsWith("scan-") ? "scan" : "upload";
+      const { error: uploadError } = await api.uploadApplicationDocument(application.id, { file, kind, label: file.name, capturedVia });
+      if (uploadError) {
+        setSubmittingCorrectionId(null);
+        toast.error(uploadError.message || `Failed to replace ${kind}`);
+        return;
+      }
+    }
+    const { data: patchData, error: patchError } = await api.updateApplication(application.id, { formData: edits });
+    if (patchError) {
+      setSubmittingCorrectionId(null);
+      toast.error(patchError.message || "Failed to save corrections");
+      return;
+    }
+    let next = patchData?.application || application;
+    if (resubmit) {
+      const { data: subData, error: subError } = await api.resubmitApplication(application.id);
+      if (subError) {
+        setSubmittingCorrectionId(null);
+        toast.error(subError.message || "Failed to resubmit application");
+        setApplications((current) => current.map((item) => (item.id === application.id ? next : item)));
+        return;
+      }
+      next = subData?.application || next;
+    }
+    setApplications((current) => current.map((item) => (item.id === application.id ? next : item)));
+    setDraftUploads((current) => ({ ...current, [application.id]: {} }));
+    setCorrectionEdits((current) => { const c = { ...current }; delete c[application.id]; return c; });
+    setSubmittingCorrectionId(null);
+    toast.success(resubmit ? "Corrections sent for re-review" : "Corrections saved");
   }
 
   async function uploadAndSubmitDraft(application) {
@@ -521,6 +579,98 @@ export default function ApplicantDashboard() {
                           <InlineLoadingLabel loading={submittingDraftId === application.id} loadingText="Submitting...">
                             Submit this season application
                           </InlineLoadingLabel>
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {application.status === "needs_correction" ? (
+                    <div className="mt-4 rounded-xl border border-amber-300/60 bg-amber-50/40 p-4">
+                      <div className="flex items-center gap-2 text-sm font-medium text-amber-900">
+                        <AlertCircle className="size-4" /> Correct your application
+                      </div>
+                      {Array.isArray(application.correction_fields) && application.correction_fields.length ? (
+                        <div className="mt-2 text-xs text-amber-900">
+                          <span className="font-medium">Flagged fields:</span>{" "}
+                          {application.correction_fields.map((f) => (
+                            <span key={f} className="inline-block mr-1.5 rounded-full bg-amber-100/80 px-2 py-0.5 capitalize">{String(f).replace(/_/g, " ")}</span>
+                          ))}
+                        </div>
+                      ) : null}
+                      {application.correction_reason ? (
+                        <div className="mt-2 text-sm text-secondary"><strong>Reviewer note:</strong> {application.correction_reason}</div>
+                      ) : null}
+
+                      <div className="mt-4 grid gap-3">
+                        <div>
+                          <label className="text-xs uppercase tracking-wider text-tertiary">Notes for the reviewer</label>
+                          <Textarea
+                            className="mt-1 bg-background"
+                            rows={3}
+                            placeholder="Describe what you fixed or upload replacement docs below"
+                            value={getCorrectionEdits(application).notes}
+                            onChange={(e) => setCorrectionField(application.id, "notes", e.target.value)}
+                          />
+                        </div>
+                        <div className="grid sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-xs uppercase tracking-wider text-tertiary">Experience level</label>
+                            <select
+                              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                              value={getCorrectionEdits(application).experienceLevel}
+                              onChange={(e) => setCorrectionField(application.id, "experienceLevel", e.target.value)}
+                            >
+                              <option value="">—</option>
+                              <option value="novice">Novice</option>
+                              <option value="intermediate">Intermediate</option>
+                              <option value="advanced">Advanced</option>
+                              <option value="elite">Elite</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-xs uppercase tracking-wider text-tertiary">Disciplines</label>
+                            <div className="mt-1 flex flex-wrap gap-2">
+                              {["mma", "kickboxing", "bjj", "wrestling", "boxing"].map((d) => {
+                                const selected = getCorrectionEdits(application).selectedDisciplines.includes(d);
+                                return (
+                                  <button
+                                    type="button"
+                                    key={d}
+                                    onClick={() => {
+                                      const current = getCorrectionEdits(application).selectedDisciplines;
+                                      const next = selected ? current.filter((x) => x !== d) : [...current, d];
+                                      setCorrectionField(application.id, "selectedDisciplines", next);
+                                    }}
+                                    className={`rounded-full border px-2.5 py-1 text-xs capitalize ${selected ? "border-primary bg-primary/10 text-primary" : "border-border bg-background"}`}
+                                  >{d}</button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-4">
+                        <div className="text-xs uppercase tracking-wider text-tertiary mb-2">Replace flagged documents (optional)</div>
+                        <div className="grid gap-3 xl:grid-cols-3">
+                          {REQUIRED_UPLOADS.map((item) => (
+                            <DraftUploadCard
+                              key={item.kind}
+                              applicationId={application.id}
+                              item={item}
+                              file={draftUploads[application.id]?.[item.kind] || null}
+                              onFileChange={setDraftFile}
+                            />
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="mt-4 flex flex-wrap justify-end gap-2">
+                        <Button variant="outline" size="sm" onClick={() => saveCorrections(application, { resubmit: false })} disabled={submittingCorrectionId === application.id}>
+                          <InlineLoadingLabel loading={submittingCorrectionId === application.id} loadingText="Saving...">Save changes</InlineLoadingLabel>
+                        </Button>
+                        <Button size="sm" onClick={() => saveCorrections(application, { resubmit: true })} disabled={submittingCorrectionId === application.id}>
+                          <InlineLoadingLabel loading={submittingCorrectionId === application.id} loadingText="Resubmitting...">Resubmit for review</InlineLoadingLabel>
                         </Button>
                       </div>
                     </div>

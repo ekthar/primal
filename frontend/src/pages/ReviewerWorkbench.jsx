@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import StatusPill from "@/components/shared/StatusPill";
 import CredentialCard from "@/components/shared/CredentialCard";
@@ -50,6 +51,9 @@ export default function ReviewerWorkbench() {
   const [scannerResult, setScannerResult] = useState(null);
   const [scannedValue, setScannedValue] = useState("");
   const [reviewDialog, setReviewDialog] = useState({ open: false, action: null, reason: "", fields: "" });
+  const [adminEditOpen, setAdminEditOpen] = useState(false);
+  const [adminEditDraft, setAdminEditDraft] = useState({ notes: "", experienceLevel: "", selectedDisciplines: [] });
+  const [adminEditSaving, setAdminEditSaving] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState(null);
   const [pdfPreviewError, setPdfPreviewError] = useState(null);
   const videoRef = useRef(null);
@@ -175,6 +179,31 @@ export default function ReviewerWorkbench() {
   async function refreshAll() {
     await loadQueue();
     if (activeId) await loadApplication(activeId);
+  }
+
+  function openAdminEdit() {
+    if (!activeApplication) return;
+    const fd = activeApplication.form_data || {};
+    setAdminEditDraft({
+      notes: fd.notes || "",
+      experienceLevel: fd.experienceLevel || "",
+      selectedDisciplines: Array.isArray(fd.selectedDisciplines) ? [...fd.selectedDisciplines] : [],
+    });
+    setAdminEditOpen(true);
+  }
+
+  async function saveAdminEdit() {
+    if (!activeApplication) return;
+    setAdminEditSaving(true);
+    const { data, error } = await api.updateApplication(activeApplication.id, { formData: adminEditDraft });
+    setAdminEditSaving(false);
+    if (error) {
+      toast.error(error.message || "Failed to save changes");
+      return;
+    }
+    if (data?.application) setActiveApplication((current) => ({ ...current, ...data.application, statusEvents: current?.statusEvents }));
+    setAdminEditOpen(false);
+    toast.success("Application updated");
   }
 
   function stopScanner() {
@@ -671,7 +700,14 @@ export default function ReviewerWorkbench() {
         <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
           <div className="space-y-5">
             <section className="rounded-2xl border border-border bg-surface p-6">
-              <h3 className="font-display text-xl font-semibold tracking-tight">{locale?.t("reviewer.disciplineEntry", "Discipline entry") ?? "Discipline entry"}</h3>
+              <div className="flex items-start justify-between gap-3">
+                <h3 className="font-display text-xl font-semibold tracking-tight">{locale?.t("reviewer.disciplineEntry", "Discipline entry") ?? "Discipline entry"}</h3>
+                {user?.role === "admin" && activeApplication?.status !== "season_closed" ? (
+                  <Button size="sm" variant="outline" onClick={openAdminEdit}>
+                    {locale?.t("reviewer.adminEdit.button", "Edit application") ?? "Edit application"}
+                  </Button>
+                ) : null}
+              </div>
               <Separator className="my-4" />
               <div className="grid sm:grid-cols-2 gap-4 text-sm">
                 <Detail label={locale?.t("fields.discipline", "Discipline") ?? "Discipline"} value={activeApplication.discipline || "-"} />
@@ -904,6 +940,56 @@ export default function ReviewerWorkbench() {
                   : reviewDialog.action === "request_correction"
                     ? (locale?.t("reviewer.dialog.sendCorrection", "Send correction") ?? "Send correction")
                     : (locale?.t("reviewer.reject", "Reject") ?? "Reject")}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={adminEditOpen} onOpenChange={setAdminEditOpen}>
+        <DialogContent className="max-w-lg rounded-3xl border-border">
+          <DialogHeader>
+            <DialogTitle>{locale?.t("reviewer.adminEdit.title", "Correct application on behalf of applicant") ?? "Correct application on behalf of applicant"}</DialogTitle>
+            <DialogDescription>{locale?.t("reviewer.adminEdit.desc", "Saves form data without changing application status. Use this to fix typos or selections an applicant cannot self-correct in time.") ?? "Saves form data without changing application status. Use this to fix typos or selections an applicant cannot self-correct in time."}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-tertiary">{locale?.t("reviewer.adminEdit.notes", "Notes") ?? "Notes"}</div>
+              <Textarea rows={3} className="mt-1 bg-surface" value={adminEditDraft.notes} onChange={(e) => setAdminEditDraft((c) => ({ ...c, notes: e.target.value }))} />
+            </div>
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-tertiary">{locale?.t("reviewer.adminEdit.experience", "Experience level") ?? "Experience level"}</div>
+              <select className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm" value={adminEditDraft.experienceLevel} onChange={(e) => setAdminEditDraft((c) => ({ ...c, experienceLevel: e.target.value }))}>
+                <option value="">—</option>
+                <option value="novice">Novice</option>
+                <option value="intermediate">Intermediate</option>
+                <option value="advanced">Advanced</option>
+                <option value="elite">Elite</option>
+              </select>
+            </div>
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-tertiary">{locale?.t("reviewer.adminEdit.disciplines", "Disciplines") ?? "Disciplines"}</div>
+              <div className="mt-1 flex flex-wrap gap-2">
+                {["mma", "kickboxing", "bjj", "wrestling", "boxing"].map((d) => {
+                  const selected = adminEditDraft.selectedDisciplines.includes(d);
+                  return (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setAdminEditDraft((c) => ({
+                        ...c,
+                        selectedDisciplines: selected ? c.selectedDisciplines.filter((x) => x !== d) : [...c.selectedDisciplines, d],
+                      }))}
+                      className={`rounded-full border px-2.5 py-1 text-xs capitalize ${selected ? "border-primary bg-primary/10 text-primary" : "border-border bg-surface"}`}
+                    >{d}</button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setAdminEditOpen(false)} disabled={adminEditSaving}>{locale?.t("actions.cancel", "Cancel") ?? "Cancel"}</Button>
+              <Button onClick={saveAdminEdit} disabled={adminEditSaving}>
+                {adminEditSaving ? (locale?.t("actions.saving", "Saving...") ?? "Saving...") : (locale?.t("actions.save", "Save") ?? "Save")}
               </Button>
             </div>
           </div>

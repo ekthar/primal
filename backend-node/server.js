@@ -57,7 +57,23 @@ const corsDelegate = (req, callback) => {
 };
 
 app.set('trust proxy', 1);
-app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+// Allow the configured frontend origins to embed responses from this API in an
+// <iframe> (e.g. document/PDF preview in Reviewer Workbench). frame-ancestors
+// in CSP supersedes X-Frame-Options in modern browsers, so we keep frameguard
+// off and rely on CSP for the policy.
+const frameAncestors = ["'self'", ...configuredCorsOrigins];
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  frameguard: false,
+  contentSecurityPolicy: {
+    useDefaults: true,
+    directives: {
+      'frame-ancestors': frameAncestors,
+      'script-src': ["'self'"],
+      'object-src': ["'none'"],
+    },
+  },
+}));
 app.use(cors(corsDelegate));
 app.options('*', cors(corsDelegate));
 app.use(express.json({ limit: `${config.maxUploadMb}mb` }));
