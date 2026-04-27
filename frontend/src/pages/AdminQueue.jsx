@@ -330,7 +330,7 @@ export default function AdminQueue() {
         </StickyActionBar>
       )}
       <Dialog open={bulkDialog.open} onOpenChange={(open) => !open && closeBulkDialog()}>
-        <DialogContent className="max-w-lg rounded-3xl border-border">
+        <DialogContent className="max-w-lg rounded-2xl sm:rounded-3xl border-border max-h-[92dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{bulkDialog.action === "request_correction" ? "Bulk correction request" : "Bulk rejection"}</DialogTitle>
             <DialogDescription>

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, Layers3, ListChecks, TimerReset, RefreshCcw, Download, Scale, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { InlineLoadingLabel, SectionLoader } from "@/components/shared/PrimalLoader";
+import { ResponsivePageShell } from "@/components/shared/ResponsivePrimitives";
 import api from "@/lib/api";
 import { toast } from "sonner";
 import { useLocale } from "@/context/LocaleContext";
@@ -53,7 +54,7 @@ export default function AdminOverview() {
   const isBootLoading = loading && !sla && !workload.length && !Object.keys(counts || {}).length;
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
+    <ResponsivePageShell>
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">{locale?.t("adminOverview.eyebrow", "Tournament overview") ?? "Tournament overview"}</div>
@@ -216,7 +217,7 @@ export default function AdminOverview() {
       </div>
         </>
       )}
-    </div>
+    </ResponsivePageShell>
   );
 }
 
