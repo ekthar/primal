@@ -33,6 +33,39 @@ export function getRefreshToken() {
   return localStorage.getItem(REFRESH_TOKEN_KEY);
 }
 
+/**
+ * Joi validation errors come back from the backend as
+ *   { code: "UNPROCESSABLE",
+ *     message: "Validation failed",
+ *     details: { errors: [{ path: "slug", message: "..." }, ...] } }
+ *
+ * Toasts only render `error.message`, so a bare "Validation failed" string
+ * gives the user no way to tell which field actually tripped. Fold the
+ * field-level reasons into the message so every caller (admin tournament
+ * create, applicant Register flow, club CRUD, etc.) automatically shows
+ * the underlying Joi detail without having to plumb `details.errors` by
+ * hand.
+ */
+function buildApiError(payload, status, statusText) {
+  const fallback = {
+    code: `HTTP_${status}`,
+    message: statusText || "Request failed",
+  };
+  const err = payload?.error ? { ...payload.error } : fallback;
+  const fieldErrors = Array.isArray(err.details?.errors) ? err.details.errors : null;
+  if (fieldErrors && fieldErrors.length) {
+    const summary = fieldErrors
+      .map((entry) => entry?.message || (entry?.path ? `${entry.path} is invalid` : "invalid value"))
+      .filter(Boolean)
+      .join("; ");
+    if (summary) {
+      const base = err.message || "Validation failed";
+      err.message = base === summary ? base : `${base}: ${summary}`;
+    }
+  }
+  return err;
+}
+
 async function refreshAccessToken() {
   const refreshToken = getRefreshToken();
   if (!refreshToken) return false;
@@ -87,7 +120,7 @@ async function request(method, path, { body, query, headers = {}, raw = false, r
 
     const isJson = res.headers.get("content-type")?.includes("application/json");
     const payload = isJson ? await res.json() : await res.text();
-    if (!res.ok) return { data: null, error: payload?.error || { code: `HTTP_${res.status}`, message: res.statusText } };
+    if (!res.ok) return { data: null, error: buildApiError(payload, res.status, res.statusText) };
     return { data: payload, error: null };
   } catch (err) {
     return { data: null, error: { code: "NETWORK", message: err.message } };
@@ -114,7 +147,7 @@ async function downloadFile(path, { query, filename }) {
     let apiError = { code: `HTTP_${res.status}`, message: res.statusText || "Download failed" };
     try {
       const payload = await res.json();
-      if (payload?.error) apiError = payload.error;
+      apiError = buildApiError(payload, res.status, res.statusText || "Download failed");
     } catch {
       // Keep fallback message when non-JSON error payload is returned.
     }
@@ -133,7 +166,7 @@ async function fetchAsBlobUrl(path, { query } = {}) {
     let apiError = { code: `HTTP_${res.status}`, message: res.statusText || "Fetch failed" };
     try {
       const payload = await res.json();
-      if (payload?.error) apiError = payload.error;
+      apiError = buildApiError(payload, res.status, res.statusText || "Fetch failed");
     } catch { /* keep fallback */ }
     return { data: null, error: apiError };
   }
