@@ -45,6 +45,7 @@ const CORRECTION_FIELD_OPTIONS = [
   { id: "cornerCoachName", label: "Corner / coach" },
   { id: "cornerCoachPhone", label: "Coach phone" },
   { id: "emergencyContactName", label: "Emergency contact" },
+  { id: "emergencyContactRelation", label: "Emergency relation" },
   { id: "emergencyContactPhone", label: "Emergency phone" },
   { id: "medicalNotes", label: "Medical notes" },
   { id: "notes", label: "Notes" },
