@@ -6,6 +6,7 @@ const { ApiError } = require('../apiError');
 const { config } = require('../config');
 const { write: auditWrite } = require('../audit');
 const { dispatch: notify } = require('../notifications');
+const webhookService = require('./webhook.service');
 const bracketService = require('./bracket.service');
 const { formatPersonName, applicationDisplayId } = require('./identity.service');
 const { logger } = require('../logger');
@@ -163,6 +164,15 @@ async function notifyDecision(app, toStatus, reason) {
       dueAt: app.correction_due_at,
       appealWindowDays: config.workflow.appealWindowDays,
     },
+  });
+  webhookService.emitAsync(template, {
+    applicationId: app.id,
+    applicationDisplayId: applicationDisplayId(app.id),
+    status: toStatus,
+    tournamentName: full.tournament_name,
+    tournamentSlug: full.tournament_slug || null,
+    applicantName: formatPersonName(full.first_name, full.last_name),
+    reason: reason || null,
   });
 }
 
