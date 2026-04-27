@@ -24,6 +24,12 @@ import { useLocale } from "@/context/LocaleContext";
 import LocaleToggle from "@/components/shared/LocaleToggle";
 import ThemeToggle from "@/components/shared/ThemeToggle";
 import CageEnergyCanvas from "@/components/landing/CageEnergyCanvas";
+import KineticHeadline from "@/components/landing/anime/KineticHeadline";
+import CountUp from "@/components/landing/anime/CountUp";
+import ScrambleText from "@/components/landing/anime/ScrambleText";
+import MagneticCTA from "@/components/landing/anime/MagneticCTA";
+import StaggerGrid from "@/components/landing/anime/StaggerGrid";
+import RippleField from "@/components/landing/anime/RippleField";
 import { HERO_IMAGE, TEXTURE_IMAGE } from "@/lib/mockData";
 import { api } from "@/lib/api";
 import { useMotionProfile } from "@/lib/motion";
@@ -252,15 +258,19 @@ function Hero({ registrationOpen, nextTournamentLabel }) {
             </Reveal>
 
             <div className="mt-8">
-              <SplitHeadline parts={[
+              <KineticHeadline parts={[
                 { text: "Primal" },
                 { text: "Fight" },
                 { text: "Series", italic: true },
                 { br: true },
-                { text: "Built" },
-                { text: "for" },
-                { text: "gyms." },
+                { text: "Conducted" },
+                { text: "across" },
+                { text: "India." },
               ]} />
+              <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-border bg-surface/70 backdrop-blur px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-tertiary">
+                <span className="size-1.5 rounded-full bg-primary" />
+                <ScrambleText text="POWERED BY PRIMAL ACADEMY" />
+              </div>
             </div>
 
             <Reveal delay={0.25}>
@@ -291,22 +301,26 @@ function Hero({ registrationOpen, nextTournamentLabel }) {
             <Reveal delay={0.4}>
               <div className="mt-8 sm:mt-10 flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-3 max-w-md sm:max-w-none">
                 {registrationOpen ? (
-                  <Link href="/register">
-                    <Button size="lg" className="w-full sm:w-auto bg-primary hover:bg-primary-hover text-primary-foreground h-12 px-6 rounded-full" data-testid="hero-cta-register">
-                      Register to compete
-                      <ArrowRight className="size-4 ml-1" />
-                    </Button>
-                  </Link>
+                  <MagneticCTA strength={28}>
+                    <Link href="/register">
+                      <Button size="lg" className="w-full sm:w-auto bg-primary hover:bg-primary-hover text-primary-foreground h-12 px-6 rounded-full" data-testid="hero-cta-register">
+                        Register to compete
+                        <ArrowRight className="size-4 ml-1" />
+                      </Button>
+                    </Link>
+                  </MagneticCTA>
                 ) : (
                   <Button size="lg" disabled className="w-full sm:w-auto h-12 px-6 rounded-full opacity-75" data-testid="hero-cta-register-disabled">
                     Registration not open yet
                   </Button>
                 )}
-                <Link href="/register?track=club">
-                  <Button size="lg" variant="outline" className="w-full sm:w-auto h-12 px-6 rounded-full bg-surface/60 backdrop-blur border-border" data-testid="hero-cta-club">
-                    Register a gym <ArrowUpRight className="size-4 ml-1" />
-                  </Button>
-                </Link>
+                <MagneticCTA>
+                  <Link href="/register?track=club">
+                    <Button size="lg" variant="outline" className="w-full sm:w-auto h-12 px-6 rounded-full bg-surface/60 backdrop-blur border-border" data-testid="hero-cta-club">
+                      Register a gym <ArrowUpRight className="size-4 ml-1" />
+                    </Button>
+                  </Link>
+                </MagneticCTA>
                 <Link href="/login">
                   <Button size="lg" variant="ghost" className="w-full sm:w-auto h-12 px-5 rounded-full" data-testid="hero-cta-admin">
                     Staff access
@@ -725,22 +739,90 @@ function AdminShowcase() {
 
 function Stats() {
   const items = [
-    { n: "71%", l: "Approval rate" },
-    { n: "6.2h", l: "Avg review time" },
-    { n: "18%", l: "Correction rate" },
-    { n: "428", l: "Applicants this season" },
+    { to: 71, suffix: "%", l: "Approval rate", code: "APPRV-RT" },
+    { to: 62, suffix: "h", l: "Avg review time", divisor: 10, code: "AVG-RVW" },
+    { to: 18, suffix: "%", l: "Correction rate", code: "CORR-RT" },
+    { to: 428, suffix: "", l: "Applicants this season", code: "SEASON-APP" },
   ];
   return (
-    <section id="stats" className="py-24 border-y border-border bg-surface-muted/30">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-2 lg:grid-cols-4 gap-10">
-        {items.map((s, i) => (
-          <Reveal key={s.l} delay={i * 0.08}>
-            <div className="flex flex-col gap-2">
-              <div className="font-display text-5xl sm:text-6xl font-semibold tracking-tight tabular-nums">{s.n}</div>
-              <div className="text-[11px] uppercase tracking-[0.18em] text-tertiary font-semibold">{s.l}</div>
+    <section id="stats" className="relative py-24 border-y border-border bg-surface-muted/30 overflow-hidden">
+      <div className="absolute inset-0 opacity-30 pointer-events-none">
+        <RippleField cols={18} rows={9} />
+      </div>
+      <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-[10px] uppercase tracking-[0.22em] text-tertiary font-semibold mb-2">
+          <ScrambleText text="LIVE TELEMETRY · PRIMAL" />
+        </div>
+        <h2 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight mb-10 max-w-3xl text-balance">
+          Numbers from the last season Primal Academy ran.
+        </h2>
+        <StaggerGrid className="grid grid-cols-2 lg:grid-cols-4 gap-10" grid={[4, 1]}>
+          {items.map((s) => (
+            <div key={s.l} className="flex flex-col gap-2">
+              <div className="font-display text-5xl sm:text-6xl font-semibold tracking-tight tabular-nums">
+                <CountUp
+                  to={s.to}
+                  suffix={s.suffix}
+                  format={(n) =>
+                    s.divisor
+                      ? (n / s.divisor).toFixed(1)
+                      : Math.round(n).toLocaleString("en-IN")
+                  }
+                />
+              </div>
+              <div className="text-[11px] uppercase tracking-[0.18em] text-tertiary font-semibold flex items-center gap-2">
+                <span>{s.l}</span>
+                <span className="font-mono text-[10px] text-tertiary/70">{s.code}</span>
+              </div>
             </div>
-          </Reveal>
-        ))}
+          ))}
+        </StaggerGrid>
+      </div>
+    </section>
+  );
+}
+
+function TournamentsByPrimal() {
+  const items = [
+    { tag: "ALL-INDIA", title: "Primal Fight Series", body: "Pan-India MMA & striking circuit. Open registration each season for fighters and gyms." },
+    { tag: "STATE", title: "State Championships", body: "Per-state qualifying brackets coordinated through dedicated state coordinators." },
+    { tag: "GYM", title: "Inter-Gym League", body: "Roster-based competition between Primal Academy partner gyms." },
+    { tag: "GRAPPLING", title: "Submission-only Series", body: "BJJ, wrestling, and submission grappling brackets with discipline-specific rules." },
+    { tag: "STRIKING", title: "Stand-up Showcase", body: "Boxing, Muay Thai, and kickboxing weight-class tournaments." },
+    { tag: "WOMENS", title: "Women's Open", body: "Dedicated women's brackets across all primary disciplines." },
+  ];
+  return (
+    <section className="relative py-24 sm:py-32 overflow-hidden">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-end justify-between gap-6 flex-wrap mb-10">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.22em] text-tertiary font-semibold">Tournaments by Primal</div>
+            <h2 className="font-display mt-3 text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight text-balance max-w-3xl">
+              The events Primal Academy <span className="italic text-primary">conducts</span> on this platform.
+            </h2>
+          </div>
+          <p className="max-w-md text-sm text-secondary-muted leading-relaxed">
+            Each tournament uses the same registration, review, weigh-in, and bracket system you see live on this site.
+          </p>
+        </div>
+        <StaggerGrid className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5" grid={[3, 2]}>
+          {items.map((it) => (
+            <article key={it.title} className="group relative rounded-3xl border border-border bg-surface p-6 sm:p-7 elev-card overflow-hidden">
+              <div
+                className="absolute inset-0 opacity-[0.04] group-hover:opacity-[0.08] transition-opacity pointer-events-none"
+                style={{ backgroundImage: `url(${TEXTURE_IMAGE})`, backgroundSize: "cover" }}
+                aria-hidden
+              />
+              <div className="relative">
+                <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-primary font-semibold">
+                  <ScrambleText text={it.tag} />
+                </div>
+                <h3 className="font-display mt-3 text-xl sm:text-2xl font-semibold tracking-tight text-balance">{it.title}</h3>
+                <p className="mt-3 text-sm text-secondary-muted leading-relaxed">{it.body}</p>
+              </div>
+            </article>
+          ))}
+        </StaggerGrid>
       </div>
     </section>
   );
@@ -893,6 +975,7 @@ export default function Landing() {
         "Teams - Verified",
         "Athletes - Ready",
       ]} />
+      <TournamentsByPrimal />
       <Paths />
       <WorkflowScrollytell />
       <AdminShowcase />
