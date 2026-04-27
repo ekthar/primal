@@ -382,7 +382,7 @@ export default function ReviewerWorkbench() {
       open: true,
       action,
         reason: action === "reject" ? "Eligibility criteria not met" : action === "request_correction" ? "Please update the flagged fields" : "Appeal granted",
-      fields: action === "request_correction" ? "medical,weight_class" : "",
+      fields: "",
     });
   }
 
