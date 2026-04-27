@@ -469,14 +469,14 @@ export default function ReviewerWorkbench() {
         ) : (
           <>
         <header className="sticky top-0 z-10 border-b border-border bg-background/85 backdrop-blur-xl">
-          <div className="px-6 py-5 flex items-center gap-4 flex-wrap">
+          <div className="px-3 py-3 sm:px-6 sm:py-5 flex items-center gap-3 sm:gap-4 flex-wrap">
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 text-xs text-tertiary">
-                <span className="font-mono">{activeApplication.application_display_id || activeApplication.id}</span>
-                <ChevronRight className="size-3" />
-                <span>{activeApplication.tournament_name}</span>
+              <div className="flex items-center gap-2 text-[11px] sm:text-xs text-tertiary">
+                <span className="font-mono truncate">{activeApplication.application_display_id || activeApplication.id}</span>
+                <ChevronRight className="size-3 shrink-0" />
+                <span className="truncate">{activeApplication.tournament_name}</span>
               </div>
-              <h2 className="font-display text-2xl font-semibold tracking-tight mt-1">
+              <h2 className="font-display text-lg sm:text-2xl font-semibold tracking-tight mt-1 truncate">
                 {activeApplication.applicant_display_name || formatPersonName(activeApplication.first_name, activeApplication.last_name)}
               </h2>
               <div className="mt-2 flex items-center gap-3 flex-wrap">
@@ -573,7 +573,7 @@ export default function ReviewerWorkbench() {
           </div>
         </header>
 
-        <div className="p-6 space-y-5">
+        <div className="p-3 sm:p-6 space-y-4 sm:space-y-5 pb-24 lg:pb-6">
           <CredentialCard
             applicationDisplayId={activeApplication.application_display_id || activeApplication.id}
             applicantName={activeApplication.applicant_display_name || formatPersonName(activeApplication.first_name, activeApplication.last_name)}
@@ -591,10 +591,10 @@ export default function ReviewerWorkbench() {
             portraitUrl={resolveBackendUrl((activeApplication.documents || []).find((doc) => doc.kind === "photo_id")?.url || "") || null}
           />
 
-          <section className="rounded-2xl border border-border bg-surface p-6">
+          <section className="rounded-2xl border border-border bg-surface p-4 sm:p-6">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div>
-                <h3 className="font-display text-xl font-semibold tracking-tight">{locale?.t("reviewer.credentialPreview", "Printable credential preview") ?? "Printable credential preview"}</h3>
+                <h3 className="font-display text-lg sm:text-xl font-semibold tracking-tight">{locale?.t("reviewer.credentialPreview", "Printable credential preview") ?? "Printable credential preview"}</h3>
                 <p className="text-sm text-secondary-muted mt-1">{locale?.t("reviewer.credentialPreviewHelper", "Live view of the Primal OS application PDF — matches exactly what prints.") ?? "Live view of the Primal OS application PDF — matches exactly what prints."}</p>
               </div>
               <Button
@@ -607,7 +607,7 @@ export default function ReviewerWorkbench() {
             </div>
             <div className="mt-4 overflow-hidden rounded-2xl border border-border bg-background">
               {pdfPreviewError ? (
-                <div className="flex h-[70vh] w-full items-center justify-center p-6 text-center text-sm text-secondary-muted">
+                <div className="flex h-[60vh] sm:h-[70vh] w-full items-center justify-center p-6 text-center text-sm text-secondary-muted">
                   {pdfPreviewError}. {locale?.t("reviewer.usePdfInstead", "Use") ?? "Use"} <span className="mx-1 font-medium">{locale?.t("reviewer.downloadPdf", "Download PDF") ?? "Download PDF"}</span> {locale?.t("reviewer.instead", "instead") ?? "instead"}.
                 </div>
               ) : pdfPreviewUrl ? (
@@ -615,21 +615,21 @@ export default function ReviewerWorkbench() {
                   key={activeApplication.id}
                   title={`Application PDF preview for ${activeApplication.application_display_id || activeApplication.id}`}
                   src={`${pdfPreviewUrl}#toolbar=0&navpanes=0`}
-                  className="h-[70vh] w-full"
+                  className="h-[60vh] sm:h-[70vh] w-full"
                 />
               ) : (
-                <div className="flex h-[70vh] w-full items-center justify-center p-6 text-center text-sm text-secondary-muted">
+                <div className="flex h-[60vh] sm:h-[70vh] w-full items-center justify-center p-6 text-center text-sm text-secondary-muted">
                   {locale?.t("reviewer.loadingCredentialPreview", "Loading credential preview\u2026") ?? "Loading credential preview\u2026"}
                 </div>
               )}
             </div>
           </section>
 
-        <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
-          <div className="space-y-5">
-            <section className="rounded-2xl border border-border bg-surface p-6">
+        <div className="grid gap-4 sm:gap-5 lg:grid-cols-[1.2fr_0.8fr]">
+          <div className="space-y-4 sm:space-y-5">
+            <section className="rounded-2xl border border-border bg-surface p-4 sm:p-6">
               <div className="flex items-start justify-between gap-3">
-                <h3 className="font-display text-xl font-semibold tracking-tight">{locale?.t("reviewer.disciplineEntry", "Discipline entry") ?? "Discipline entry"}</h3>
+                <h3 className="font-display text-lg sm:text-xl font-semibold tracking-tight">{locale?.t("reviewer.disciplineEntry", "Discipline entry") ?? "Discipline entry"}</h3>
                 {user?.role === "admin" && activeApplication?.status !== "season_closed" ? (
                   <Button size="sm" variant="outline" onClick={openAdminEdit}>
                     {locale?.t("reviewer.adminEdit.button", "Edit application") ?? "Edit application"}
@@ -648,11 +648,11 @@ export default function ReviewerWorkbench() {
               </div>
             </section>
 
-            <section className="rounded-2xl border border-border bg-surface p-6">
+            <section className="rounded-2xl border border-border bg-surface p-4 sm:p-6">
               <div className="flex items-start gap-3">
                 <Swords className="size-5 text-primary shrink-0 mt-0.5" />
                 <div>
-                  <h3 className="font-display text-xl font-semibold tracking-tight">{locale?.t("reviewer.reviewTimeline", "Review timeline") ?? "Review timeline"}</h3>
+                  <h3 className="font-display text-lg sm:text-xl font-semibold tracking-tight">{locale?.t("reviewer.reviewTimeline", "Review timeline") ?? "Review timeline"}</h3>
                   <p className="text-sm text-secondary-muted mt-2">
                     {locale?.t("reviewer.reviewTimelineHelper", "Full event log for auditability from creation to current state.") ?? "Full event log for auditability from creation to current state."}
                   </p>
@@ -674,8 +674,8 @@ export default function ReviewerWorkbench() {
           </div>
 
           <div className="space-y-5">
-            <section className="rounded-2xl border border-border bg-surface p-6">
-              <h3 className="font-display text-xl font-semibold tracking-tight">{locale?.t("reviewer.participantDetails", "Participant details") ?? "Participant details"}</h3>
+            <section className="rounded-2xl border border-border bg-surface p-4 sm:p-6">
+              <h3 className="font-display text-lg sm:text-xl font-semibold tracking-tight">{locale?.t("reviewer.participantDetails", "Participant details") ?? "Participant details"}</h3>
               <Separator className="my-4" />
               <div className="space-y-3 text-sm">
                 <Detail label={locale?.t("fields.club", "Club") ?? "Club"} value={activeApplication.club_name || (locale?.t("fields.individual", "Individual") ?? "Individual")} />
@@ -688,8 +688,8 @@ export default function ReviewerWorkbench() {
               </div>
             </section>
 
-            <section className="rounded-2xl border border-border bg-surface p-6">
-              <h3 className="font-display text-xl font-semibold tracking-tight">{locale?.t("reviewer.documentsAndChecks", "Documents and checks") ?? "Documents and checks"}</h3>
+            <section className="rounded-2xl border border-border bg-surface p-4 sm:p-6">
+              <h3 className="font-display text-lg sm:text-xl font-semibold tracking-tight">{locale?.t("reviewer.documentsAndChecks", "Documents and checks") ?? "Documents and checks"}</h3>
               <Separator className="my-4" />
               <div className="space-y-3 text-sm">
                 <CheckRow ok={hasRequiredDocs} label={locale?.t("reviewer.checks.requiredUploaded", "Required documents uploaded") ?? "Required documents uploaded"} />
@@ -744,12 +744,17 @@ export default function ReviewerWorkbench() {
               <Undo2 className="size-4 mr-1.5" /> {locale?.t("reviewer.reopen", "Reopen") ?? "Reopen"}
             </Button>
           )}
+          {["approved", "rejected", "needs_correction"].includes(activeApplication.status) && (
+            <Button variant="outline" className="flex-1" disabled={actionBusy} onClick={handleResendNotification}>
+              <Mail className="size-4 mr-1.5" /> {locale?.t("reviewer.resendNotification", "Resend") ?? "Resend"}
+            </Button>
+          )}
         </StickyActionBar>
           </>
         )}
       </section>
       <Dialog open={scannerOpen} onOpenChange={setScannerOpen}>
-        <DialogContent className="max-w-md rounded-3xl border-border p-0 sm:max-w-md">
+        <DialogContent className="w-full max-w-md p-0 sm:max-w-md sm:rounded-3xl border-border max-h-[92dvh] overflow-y-auto rounded-3xl">
           <DialogHeader className="border-b border-border px-5 py-4">
             <DialogTitle className="flex items-center gap-2">
               <QrCode className="size-5 text-primary" /> {locale?.t("reviewer.qr.title", "Verify printed application") ?? "Verify printed application"}
@@ -808,7 +813,7 @@ export default function ReviewerWorkbench() {
         </DialogContent>
       </Dialog>
       <Dialog open={reviewDialog.open} onOpenChange={(open) => !open && closeReviewDialog()}>
-        <DialogContent className="max-w-lg rounded-3xl border-border">
+        <DialogContent className="max-w-lg sm:rounded-3xl border-border max-h-[92dvh] overflow-y-auto rounded-2xl">
           <DialogHeader>
             <DialogTitle>
               {reviewDialog.action === "reopen"
@@ -895,7 +900,7 @@ export default function ReviewerWorkbench() {
       </Dialog>
 
       <Dialog open={adminEditOpen} onOpenChange={setAdminEditOpen}>
-        <DialogContent className="max-w-3xl rounded-3xl border-border max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl border-border max-h-[92dvh] overflow-y-auto rounded-2xl sm:rounded-3xl p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>{locale?.t("reviewer.adminEdit.title", "Correct application on behalf of applicant") ?? "Correct application on behalf of applicant"}</DialogTitle>
             <DialogDescription>{locale?.t("reviewer.adminEdit.desc", "Saves form data without changing application status. Use this to fix typos or selections an applicant cannot self-correct in time.") ?? "Saves form data without changing application status. Use this to fix typos or selections an applicant cannot self-correct in time."}</DialogDescription>
