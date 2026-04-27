@@ -27,12 +27,12 @@ function loginErrorMessage(error, locale) {
   const normalized = rawMessage.toLowerCase();
 
   if (code === "UNAUTHORIZED" || code === "HTTP_401" || normalized.includes("invalid")) {
-    return "Invalid email or password";
+    return locale?.t("login.invalidCredentials", "Invalid email or password");
   }
   if (code === "NETWORK") {
-    return "Cannot reach server. Check connection and try again";
+    return locale?.t("login.networkError", "Cannot reach server. Check connection and try again");
   }
-  return rawMessage || locale?.t("common.signIn", "Sign in") + " failed";
+  return rawMessage || locale?.t("login.signInFailed", "Sign in failed");
 }
 
 export default function Login() {
@@ -51,7 +51,7 @@ export default function Login() {
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (!email || !password) {
-      toast.error(locale?.t("common.email", "Email") + " " + locale?.t("common.password", "Password") + " required");
+      toast.error(locale?.t("login.requiredEmailPassword", "Email and password are required"));
       return;
     }
     setLoading(true);
@@ -61,7 +61,7 @@ export default function Login() {
       toast.error(loginErrorMessage(error, locale));
       return;
     }
-    toast.success(`Welcome back - signed in as ${user.role}`);
+    toast.success(`${locale?.t("login.welcomeBackRolePrefix", "Welcome back - signed in as")} ${user.role}`);
     router.push(nextRoute || "/");
   };
 
@@ -81,7 +81,7 @@ export default function Login() {
 
         <div className="flex-1 flex items-center justify-center px-6 sm:px-10 pb-10">
           <div className="w-full max-w-md">
-            <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">Sign in</div>
+            <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">{locale?.t("login.eyebrow", "Sign in")}</div>
             <h1 className="font-display mt-2 text-3xl sm:text-4xl font-semibold tracking-tight">{locale?.t("login.title", "Welcome back.")}</h1>
             <p className="mt-2 text-sm text-secondary-muted">
               {locale?.t("login.subtitle", "Choose your account type, then sign in with your own email and password.")}
@@ -126,7 +126,7 @@ export default function Login() {
                   onChange={(event) => setPassword(event.target.value)}
                   data-testid="login-password"
                   className="mt-1.5 h-11 bg-surface"
-                  placeholder="Enter your password"
+                  placeholder={locale?.t("login.passwordPlaceholder", "Enter your password")}
                 />
                 <div className="mt-2 text-right">
                   <Link href="/forgot-password" className="text-xs text-secondary-muted hover:text-foreground hover:underline">
@@ -140,7 +140,7 @@ export default function Login() {
                 data-testid="login-submit"
                 className="w-full h-11 bg-primary hover:bg-primary-hover text-primary-foreground font-medium"
               >
-                <InlineLoadingLabel loading={loading} loadingText="Signing in...">
+                <InlineLoadingLabel loading={loading} loadingText={locale?.t("login.signingIn", "Signing in...")}>
                   <>
                       {locale?.t("common.signIn", "Sign in")} <ArrowRight className="size-4 ml-1" />
                   </>

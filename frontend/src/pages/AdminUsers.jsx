@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/context/AuthContext";
+import { useLocale } from "@/context/LocaleContext";
 import api from "@/lib/api";
 import { toast } from "sonner";
 
@@ -12,6 +13,7 @@ const ROLE_OPTIONS = ["reviewer", "state_coordinator", "club", "applicant", "adm
 
 export default function AdminUsers() {
   const { user } = useAuth();
+  const locale = useLocale();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -66,7 +68,7 @@ export default function AdminUsers() {
       password: draft.password,
       role: draft.role,
       stateCode: draft.role === "state_coordinator" ? draft.stateCode : undefined,
-      locale: "en",
+      locale: locale?.locale || "en",
     });
     setSaving(false);
 

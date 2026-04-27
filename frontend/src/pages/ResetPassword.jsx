@@ -41,15 +41,15 @@ export default function ResetPassword() {
   const submit = async (event) => {
     event.preventDefault();
     if (!token) {
-      toast.error("Reset token is missing");
+      toast.error(locale?.t("auth.resetTokenMissing", "Reset token is missing"));
       return;
     }
     if (!newPassword || newPassword.length < 8) {
-      toast.error("Password must be at least 8 characters");
+      toast.error(locale?.t("auth.passwordMin8", "Password must be at least 8 characters"));
       return;
     }
     if (newPassword !== confirmPassword) {
-      toast.error("Passwords do not match");
+      toast.error(locale?.t("auth.passwordsDoNotMatch", "Passwords do not match"));
       return;
     }
 
@@ -58,11 +58,11 @@ export default function ResetPassword() {
     setLoading(false);
 
     if (error) {
-      toast.error(error.message || "Unable to reset password");
+      toast.error(error.message || locale?.t("auth.unableToReset", "Unable to reset password"));
       return;
     }
 
-    toast.success("Password reset successful. Please sign in.");
+    toast.success(locale?.t("auth.resetSuccess", "Password reset successful. Please sign in."));
     router.push("/login");
   };
 
@@ -78,9 +78,9 @@ export default function ResetPassword() {
         </div>
 
         <div className="rounded-3xl border border-border bg-surface elev-card p-7 mt-6">
-          <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">Account recovery</div>
+          <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">{locale?.t("auth.recovery", "Account recovery")}</div>
           <h1 className="font-display text-3xl font-semibold tracking-tight mt-2">{locale?.t("auth.setPassword", "Set a new password")}</h1>
-          <p className="text-sm text-secondary-muted mt-2">Choose a new password for your account.</p>
+          <p className="text-sm text-secondary-muted mt-2">{locale?.t("auth.chooseNewPassword", "Choose a new password for your account.")}</p>
 
           <form onSubmit={submit} className="space-y-4 mt-6">
             <div>
@@ -90,7 +90,7 @@ export default function ResetPassword() {
                 value={newPassword}
                 onChange={(event) => setNewPassword(event.target.value)}
                 className="mt-1.5 h-11 bg-surface"
-                placeholder="Minimum 8 characters"
+                placeholder={locale?.t("auth.min8Placeholder", "Minimum 8 characters")}
               />
             </div>
             <div>
@@ -100,7 +100,7 @@ export default function ResetPassword() {
                 value={confirmPassword}
                 onChange={(event) => setConfirmPassword(event.target.value)}
                 className="mt-1.5 h-11 bg-surface"
-                placeholder="Repeat your new password"
+                placeholder={locale?.t("auth.repeatNewPasswordPlaceholder", "Repeat your new password")}
               />
             </div>
 

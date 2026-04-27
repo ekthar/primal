@@ -32,7 +32,7 @@ export default function ForgotPassword() {
   const submit = async (event) => {
     event.preventDefault();
     if (!email.trim()) {
-      toast.error(locale?.t("common.email", "Email") + " required");
+      toast.error(locale?.t("auth.emailRequired", "Email is required"));
       return;
     }
 
@@ -41,12 +41,12 @@ export default function ForgotPassword() {
     setLoading(false);
 
     if (error) {
-      toast.error(error.message || "Unable to process request");
+      toast.error(error.message || locale?.t("auth.unableToProcess", "Unable to process request"));
       return;
     }
 
     setDevResetUrl(toCurrentOriginResetUrl(data?.resetUrl || ""));
-    toast.success("If the email exists, a reset link has been sent");
+    toast.success(locale?.t("auth.resetEmailSent", "If the email exists, a reset link has been sent"));
   };
 
   return (
@@ -61,9 +61,9 @@ export default function ForgotPassword() {
         </div>
 
         <div className="rounded-3xl border border-border bg-surface elev-card p-7 mt-6">
-          <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">Account recovery</div>
+          <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">{locale?.t("auth.recovery", "Account recovery")}</div>
           <h1 className="font-display text-3xl font-semibold tracking-tight mt-2">{locale?.t("auth.resetPassword", "Reset your password")}</h1>
-          <p className="text-sm text-secondary-muted mt-2">Enter your account email and we will send a password reset link.</p>
+          <p className="text-sm text-secondary-muted mt-2">{locale?.t("auth.resetEmailHelp", "Enter your account email and we will send a password reset link.")}</p>
 
           <form onSubmit={submit} className="space-y-4 mt-6">
             <div>
@@ -84,7 +84,7 @@ export default function ForgotPassword() {
 
           {devResetUrl ? (
             <div className="mt-4 rounded-xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/80 dark:bg-emerald-950/20 p-3">
-              <div className="text-[11px] uppercase tracking-wider text-emerald-700 dark:text-emerald-300 font-semibold">Development reset link</div>
+              <div className="text-[11px] uppercase tracking-wider text-emerald-700 dark:text-emerald-300 font-semibold">{locale?.t("auth.resetLinkLabel", "Development reset link")}</div>
               <a href={devResetUrl} className="text-xs break-all text-emerald-700 dark:text-emerald-300 hover:underline">{devResetUrl}</a>
             </div>
           ) : null}
