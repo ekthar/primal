@@ -50,11 +50,14 @@ export function DataCardList({ items, renderItem, className = "" }) {
 }
 
 export function StickyActionBar({ children, className = "" }) {
+  // The 5rem mobile offset clears the AppShell MobileBottomNav (z-30) so the
+  // sticky action bar (z-20) is always tappable above it. md+ has no bottom
+  // nav and uses bottom-4.
   return (
     <div
       className={cn(
         "sticky z-20 mt-4 rounded-2xl border border-border bg-background/92 p-3 backdrop-blur-xl shadow-[0_16px_40px_rgba(0,0,0,0.12)]",
-        "bottom-[calc(0.75rem+env(safe-area-inset-bottom))] md:bottom-4",
+        "bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-4",
         className,
       )}
     >
