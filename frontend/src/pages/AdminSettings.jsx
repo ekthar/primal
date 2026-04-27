@@ -10,6 +10,7 @@ import { InlineLoadingLabel, SectionLoader } from "@/components/shared/PrimalLoa
 import { PageSectionHeader, ResponsivePageShell } from "@/components/shared/ResponsivePrimitives";
 import api from "@/lib/api";
 import { toast } from "sonner";
+import { useLocale } from "@/context/LocaleContext";
 
 const BACKLOG_ITEMS = [
   "Public brackets/results page",
@@ -78,6 +79,7 @@ function toIsoDateTime(value) {
 
 export default function AdminSettings({ initialTab = "tournaments" }) {
   const { user } = useAuth();
+  const locale = useLocale();
   const [loadingTournaments, setLoadingTournaments] = useState(true);
   const [savingTournamentId, setSavingTournamentId] = useState(null);
   const [tournaments, setTournaments] = useState([]);
@@ -355,9 +357,9 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
   return (
     <ResponsivePageShell className="space-y-6">
       <PageSectionHeader
-        eyebrow="Admin settings"
-        title="Registration windows and weigh-in control"
-        description="Manage per-tournament registration timing, correction windows, and club-wise weigh-in updates that automatically refresh weight class for grouping."
+        eyebrow={locale?.t("adminSettings.eyebrow", "Admin settings") ?? "Admin settings"}
+        title={locale?.t("pages.adminSettings.title", "Registration windows and weigh-in control") ?? "Registration windows and weigh-in control"}
+        description={locale?.t("adminSettings.description", "Manage per-tournament registration timing, correction windows, and club-wise weigh-in updates that automatically refresh weight class for grouping.") ?? "Manage per-tournament registration timing, correction windows, and club-wise weigh-in updates that automatically refresh weight class for grouping."}
       />
 
       <Tabs defaultValue={initialTab} className="space-y-5">

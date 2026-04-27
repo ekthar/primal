@@ -8,9 +8,11 @@ import { PageSectionHeader, ResponsivePageShell } from "@/components/shared/Resp
 import api from "@/lib/api";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
+import { useLocale } from "@/context/LocaleContext";
 
 export default function Reports() {
   const { user } = useAuth();
+  const locale = useLocale();
   const isAdmin = user?.role === "admin";
 
   const [loading, setLoading] = useState(true);
@@ -264,9 +266,9 @@ export default function Reports() {
   return (
     <ResponsivePageShell>
       <PageSectionHeader
-        eyebrow="Reports"
-        title="Review operations report"
-        description="Live SLA, reviewer workload, and approved participant reports."
+        eyebrow={locale?.t("pages.adminReports.title", "Reports") ?? "Reports"}
+        title={locale?.t("adminReports.headline", "Review operations report") ?? "Review operations report"}
+        description={locale?.t("adminReports.description", "Live SLA, reviewer workload, and approved participant reports.") ?? "Live SLA, reviewer workload, and approved participant reports."}
         actions={(
           <>
           <Button variant="outline" onClick={handleApprovedExport}>
@@ -328,8 +330,8 @@ export default function Reports() {
           <div className="mt-6 rounded-3xl border border-border bg-surface elev-card p-6">
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <div>
-                <h2 className="font-display text-2xl font-semibold tracking-tight">Reviewer workload</h2>
-                <p className="text-sm text-secondary-muted mt-1">Open queue allocation and recent outcomes by reviewer.</p>
+                <h2 className="font-display text-2xl font-semibold tracking-tight">{locale?.t("adminReports.reviewerWorkload", "Reviewer workload") ?? "Reviewer workload"}</h2>
+                <p className="text-sm text-secondary-muted mt-1">{locale?.t("adminReports.reviewerWorkloadHelper", "Open queue allocation and recent outcomes by reviewer.") ?? "Open queue allocation and recent outcomes by reviewer."}</p>
               </div>
               <Button variant="outline" size="sm" onClick={loadSummary}>Refresh</Button>
             </div>
@@ -521,8 +523,8 @@ export default function Reports() {
             <section className="mt-6 rounded-3xl border border-border bg-surface elev-card p-6">
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>
-                  <h2 className="font-display text-2xl font-semibold tracking-tight">Approved participants report</h2>
-                  <p className="text-sm text-secondary-muted mt-1">Club-wise and individual participant tables for approved applications.</p>
+                  <h2 className="font-display text-2xl font-semibold tracking-tight">{locale?.t("adminReports.approvedParticipants", "Approved participants report") ?? "Approved participants report"}</h2>
+                  <p className="text-sm text-secondary-muted mt-1">{locale?.t("adminReports.approvedParticipantsHelper", "Club-wise and individual participant tables for approved applications.") ?? "Club-wise and individual participant tables for approved applications."}</p>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <Button variant="outline" size="sm" onClick={handleParticipantsPdfExport}>
@@ -589,7 +591,7 @@ export default function Reports() {
             <section className="mt-6 rounded-3xl border border-border bg-surface elev-card p-6">
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>
-                  <h2 className="font-display text-2xl font-semibold tracking-tight">Seasonal archive reports</h2>
+                  <h2 className="font-display text-2xl font-semibold tracking-tight">{locale?.t("adminReports.seasonalArchive", "Seasonal archive reports") ?? "Seasonal archive reports"}</h2>
                   <p className="text-sm text-secondary-muted mt-1">
                     Full retrospective reports for every season. Applications are never deleted — past data
                     stays available for download forever.

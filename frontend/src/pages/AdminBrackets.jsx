@@ -11,8 +11,10 @@ import { ResponsivePageShell } from "@/components/shared/ResponsivePrimitives";
 import { SectionLoader } from "@/components/shared/PrimalLoader";
 import api from "@/lib/api";
 import { toast } from "sonner";
+import { useLocale } from "@/context/LocaleContext";
 
 export default function AdminBrackets() {
+  const locale = useLocale();
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -27,7 +29,6 @@ export default function AdminBrackets() {
     resultRound: "",
     resultTime: "",
   });
-   [tournaments, setTournaments] = useState([]);
   const [tournaments, setTournaments] = useState([]);
   const [selectedTournamentId, setSelectedTournamentId] = useState("");
   const [divisions, setDivisions] = useState([]);
@@ -242,9 +243,9 @@ export default function AdminBrackets() {
       <section className="rounded-[32px] overflow-hidden border border-zinc-800 bg-[radial-gradient(circle_at_top_left,rgba(239,68,68,0.28),transparent_28%),radial-gradient(circle_at_top_right,rgba(59,130,246,0.2),transparent_32%),radial-gradient(circle_at_bottom,rgba(250,204,21,0.18),transparent_30%),linear-gradient(180deg,#0a0a0a_0%,#111111_100%)] p-7 sm:p-8 text-white shadow-[0_24px_120px_rgba(0,0,0,0.45)]">
         <div className="grid lg:grid-cols-[1.15fr_0.85fr] gap-6 items-start">
           <div>
-            <div className="text-[10px] uppercase tracking-[0.26em] text-red-300 font-semibold">Division Engine</div>
+            <div className="text-[10px] uppercase tracking-[0.26em] text-red-300 font-semibold">{locale?.t("adminBrackets.eyebrow", "Division Engine") ?? "Division Engine"}</div>
             <h1 className="font-display text-4xl sm:text-5xl font-semibold tracking-tight mt-3 max-w-3xl">
-              Persisted divisions, entries, and match progression.
+              {locale?.t("adminBrackets.heroTitle", "Persisted divisions, entries, and match progression.") ?? "Persisted divisions, entries, and match progression."}
             </h1>
             <p className="text-sm text-zinc-300 mt-4 max-w-2xl leading-6">
               Approved applications are expanded into one entry per discipline, grouped into strict divisions, and generated into a deterministic single-elimination tree with bye propagation and winner carry-forward.
@@ -269,19 +270,19 @@ export default function AdminBrackets() {
 
           <div className="rounded-3xl border border-zinc-800 bg-black/25 p-5 backdrop-blur-sm">
             <div className="flex items-center justify-between gap-3">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500 font-semibold">Tournament scope</div>
+              <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500 font-semibold">{locale?.t("adminBrackets.tournamentScope", "Tournament scope") ?? "Tournament scope"}</div>
               <Button
                 variant="outline"
                 className="border-zinc-700 bg-zinc-950/50 text-zinc-100 hover:bg-zinc-900"
                 onClick={() => syncAndLoadDivisions(selectedTournamentId)}
                 disabled={syncing || !selectedTournamentId}
               >
-                <RefreshCw className="size-4" /> {syncing ? "Syncing..." : "Sync divisions"}
+                <RefreshCw className="size-4" /> {syncing ? (locale?.t("adminBrackets.syncing", "Syncing...") ?? "Syncing...") : (locale?.t("adminBrackets.syncDivisions", "Sync divisions") ?? "Sync divisions")}
               </Button>
             </div>
 
             <div className="mt-4">
-              <label className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Tournament</label>
+              <label className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">{locale?.t("fields.tournament", "Tournament") ?? "Tournament"}</label>
               <select
                 value={selectedTournamentId}
                 onChange={(event) => handleTournamentChange(event.target.value)}

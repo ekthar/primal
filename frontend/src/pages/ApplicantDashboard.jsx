@@ -11,6 +11,7 @@ import api from "@/lib/api";
 import { formatPersonName } from "@/lib/person";
 import { toast } from "sonner";
 import LiveDocumentScanner from "@/components/scanner/LiveDocumentScanner";
+import { useLocale } from "@/context/LocaleContext";
 
 function getAccessMessage(application) {
   if (!application) return "";
@@ -67,6 +68,7 @@ function isImageFile(file) {
 }
 
 export default function ApplicantDashboard() {
+  const locale = useLocale();
   const [profile, setProfile] = useState(null);
   const [applications, setApplications] = useState([]);
   const [appealsByApplication, setAppealsByApplication] = useState({});
@@ -322,10 +324,10 @@ export default function ApplicantDashboard() {
         <div className="bg-gradient-to-br from-surface-muted to-surface p-6 sm:p-8">
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div className="min-w-0">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">My application</div>
+              <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">{locale?.t("pages.applicant.title", "My application") ?? "My application"}</div>
               <h1 className="font-display text-3xl font-semibold tracking-tight mt-1">{formatPersonName(profile.first_name, profile.last_name)}</h1>
               <p className="text-sm text-secondary-muted mt-2 max-w-2xl">
-                Your reusable profile is saved once and reused across tournaments. Each submission enters the review queue with full status history.
+                {locale?.t("applicant.profileHelper", "Your reusable profile is saved once and reused across tournaments. Each submission enters the review queue with full status history.") ?? "Your reusable profile is saved once and reused across tournaments. Each submission enters the review queue with full status history."}
               </p>
             </div>
             {applications[0] && (

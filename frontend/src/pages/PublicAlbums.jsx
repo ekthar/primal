@@ -5,8 +5,10 @@ import { ArrowLeft, Image as ImageIcon } from "lucide-react";
 import { api } from "@/lib/api";
 import { PageSectionHeader, ResponsivePageShell } from "@/components/shared/ResponsivePrimitives";
 import { SectionLoader } from "@/components/shared/PrimalLoader";
+import { useLocale } from "@/context/LocaleContext";
 
 export default function PublicAlbums() {
+  const locale = useLocale();
   const router = useRouter();
   const { id } = router.query;
   const [albums, setAlbums] = useState([]);
@@ -51,7 +53,7 @@ export default function PublicAlbums() {
     return (
       <ResponsivePageShell className="space-y-6">
         <Link href="/albums" className="inline-flex items-center gap-2 text-sm text-primary hover:underline">
-          <ArrowLeft className="size-4" /> All albums
+          <ArrowLeft className="size-4" /> {locale?.t("publicAlbums.allAlbums", "All albums") ?? "All albums"}
         </Link>
         <PageSectionHeader
           eyebrow={album.tournamentName || "Primal Academy"}
@@ -112,9 +114,9 @@ export default function PublicAlbums() {
   return (
     <ResponsivePageShell className="space-y-6">
       <PageSectionHeader
-        eyebrow="Primal Academy"
-        title="Tournament albums"
-        description="Match day photos from Primal Academy events."
+        eyebrow={locale?.t("adminAlbums.eyebrow", "Primal Academy") ?? "Primal Academy"}
+        title={locale?.t("publicAlbums.title", "Tournament albums") ?? "Tournament albums"}
+        description={locale?.t("publicAlbums.description", "Match day photos from Primal Academy events.") ?? "Match day photos from Primal Academy events."}
       />
 
       {!albums.length ? (

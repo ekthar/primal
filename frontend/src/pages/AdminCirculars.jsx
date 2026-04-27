@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import { useLocale } from "@/context/LocaleContext";
 
 const KINDS = [
   { id: "notice", label: "Circular" },
@@ -24,6 +25,7 @@ function isoOrNull(v) {
 }
 
 export default function AdminCirculars() {
+  const locale = useLocale();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -148,10 +150,10 @@ export default function AdminCirculars() {
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <div className="text-[10px] uppercase tracking-[0.22em] text-tertiary font-semibold">Admin</div>
-          <h1 className="font-display mt-2 text-3xl sm:text-4xl font-semibold tracking-tight">Public circulars</h1>
+          <div className="text-[10px] uppercase tracking-[0.22em] text-tertiary font-semibold">{locale?.t("roles.admin", "Admin") ?? "Admin"}</div>
+          <h1 className="font-display mt-2 text-3xl sm:text-4xl font-semibold tracking-tight">{locale?.t("pages.adminCirculars.title", "Circulars") ?? "Circulars"}</h1>
           <p className="mt-3 text-secondary-muted max-w-2xl">
-            Publish announcements that show up on the landing page (registration windows, rule updates, notices).
+            {locale?.t("adminCirculars.description", "Publish announcements that show up on the landing page (registration windows, rule updates, notices).") ?? "Publish announcements that show up on the landing page (registration windows, rule updates, notices)."}
           </p>
         </div>
         <Button onClick={onCreateNew} className="rounded-full" data-testid="circular-new">
