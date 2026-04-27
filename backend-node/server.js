@@ -32,9 +32,32 @@ const app = express();
 
 validateProductionConfig();
 
+const configuredCorsOrigins = Array.from(new Set([
+  ...config.corsOrigins,
+  config.webBaseUrl,
+])).filter(Boolean);
+
+const corsDelegate = (req, callback) => {
+  const requestOrigin = req.header('Origin');
+  if (!requestOrigin) {
+    callback(null, { origin: true, credentials: true });
+    return;
+  }
+  if (!configuredCorsOrigins.length) {
+    callback(null, { origin: true, credentials: true });
+    return;
+  }
+  const allowed = configuredCorsOrigins.includes(requestOrigin);
+  callback(null, {
+    origin: allowed,
+    credentials: true,
+  });
+};
+
 app.set('trust proxy', 1);
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
-app.use(cors({ origin: true, credentials: true }));
+app.use(cors(corsDelegate));
+app.options('*', cors(corsDelegate));
 app.use(express.json({ limit: `${config.maxUploadMb}mb` }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan(config.env === 'production' ? 'combined' : 'dev'));

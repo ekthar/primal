@@ -2,6 +2,15 @@ const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.REACT_APP_BA
 const ACCESS_TOKEN_KEY = "tos-access-token";
 const REFRESH_TOKEN_KEY = "tos-refresh-token";
 
+export function resolveBackendUrl(pathOrUrl) {
+  const raw = String(pathOrUrl || "").trim();
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw) || /^data:/i.test(raw) || /^blob:/i.test(raw)) return raw;
+  const normalizedPath = raw.startsWith("/") ? raw : `/${raw}`;
+  if (!BASE_URL) return normalizedPath;
+  return `${String(BASE_URL).replace(/\/+$/, "")}${normalizedPath}`;
+}
+
 export function setSession({ accessToken, refreshToken }) {
   if (typeof window === "undefined") return;
   if (accessToken) localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
@@ -255,7 +264,16 @@ export const api = {
   }),
 
   publicTournaments: () => request("GET", "/api/public/tournaments"),
-  publicCurrentTournament: () => request("GET", "/api/public/tournaments/current"),
+  publicCurrentTournament: async () => {
+    const current = await request("GET", "/api/public/tournaments/current");
+    if (!current.error) return current;
+    if (!String(current.error?.code || "").includes("404")) return current;
+    const list = await request("GET", "/api/public/tournaments");
+    if (list.error) return current;
+    const tournaments = list.data?.tournaments || [];
+    const fallback = tournaments.find((item) => item.registrationOpen) || tournaments[0] || null;
+    return { data: { tournament: fallback }, error: null };
+  },
   publicParticipants: (query) => request("GET", "/api/public/participants", { query }),
   publicClubs: (query) => request("GET", "/api/public/clubs", { query }),
   publicCirculars: (query) => request("GET", "/api/public/circulars", { query }),
@@ -309,7 +327,12 @@ export const api = {
 
   // Notifications
   notificationsHealth: () => request("GET", "/api/notifications/health"),
-  resendNotification: (applicationId, body) => request("POST", `/api/notifications/resend/${applicationId}`, { body }),
+  resendNotification: async (applicationId, body) => {
+    const primary = await request("POST", `/api/notifications/resend/${applicationId}`, { body });
+    if (!primary.error) return primary;
+    if (!String(primary.error?.code || "").includes("404")) return primary;
+    return request("POST", `/api/notifications/${applicationId}/resend`, { body });
+  },
 };
 
 export async function isApiLive() {

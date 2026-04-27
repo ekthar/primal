@@ -60,6 +60,10 @@ export default function AdminUsers() {
       toast.error("Name, email, and password are required");
       return;
     }
+    if (draft.role === "state_coordinator" && !draft.stateCode.trim()) {
+      toast.error("State is required for state coordinator accounts");
+      return;
+    }
 
     setSaving(true);
     const { error } = await api.adminCreateUser({
@@ -67,7 +71,7 @@ export default function AdminUsers() {
       email: draft.email.trim().toLowerCase(),
       password: draft.password,
       role: draft.role,
-      stateCode: draft.role === "state_coordinator" ? draft.stateCode : undefined,
+      stateCode: draft.role === "state_coordinator" ? draft.stateCode.trim() : undefined,
       locale: locale?.locale || "en",
     });
     setSaving(false);

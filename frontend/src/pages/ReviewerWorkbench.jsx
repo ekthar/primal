@@ -25,7 +25,7 @@ import EmptyState from "@/components/shared/EmptyState";
 import { SectionLoader } from "@/components/shared/PrimalLoader";
 import { StickyActionBar } from "@/components/shared/ResponsivePrimitives";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import api, { isApiLive } from "@/lib/api";
+import api, { isApiLive, resolveBackendUrl } from "@/lib/api";
 import { formatPersonName } from "@/lib/person";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
@@ -117,7 +117,11 @@ export default function ReviewerWorkbench() {
   useEffect(() => {
     isApiLive().then((live) => {
       if (!live) {
-        toast.error("Backend API is not reachable. Review actions will fail until the API is back online.");
+        const marker = "review-workbench-api-unreachable-toast-shown";
+        if (typeof window !== "undefined" && !window.sessionStorage.getItem(marker)) {
+          window.sessionStorage.setItem(marker, "1");
+          toast.error("Backend API is not reachable. Review actions will fail until the API is back online.");
+        }
       }
     });
   }, []);
@@ -625,7 +629,7 @@ export default function ReviewerWorkbench() {
             ]}
             verifyUrl={typeof window !== "undefined" ? `${window.location.origin}/verify/${activeApplication.application_display_id || activeApplication.id}` : undefined}
             signatureShortId={(activeApplication.id || "").slice(-8).toUpperCase()}
-            portraitUrl={(activeApplication.documents || []).find((doc) => doc.kind === "photo_id")?.url || null}
+            portraitUrl={resolveBackendUrl((activeApplication.documents || []).find((doc) => doc.kind === "photo_id")?.url || "") || null}
           />
 
           <section className="rounded-2xl border border-border bg-surface p-6">
@@ -926,6 +930,7 @@ function CheckRow({ ok, label }) {
 function DocumentReviewRow({ doc, busy, canVerify, onVerify }) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
+  const docUrl = resolveBackendUrl(doc.url);
   const isImage = (doc.mime_type || "").startsWith("image/");
   const isPdf = (doc.mime_type || "") === "application/pdf";
   const verified = !!doc.verified_at;
@@ -952,16 +957,16 @@ function DocumentReviewRow({ doc, busy, canVerify, onVerify }) {
         </div>
         <div className="flex shrink-0 gap-1.5">
           <Button size="sm" variant="outline" onClick={() => setPreviewOpen((v) => !v)}>{previewOpen ? "Hide" : "Preview"}</Button>
-          <a href={doc.url} target="_blank" rel="noreferrer" className="inline-flex items-center rounded-md border border-border px-2.5 py-1 text-xs hover:bg-surface-muted/40">Open</a>
+          <a href={docUrl} target="_blank" rel="noreferrer" className="inline-flex items-center rounded-md border border-border px-2.5 py-1 text-xs hover:bg-surface-muted/40">Open</a>
         </div>
       </div>
 
       {previewOpen ? (
         <div className="mt-3 overflow-hidden rounded-lg border border-border bg-black/5">
           {isImage ? (
-            <img src={doc.url} alt={doc.kind} className="block max-h-[420px] w-full object-contain bg-white" />
+            <img src={docUrl} alt={doc.kind} className="block max-h-[420px] w-full object-contain bg-white" />
           ) : isPdf ? (
-            <iframe src={`${doc.url}#toolbar=0&navpanes=0`} title={doc.kind} className="block h-[420px] w-full bg-white" />
+            <iframe src={`${docUrl}#toolbar=0&navpanes=0`} title={doc.kind} className="block h-[420px] w-full bg-white" />
           ) : (
             <div className="p-4 text-xs text-tertiary">Preview not available for this file type.</div>
           )}

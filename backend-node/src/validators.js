@@ -50,7 +50,12 @@ const schemas = {
       role: Joi.string().valid('admin', 'reviewer', 'state_coordinator', 'club', 'applicant').required(),
       stateCode: Joi.string().min(2).max(120).allow(null, ''),
       locale: Joi.string().length(2).default('en'),
-    }),
+    }).custom((value, helpers) => {
+      if (value.role === 'state_coordinator' && !String(value.stateCode || '').trim()) {
+        return helpers.error('any.custom', { message: 'stateCode is required for state_coordinator' });
+      }
+      return value;
+    }, 'state coordinator state validation'),
     adminListUsers: Joi.object({
       role: Joi.string().valid('admin', 'reviewer', 'state_coordinator', 'club', 'applicant'),
       stateCode: Joi.string().min(2).max(120).allow(null, ''),

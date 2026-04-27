@@ -8,6 +8,10 @@ const config = {
   port: parseInt(process.env.PORT || '4000', 10),
   appBaseUrl: process.env.APP_BASE_URL || 'http://localhost:4000',
   webBaseUrl: process.env.WEB_BASE_URL || 'http://localhost:3000',
+  corsOrigins: String(process.env.CORS_ORIGINS || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean),
 
   db: {
     url: databaseUrl || undefined,

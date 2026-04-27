@@ -49,8 +49,7 @@ router.get('/health', requireAuth, requireRole('admin'), ah(async (_req, res) =>
   });
 }));
 
-// Resend a notification for a given application. Admin-only.
-router.post('/resend/:applicationId', requireAuth, requireRole('admin'), ah(async (req, res) => {
+async function resendForApplication(req, res) {
   const { applicationId } = req.params;
   const channels = Array.isArray(req.body?.channels) && req.body.channels.length
     ? req.body.channels.filter((c) => ['email', 'sms', 'whatsapp', 'push'].includes(c))
@@ -96,6 +95,12 @@ router.post('/resend/:applicationId', requireAuth, requireRole('admin'), ah(asyn
   });
 
   res.json({ ok: true, template, channels });
-}));
+}
+
+// Resend a notification for a given application. Admin-only.
+router.post('/resend/:applicationId', requireAuth, requireRole('admin'), ah(resendForApplication));
+
+// Backward-compatible alias used by some frontend builds.
+router.post('/:applicationId/resend', requireAuth, requireRole('admin'), ah(resendForApplication));
 
 module.exports = router;
