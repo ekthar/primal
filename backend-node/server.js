@@ -27,6 +27,8 @@ const divisionRoutes = require('./src/routes/division.routes');
 const matchRoutes = require('./src/routes/match.routes');
 const albumRoutes = require('./src/routes/album.routes');
 const notificationRoutes = require('./src/routes/notification.routes');
+const weighinRoutes = require('./src/routes/weighin.routes');
+const webhookRoutes = require('./src/routes/webhook.routes');
 
 const app = express();
 
@@ -93,6 +95,8 @@ app.use('/api/divisions', divisionRoutes);
 app.use('/api/matches', matchRoutes);
 app.use('/api/albums', albumRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/weigh-ins', weighinRoutes);
+app.use('/api/webhooks', webhookRoutes);
 app.use('/api/public', publicRoutes);
 
 app.use(notFound);

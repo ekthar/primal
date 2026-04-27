@@ -328,6 +328,32 @@ export const api = {
   publicGetAlbum: (id) => request("GET", `/api/public/albums/${id}`),
   publicRecentAlbumPhotos: (limit = 12) => request("GET", "/api/public/albums/recent-photos", { query: { limit } }),
 
+  // Weigh-ins (cage-side / weigh-in tablet)
+  listWeighInsForTournament: (tournamentId) => request("GET", `/api/weigh-ins/by-tournament/${encodeURIComponent(tournamentId)}`),
+  listWeighInsForApplication: (applicationId) => request("GET", `/api/weigh-ins/by-application/${encodeURIComponent(applicationId)}`),
+  recordWeighIn: ({ applicationId, weightKg, notes, photoFile, photoUrl }) => {
+    if (photoFile) {
+      const body = new FormData();
+      body.append("applicationId", applicationId);
+      body.append("weightKg", String(weightKg));
+      if (notes) body.append("notes", notes);
+      body.append("photo", photoFile);
+      return request("POST", "/api/weigh-ins", { body });
+    }
+    return request("POST", "/api/weigh-ins", {
+      body: { applicationId, weightKg, notes, photoUrl: photoUrl || undefined },
+    });
+  },
+
+  // Webhooks (admin)
+  listWebhooks: () => request("GET", "/api/webhooks"),
+  listWebhookEvents: () => request("GET", "/api/webhooks/events"),
+  createWebhook: (body) => request("POST", "/api/webhooks", { body }),
+  updateWebhook: (id, body) => request("PATCH", `/api/webhooks/${id}`, { body }),
+  deleteWebhook: (id) => request("DELETE", `/api/webhooks/${id}`),
+  listWebhookDeliveries: (id) => request("GET", `/api/webhooks/${id}/deliveries`),
+  testWebhook: (id, body) => request("POST", `/api/webhooks/${id}/test`, { body: body || {} }),
+
   // Notifications
   notificationsHealth: () => request("GET", "/api/notifications/health"),
   resendNotification: async (applicationId, body) => {

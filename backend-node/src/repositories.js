@@ -404,7 +404,7 @@ const applications = {
     if (tournamentSlug) { args.push(tournamentSlug); where.push(`t.slug = $${args.length}`); }
     args.push(limit);
     return (await query(
-    `SELECT a.id, p.first_name, p.last_name, p.weight_class, p.discipline,
+    `SELECT a.id, a.id AS application_id, p.first_name, p.last_name, p.weight_class, p.weight_kg, p.discipline,
             c.name AS club_name, t.slug AS tournament_slug
      FROM applications a
      JOIN profiles p ON p.id = a.profile_id
@@ -591,4 +591,102 @@ const reviewers = {
      ORDER BY open_count ASC, u.created_at ASC LIMIT 1`)).rows[0],
 };
 
-module.exports = { users, sessions, clubs, profiles, tournaments, applications, documents, statusEvents, appeals, reviewers, circulars, trash };
+// --------- weigh-ins ---------
+const weighIns = {
+  create: async ({ applicationId, weightKg, photoUrl = null, notes = null, weighedBy = null }) =>
+    (await query(
+      `INSERT INTO weigh_ins (application_id, weight_kg, photo_url, notes, weighed_by)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [applicationId, weightKg, photoUrl, notes, weighedBy]
+    )).rows[0],
+  listForApplication: async (applicationId) =>
+    (await query(
+      `SELECT w.*, u.name AS weighed_by_name
+       FROM weigh_ins w
+       LEFT JOIN users u ON u.id = w.weighed_by
+       WHERE w.application_id = $1 AND w.deleted_at IS NULL
+       ORDER BY w.weighed_at DESC`,
+      [applicationId]
+    )).rows,
+  listForTournament: async (tournamentId, { limit = 200 } = {}) =>
+    (await query(
+      `SELECT w.*, u.name AS weighed_by_name,
+              p.first_name, p.last_name, p.weight_class, p.discipline,
+              c.name AS club_name
+       FROM weigh_ins w
+       JOIN applications a ON a.id = w.application_id
+       JOIN profiles p ON p.id = a.profile_id
+       LEFT JOIN clubs c ON c.id = a.club_id
+       LEFT JOIN users u ON u.id = w.weighed_by
+       WHERE a.tournament_id = $1 AND w.deleted_at IS NULL AND a.deleted_at IS NULL
+       ORDER BY w.weighed_at DESC LIMIT $2`,
+      [tournamentId, limit]
+    )).rows,
+};
+
+// --------- webhook subscriptions + deliveries ---------
+const webhookSubscriptions = {
+  list: async () => (await query(
+    `SELECT * FROM webhook_subscriptions WHERE deleted_at IS NULL ORDER BY created_at DESC`
+  )).rows,
+  listActiveForEvent: async (event) => (await query(
+    `SELECT * FROM webhook_subscriptions
+     WHERE deleted_at IS NULL AND is_active = TRUE AND $1 = ANY(events)`,
+    [event]
+  )).rows,
+  findById: async (id) => (await query(
+    `SELECT * FROM webhook_subscriptions WHERE id = $1 AND deleted_at IS NULL`,
+    [id]
+  )).rows[0],
+  create: async ({ name, url, secret, events, isActive = true, createdBy = null }) =>
+    (await query(
+      `INSERT INTO webhook_subscriptions (name, url, secret, events, is_active, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [name, url, secret, events, isActive, createdBy]
+    )).rows[0],
+  update: async (id, patch) => {
+    const map = { name: 'name', url: 'url', secret: 'secret', events: 'events', isActive: 'is_active' };
+    const fields = []; const args = [];
+    for (const [k, col] of Object.entries(map)) {
+      if (patch[k] === undefined) continue;
+      args.push(patch[k]);
+      fields.push(`${col} = $${args.length}`);
+    }
+    if (!fields.length) return webhookSubscriptions.findById(id);
+    args.push(id);
+    const { rows } = await query(
+      `UPDATE webhook_subscriptions SET ${fields.join(', ')} WHERE id = $${args.length} RETURNING *`,
+      args
+    );
+    return rows[0];
+  },
+  remove: async (id) => (await query(
+    `UPDATE webhook_subscriptions SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL RETURNING *`,
+    [id]
+  )).rows[0],
+};
+
+const webhookDeliveries = {
+  create: async ({ subscriptionId, event, payload }) =>
+    (await query(
+      `INSERT INTO webhook_deliveries (subscription_id, event, payload)
+       VALUES ($1,$2,$3) RETURNING *`,
+      [subscriptionId, event, payload]
+    )).rows[0],
+  markResult: async (id, { status, responseCode = null, responseBody = null, errorMessage = null, nextRetryAt = null, attemptCount }) =>
+    (await query(
+      `UPDATE webhook_deliveries
+       SET status = $2, response_code = $3, response_body = $4, error_message = $5,
+           next_retry_at = $6, attempt_count = $7,
+           delivered_at = CASE WHEN $2 = 'success' THEN NOW() ELSE delivered_at END
+       WHERE id = $1 RETURNING *`,
+      [id, status, responseCode, responseBody, errorMessage, nextRetryAt, attemptCount]
+    )).rows[0],
+  listForSubscription: async (subscriptionId, { limit = 50 } = {}) =>
+    (await query(
+      `SELECT * FROM webhook_deliveries WHERE subscription_id = $1 ORDER BY created_at DESC LIMIT $2`,
+      [subscriptionId, limit]
+    )).rows,
+};
+
+module.exports = { users, sessions, clubs, profiles, tournaments, applications, documents, statusEvents, appeals, reviewers, circulars, trash, weighIns, webhookSubscriptions, webhookDeliveries };
