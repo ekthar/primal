@@ -363,6 +363,7 @@ const applications = {
     const sql = `
       SELECT a.id, a.status, a.submitted_at, a.review_due_at, a.correction_due_at, a.updated_at,
              a.reviewer_id, a.tournament_id, a.club_id, a.profile_id,
+             a.form_data, a.correction_fields, a.correction_reason,
              p.first_name, p.last_name, p.weight_class, p.weight_kg, p.discipline,
              c.name AS club_name, c.slug AS club_slug,
              t.name AS tournament_name
