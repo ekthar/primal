@@ -45,6 +45,7 @@ const CORRECTION_FIELD_OPTIONS = [
   { id: "cornerCoachName", label: "Corner / coach" },
   { id: "cornerCoachPhone", label: "Coach phone" },
   { id: "emergencyContactName", label: "Emergency contact" },
+  { id: "emergencyContactRelation", label: "Emergency relation" },
   { id: "emergencyContactPhone", label: "Emergency phone" },
   { id: "medicalNotes", label: "Medical notes" },
   { id: "notes", label: "Notes" },
@@ -381,7 +382,7 @@ export default function ReviewerWorkbench() {
       open: true,
       action,
         reason: action === "reject" ? "Eligibility criteria not met" : action === "request_correction" ? "Please update the flagged fields" : "Appeal granted",
-      fields: action === "request_correction" ? "medical,weight_class" : "",
+      fields: "",
     });
   }
 
