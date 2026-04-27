@@ -282,7 +282,6 @@ export default function LiveQrScanner({
         ref={fileInputRef}
         type="file"
         accept="image/*"
-        capture="environment"
         onChange={handlePhotoPick}
         className="hidden"
       />
