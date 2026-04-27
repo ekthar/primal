@@ -1549,6 +1549,30 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
     .text('Full declaration, submitted documents, and workflow events for this registration.', PX, doc.y + 24, { width: CW });
   doc.y += 28;
 
+  // ── Correction request callout (only when applicable) ────────────────────
+  if (app.status === 'needs_correction' && (app.correction_reason || app.correction_fields)) {
+    ensureSpace(doc, 70);
+    const calloutY = doc.y;
+    const calloutH = 60;
+    gridCard(doc, PX, calloutY, CW, calloutH, { fill: '#fff8e6', stroke: '#d4a64a', radius: 6 });
+    microLabel(doc, 'Correction Required', PX + 12, calloutY + 8, CW - 24, palette, fonts);
+    const reason = asText(app.correction_reason) || '—';
+    doc.fillColor('#7a5d20').font(fonts.body).fontSize(TYPE_SCALE.body.size)
+      .text(`Reason: ${reason}`, PX + 12, calloutY + 22, { width: CW - 24, ellipsis: true });
+    let fieldsArr = app.correction_fields;
+    if (typeof fieldsArr === 'string') {
+      try { fieldsArr = JSON.parse(fieldsArr); } catch (_) { fieldsArr = []; }
+    }
+    if (Array.isArray(fieldsArr) && fieldsArr.length) {
+      doc.fillColor('#7a5d20').font(fonts.body).fontSize(TYPE_SCALE.small.size)
+        .text(`Fields: ${fieldsArr.join(', ')}`, PX + 12, calloutY + 40, { width: CW - 24, ellipsis: true });
+    } else if (app.correction_due_at) {
+      doc.fillColor('#7a5d20').font(fonts.body).fontSize(TYPE_SCALE.small.size)
+        .text(`Due: ${formatDateTime(app.correction_due_at)}`, PX + 12, calloutY + 40, { width: CW - 24, ellipsis: true });
+    }
+    doc.y = calloutY + calloutH + 12;
+  }
+
   // ── Contact & additional identity details (moved from cover to page 2) ──
   const DETAILS_ROWS = [
     ['Email',        asText(app.email)],
@@ -1591,6 +1615,7 @@ async function applicationToPdf(res, applicationId, actor, ctx = {}) {
     ['Review Due',      formatDateTime(app.review_due_at)],
     ['Decided',         formatDateTime(app.decided_at)],
     ['Correction Due',  formatDateTime(app.correction_due_at)],
+    ['Correction Reason', asText(app.correction_reason)],
     ['Disciplines',     appliedDisciplines.length ? appliedDisciplines.join(', ') : 'Open'],
     ['Rejection Reason', asText(app.rejection_reason)],
     ['Reopen Reason',   asText(app.reopen_reason)],

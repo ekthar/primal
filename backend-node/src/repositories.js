@@ -301,8 +301,12 @@ const applications = {
   updateForm: async (id, formData) =>
     (await query(`UPDATE applications SET form_data = $1 WHERE id = $2 AND ${ACTIVE} RETURNING *`, [formData, id])).rows[0],
   setStatus: async (id, patch) => {
+    const cast = { status: '::application_status', correction_fields: '::jsonb' };
     const fields = []; const args = [];
-    for (const [k, v] of Object.entries(patch)) { args.push(v); fields.push(`${k} = $${args.length}`); }
+    for (const [k, v] of Object.entries(patch)) {
+      args.push(v);
+      fields.push(`${k} = $${args.length}${cast[k] || ''}`);
+    }
     args.push(id);
     const { rows } = await query(
       `UPDATE applications SET ${fields.join(', ')} WHERE id = $${args.length} RETURNING *`, args);
@@ -316,10 +320,10 @@ const applications = {
          FROM applications
          WHERE deleted_at IS NULL
            AND tournament_id <> $2
-           AND status = ANY($4::text[])
+           AND status::text = ANY($4::text[])
        )
        UPDATE applications
-       SET status = $1,
+       SET status = $1::application_status,
            correction_due_at = NULL,
            review_due_at = NULL,
            updated_at = NOW(),

@@ -57,7 +57,13 @@ const corsDelegate = (req, callback) => {
 };
 
 app.set('trust proxy', 1);
-app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  // Disable X-Frame-Options so the frontend on Vercel can embed PDFs/images served
+  // from this API in an <iframe> (e.g. document verification preview).
+  frameguard: false,
+  contentSecurityPolicy: false,
+}));
 app.use(cors(corsDelegate));
 app.options('*', cors(corsDelegate));
 app.use(express.json({ limit: `${config.maxUploadMb}mb` }));

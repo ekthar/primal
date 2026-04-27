@@ -71,13 +71,13 @@ router.get('/analytics.pdf', requireRole('admin', 'state_coordinator'), ah(async
   }, { ip: req.ip });
 }));
 
+router.get('/seasons/:id.pdf', requireRole('admin', 'state_coordinator'), ah(async (req, res) => {
+  await exporter.seasonalReportToPdf(res, req.user, req.params.id, { ip: req.ip });
+}));
+
 router.get('/seasons/:id', requireRole('admin', 'state_coordinator'), ah(async (req, res) => {
   const report = await reportService.seasonalTournamentReport({ tournamentId: req.params.id });
   res.json(report);
-}));
-
-router.get('/seasons/:id.pdf', requireRole('admin', 'state_coordinator'), ah(async (req, res) => {
-  await exporter.seasonalReportToPdf(res, req.user, req.params.id, { ip: req.ip });
 }));
 
 router.get('/applications/:id.pdf', ah(async (req, res) => {
