@@ -48,10 +48,14 @@ const {
 // process.
 function safePipePdf(doc, res) {
   doc.on('error', (err) => {
-    try { res.destroy(err); } catch (_) { /* ignore */ }
+    if (typeof res.destroy === 'function') {
+      try { res.destroy(err); } catch (_) { /* ignore */ }
+    } else if (typeof res.emit === 'function') {
+      try { res.emit('error', err); } catch (_) { /* ignore */ }
+    }
   });
   res.on('close', () => {
-    if (!res.writableEnded) {
+    if (res.writableEnded === false) {
       try { doc.destroy(); } catch (_) { /* ignore */ }
     }
   });
@@ -2089,6 +2093,8 @@ async function applicationToPdfBuffer(applicationId, actor, ctx = {}) {
       once: pass.once.bind(pass),
       emit: pass.emit.bind(pass),
       pipe: pass.pipe.bind(pass),
+      destroy: pass.destroy.bind(pass),
+      get writableEnded() { return pass.writableEnded; },
     };
 
     applicationToPdf(resLike, applicationId, actor, ctx).catch(reject);
