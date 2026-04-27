@@ -12,6 +12,8 @@
  *   active        boolean   — when true, the camera stream is started.
  *   onScan(text)  required  — invoked with the decoded QR string.
  *   onError(msg)  optional  — invoked when camera/decoder reports an error.
+ *                            When provided, the component will NOT render an
+ *                            internal error banner; the parent owns the UI.
  *   className     optional  — wrapper styling.
  *   videoClassName optional — styling for the <video> element.
  *   showPhotoPick boolean   — show the "Scan QR photo" button (default true).
@@ -96,9 +98,13 @@ export default function LiveQrScanner({
     [onScan, feedback],
   );
 
+  // When the parent provides onError, it owns the error UI and we suppress
+  // the internal error banner so the same message is not displayed twice.
   const reportError = useCallback(
     (message) => {
-      setLocalError(message);
+      if (!onError) {
+        setLocalError(message);
+      }
       onError?.(message);
     },
     [onError],
@@ -197,6 +203,11 @@ export default function LiveQrScanner({
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
+    // Each photo pick is a fresh, deliberate scan attempt: clear the
+    // single-shot guard so a previously consumed scan doesn't silently
+    // suppress this one. Without this, after the first successful decode
+    // every subsequent photo pick would no-op until the camera is restarted.
+    consumedRef.current = false;
     setPhotoBusy(true);
     setLocalError("");
     try {
