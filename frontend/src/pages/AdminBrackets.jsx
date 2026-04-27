@@ -467,7 +467,7 @@ export default function AdminBrackets() {
       )}
 
       <Dialog open={resultDialog.open} onOpenChange={(open) => setResultDialog((current) => ({ ...current, open }))}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[92dvh] overflow-y-auto rounded-2xl sm:rounded-3xl">
           <DialogHeader>
             <DialogTitle>Record match result</DialogTitle>
             <DialogDescription>Set the winner method, round number, and finish time before saving.</DialogDescription>
