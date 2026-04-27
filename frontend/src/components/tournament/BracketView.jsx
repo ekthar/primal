@@ -1,5 +1,7 @@
-import { AlertTriangle, Clock3, Shield, Swords, Trophy } from "lucide-react";
+import { useState } from "react";
+import { AlertTriangle, Clock3, Minus, Plus, RotateCcw, Shield, Swords, Trophy } from "lucide-react";
 import { BRACKET_STATUS_LABELS } from "@/lib/brackets";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 const STATUS_TONES = {
   draft: "bg-zinc-950/70 text-zinc-200 border-zinc-800",
@@ -120,6 +122,8 @@ function FixtureTable({ fixtures }) {
 }
 
 export default function BracketView({ bracket, onAdvanceWinner }) {
+  const [bracketZoom, setBracketZoom] = useState(1);
+  const [activeMatch, setActiveMatch] = useState(null);
   if (!bracket) return null;
   const finalRound = bracket.rounds?.[bracket.rounds.length - 1];
   const finalMatch = finalRound?.matches?.[0];
@@ -187,7 +191,12 @@ export default function BracketView({ bracket, onAdvanceWinner }) {
                 <div className="mt-1 text-xs text-zinc-400">{round.matches.length} fight card slot{round.matches.length > 1 ? "s" : ""}</div>
                 <div className="mt-4 space-y-3">
                   {round.matches.map((match) => (
-                    <article key={match.id} className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
+                    <button
+                      key={match.id}
+                      type="button"
+                      onClick={() => setActiveMatch({ match, round })}
+                      className="block w-full text-left rounded-2xl border border-zinc-800 bg-black/20 p-4 transition-colors hover:bg-black/40 active:bg-black/50"
+                    >
                       <div className="flex items-center justify-between gap-3 text-[10px] uppercase tracking-[0.16em] text-zinc-500 font-semibold">
                         <span>{match.label}</span>
                         <span>{match.status}</span>
@@ -197,23 +206,51 @@ export default function BracketView({ bracket, onAdvanceWinner }) {
                           <SideCard
                             side={side}
                             winner={match.winnerIndex === sideIndex}
-                            onAdvance={
-                              onAdvanceWinner && !side.isBye && !side.placeholder && match.status !== "completed"
-                                ? () => onAdvanceWinner(match.id, side.entryId)
-                                : null
-                            }
+                            onAdvance={null}
                           />
                         </div>
                       ))}
-                    </article>
+                      <div className="mt-3 text-[11px] uppercase tracking-[0.16em] text-zinc-500">Tap for actions</div>
+                    </button>
                   ))}
                 </div>
               </section>
             ))}
           </div>
 
-          <div className="mt-6 hidden md:block overflow-x-auto">
-            <div className="inline-flex min-w-full gap-5 pb-2">
+          <div className="mt-6 hidden md:block">
+            <div className="flex items-center justify-end gap-2 mb-3">
+              <button
+                type="button"
+                onClick={() => setBracketZoom((z) => Math.max(0.5, +(z - 0.1).toFixed(2)))}
+                className="inline-flex size-9 items-center justify-center rounded-full border border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800"
+                aria-label="Zoom out"
+              >
+                <Minus className="size-4" />
+              </button>
+              <div className="min-w-12 text-center text-xs text-zinc-400 tabular-nums">{Math.round(bracketZoom * 100)}%</div>
+              <button
+                type="button"
+                onClick={() => setBracketZoom((z) => Math.min(1.6, +(z + 0.1).toFixed(2)))}
+                className="inline-flex size-9 items-center justify-center rounded-full border border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800"
+                aria-label="Zoom in"
+              >
+                <Plus className="size-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setBracketZoom(1)}
+                className="inline-flex h-9 items-center gap-1 rounded-full border border-zinc-700 bg-zinc-900 px-3 text-xs text-zinc-200 hover:bg-zinc-800"
+                aria-label="Reset zoom"
+              >
+                <RotateCcw className="size-3.5" /> Reset
+              </button>
+            </div>
+          <div className="overflow-auto rounded-2xl" style={{ touchAction: "pan-x pan-y" }}>
+            <div
+              className="inline-flex min-w-full gap-5 pb-2 origin-top-left transition-transform duration-150"
+              style={{ transform: `scale(${bracketZoom})` }}
+            >
               {bracket.rounds.map((round) => (
                 <section key={round.id} className="min-w-[320px] flex-1">
                   <div className="mb-3">
@@ -253,6 +290,7 @@ export default function BracketView({ bracket, onAdvanceWinner }) {
               ))}
             </div>
           </div>
+          </div>
         </>
       ) : (
         <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950/80 p-5 text-sm text-zinc-300">
@@ -278,6 +316,44 @@ export default function BracketView({ bracket, onAdvanceWinner }) {
       <div className="mt-6">
         <FixtureTable fixtures={bracket.fixtures || []} />
       </div>
+
+      <Sheet open={!!activeMatch} onOpenChange={(open) => !open && setActiveMatch(null)}>
+        <SheetContent side="bottom" className="border-zinc-800 bg-zinc-950 text-zinc-100 max-h-[85dvh] overflow-y-auto rounded-t-3xl">
+          {activeMatch ? (
+            <>
+              <SheetHeader className="text-left">
+                <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500 font-semibold">
+                  {activeMatch.round?.label}
+                </div>
+                <SheetTitle className="text-zinc-100">{activeMatch.match.label}</SheetTitle>
+                <div className="text-xs uppercase tracking-wider text-zinc-400">{activeMatch.match.status}</div>
+              </SheetHeader>
+              {activeMatch.match.conflict ? (
+                <div className="mt-3">
+                  <SeverityBadge conflict={activeMatch.match.conflict} />
+                </div>
+              ) : null}
+              <div className="mt-4 space-y-3">
+                {activeMatch.match.sides.map((side, sideIndex) => (
+                  <SideCard
+                    key={`sheet-${activeMatch.match.id}-${side.entryId || side.corner}-${sideIndex}`}
+                    side={side}
+                    winner={activeMatch.match.winnerIndex === sideIndex}
+                    onAdvance={
+                      onAdvanceWinner && !side.isBye && !side.placeholder && activeMatch.match.status !== "completed"
+                        ? () => {
+                            onAdvanceWinner(activeMatch.match.id, side.entryId);
+                            setActiveMatch(null);
+                          }
+                        : null
+                    }
+                  />
+                ))}
+              </div>
+            </>
+          ) : null}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
