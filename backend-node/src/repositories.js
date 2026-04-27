@@ -655,7 +655,7 @@ const webhookSubscriptions = {
     if (!fields.length) return webhookSubscriptions.findById(id);
     args.push(id);
     const { rows } = await query(
-      `UPDATE webhook_subscriptions SET ${fields.join(', ')} WHERE id = $${args.length} RETURNING *`,
+      `UPDATE webhook_subscriptions SET ${fields.join(', ')} WHERE id = $${args.length} AND deleted_at IS NULL RETURNING *`,
       args
     );
     return rows[0];
