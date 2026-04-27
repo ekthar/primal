@@ -130,4 +130,46 @@ describe('validators', () => {
     const { error } = schemas.profile.adminReweigh.validate({ weightKg: 63.4 });
     expect(error).toBeFalsy();
   });
+
+  it('accepts state_coordinator role on adminCreateUser with stateCode', () => {
+    const { error } = schemas.auth.adminCreateUser.validate({
+      email: 'sc@primalfight.io',
+      password: 'longenough',
+      name: 'Maharashtra Coord',
+      role: 'state_coordinator',
+      stateCode: 'Maharashtra',
+    });
+    expect(error).toBeFalsy();
+  });
+
+  it('queue.list accepts stateCode filter', () => {
+    const { error, value } = schemas.queue.list.validate({ stateCode: 'Karnataka' });
+    expect(error).toBeFalsy();
+    expect(value.stateCode).toBe('Karnataka');
+  });
+
+  it('match.result requires method/resultRound/resultTime', () => {
+    const winnerEntryId = '11111111-1111-1111-1111-111111111111';
+    const missing = schemas.match.result.validate({ winnerEntryId });
+    expect(missing.error).toBeTruthy();
+    const ok = schemas.match.result.validate({
+      winnerEntryId,
+      method: 'KO',
+      resultRound: 2,
+      resultTime: '1:34',
+    });
+    expect(ok.error).toBeFalsy();
+  });
+
+  it('match.result rejects unknown methods and bad time format', () => {
+    const winnerEntryId = '11111111-1111-1111-1111-111111111111';
+    const badMethod = schemas.match.result.validate({
+      winnerEntryId, method: 'OTHER', resultRound: 1, resultTime: '0:30',
+    });
+    expect(badMethod.error).toBeTruthy();
+    const badTime = schemas.match.result.validate({
+      winnerEntryId, method: 'TKO', resultRound: 1, resultTime: '90s',
+    });
+    expect(badTime.error).toBeTruthy();
+  });
 });

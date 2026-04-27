@@ -48,6 +48,8 @@ export default function ReviewerWorkbench() {
   const [scannerResult, setScannerResult] = useState(null);
   const [scannedValue, setScannedValue] = useState("");
   const [reviewDialog, setReviewDialog] = useState({ open: false, action: null, reason: "", fields: "" });
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState(null);
+  const [pdfPreviewError, setPdfPreviewError] = useState(null);
   const videoRef = useRef(null);
   const fileInputRef = useRef(null);
   const streamRef = useRef(null);
@@ -82,6 +84,30 @@ export default function ReviewerWorkbench() {
     if (!activeId) return;
     loadApplication(activeId);
   }, [activeId]);
+
+  useEffect(() => {
+    let revoked = false;
+    let createdUrl = null;
+    setPdfPreviewError(null);
+    setPdfPreviewUrl(null);
+    if (!activeApplication?.id) return undefined;
+    (async () => {
+      const { data, error } = await api.applicationPdfBlobUrl(activeApplication.id);
+      if (revoked) return;
+      if (error) {
+        setPdfPreviewError(error.message || "Could not load preview");
+        return;
+      }
+      createdUrl = data;
+      setPdfPreviewUrl(data);
+    })();
+    return () => {
+      revoked = true;
+      if (createdUrl && typeof window !== "undefined") {
+        try { window.URL.revokeObjectURL(createdUrl); } catch { /* noop */ }
+      }
+    };
+  }, [activeApplication?.id]);
 
   useEffect(() => {
     const supported = typeof window !== "undefined" && "BarcodeDetector" in window && typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
@@ -617,12 +643,22 @@ export default function ReviewerWorkbench() {
               </Button>
             </div>
             <div className="mt-4 overflow-hidden rounded-2xl border border-border bg-background">
-              <iframe
-                key={activeApplication.id}
-                title={`Application PDF preview for ${activeApplication.application_display_id || activeApplication.id}`}
-                src={`${api.exportApplicationPdf ? api.exportApplicationPdf(activeApplication.id) : `/api/reports/applications/${activeApplication.id}.pdf`}#toolbar=0&navpanes=0`}
-                className="h-[70vh] w-full"
-              />
+              {pdfPreviewError ? (
+                <div className="flex h-[70vh] w-full items-center justify-center p-6 text-center text-sm text-secondary-muted">
+                  {pdfPreviewError}. Use <span className="mx-1 font-medium">Download PDF</span> instead.
+                </div>
+              ) : pdfPreviewUrl ? (
+                <iframe
+                  key={activeApplication.id}
+                  title={`Application PDF preview for ${activeApplication.application_display_id || activeApplication.id}`}
+                  src={`${pdfPreviewUrl}#toolbar=0&navpanes=0`}
+                  className="h-[70vh] w-full"
+                />
+              ) : (
+                <div className="flex h-[70vh] w-full items-center justify-center p-6 text-center text-sm text-secondary-muted">
+                  Loading credential preview…
+                </div>
+              )}
             </div>
           </section>
 
