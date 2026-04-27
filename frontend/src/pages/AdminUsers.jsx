@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ResponsivePageShell } from "@/components/shared/ResponsivePrimitives";
 import { useAuth } from "@/context/AuthContext";
 import { useLocale } from "@/context/LocaleContext";
 import api from "@/lib/api";
@@ -99,7 +100,7 @@ export default function AdminUsers() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
+    <ResponsivePageShell className="space-y-6">
       <div>
         <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">{locale?.t("roles.admin", "Admin") ?? "Admin"}</div>
         <h1 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight mt-1">{locale?.t("pages.adminUsers.title", "Users") ?? "Users"}</h1>
@@ -172,9 +173,9 @@ export default function AdminUsers() {
       </section>
 
       <section className="rounded-3xl border border-border bg-surface elev-card p-6">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <h2 className="font-display text-2xl font-semibold tracking-tight">{locale?.t("adminUsers.accounts", "Accounts") ?? "Accounts"}</h2>
-          <div className="flex items-center gap-2">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <h2 className="font-display text-xl sm:text-2xl font-semibold tracking-tight">{locale?.t("adminUsers.accounts", "Accounts") ?? "Accounts"}</h2>
+          <div className="flex flex-1 sm:flex-none items-center gap-2 flex-wrap sm:flex-nowrap">
             <Select value={roleFilter} onValueChange={setRoleFilter}>
               <SelectTrigger className="h-10 min-w-36 bg-background">
                 <SelectValue />
@@ -199,36 +200,58 @@ export default function AdminUsers() {
           </div>
         </div>
 
-        <div className="mt-4 overflow-x-auto">
+        <div className="mt-4">
           {loading ? (
             <div className="py-6 text-sm text-secondary-muted">{locale?.t("adminUsers.loading", "Loading users...") ?? "Loading users..."}</div>
           ) : (
-            <table className="w-full text-left">
-              <thead>
-                <tr className="text-[10px] uppercase tracking-wider text-tertiary font-semibold border-b border-border">
-                  <th className="py-3">{locale?.t("fields.name", "Name") ?? "Name"}</th>
-                  <th className="py-3">{locale?.t("fields.email", "Email") ?? "Email"}</th>
-                  <th className="py-3">{locale?.t("fields.role", "Role") ?? "Role"}</th>
-                  <th className="py-3">{locale?.t("fields.state", "State") ?? "State"}</th>
-                </tr>
-              </thead>
-              <tbody>
+            <>
+              <div className="space-y-2 md:hidden">
                 {filteredUsers.map((entry) => (
-                  <tr key={entry.id} className="border-b border-border last:border-b-0">
-                    <td className="py-3 text-sm">{entry.name}</td>
-                    <td className="py-3 text-sm">{entry.email}</td>
-                    <td className="py-3 text-sm">{locale?.t(`roles.${entry.role}`, entry.role) ?? entry.role}</td>
-                    <td className="py-3 text-sm">{entry.stateCode || "-"}</td>
-                  </tr>
+                  <article key={entry.id} className="rounded-2xl border border-border bg-surface/70 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium truncate">{entry.name}</div>
+                        <div className="mt-0.5 text-xs text-secondary-muted truncate">{entry.email}</div>
+                      </div>
+                      <span className="shrink-0 rounded-full border border-border bg-background px-2 py-0.5 text-[10px] uppercase tracking-wider text-tertiary">
+                        {locale?.t(`roles.${entry.role}`, entry.role) ?? entry.role}
+                      </span>
+                    </div>
+                    {entry.stateCode ? (
+                      <div className="mt-2 text-[11px] text-tertiary">{locale?.t("fields.state", "State") ?? "State"}: {entry.stateCode}</div>
+                    ) : null}
+                  </article>
                 ))}
-              </tbody>
-            </table>
+              </div>
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="text-[10px] uppercase tracking-wider text-tertiary font-semibold border-b border-border">
+                      <th className="py-3">{locale?.t("fields.name", "Name") ?? "Name"}</th>
+                      <th className="py-3">{locale?.t("fields.email", "Email") ?? "Email"}</th>
+                      <th className="py-3">{locale?.t("fields.role", "Role") ?? "Role"}</th>
+                      <th className="py-3">{locale?.t("fields.state", "State") ?? "State"}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredUsers.map((entry) => (
+                      <tr key={entry.id} className="border-b border-border last:border-b-0">
+                        <td className="py-3 text-sm">{entry.name}</td>
+                        <td className="py-3 text-sm">{entry.email}</td>
+                        <td className="py-3 text-sm">{locale?.t(`roles.${entry.role}`, entry.role) ?? entry.role}</td>
+                        <td className="py-3 text-sm">{entry.stateCode || "-"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
           {!loading && filteredUsers.length === 0 && (
             <div className="py-6 text-sm text-secondary-muted">{locale?.t("adminUsers.noUsers", "No users found.") ?? "No users found."}</div>
           )}
         </div>
       </section>
-    </div>
+    </ResponsivePageShell>
   );
 }

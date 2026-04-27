@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, Layers3, ListChecks, TimerReset, RefreshCcw, Download, Scale, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { InlineLoadingLabel, SectionLoader } from "@/components/shared/PrimalLoader";
+import { KpiGrid, ResponsivePageShell } from "@/components/shared/ResponsivePrimitives";
 import api from "@/lib/api";
 import { toast } from "sonner";
 import { useLocale } from "@/context/LocaleContext";
@@ -53,7 +54,7 @@ export default function AdminOverview() {
   const isBootLoading = loading && !sla && !workload.length && !Object.keys(counts || {}).length;
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
+    <ResponsivePageShell>
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">{locale?.t("adminOverview.eyebrow", "Tournament overview") ?? "Tournament overview"}</div>
@@ -88,13 +89,13 @@ export default function AdminOverview() {
         </div>
       ) : (
         <>
-      <div className="mt-8 grid sm:grid-cols-2 xl:grid-cols-5 gap-3">
+      <KpiGrid columns={5} className="mt-8">
         <Kpi label={locale?.t("adminOverview.kpi.applications", "Applications") ?? "Applications"} value={loading ? "-" : totalApplications} helper={locale?.t("adminOverview.kpi.applicationsHelper", "All workflow states") ?? "All workflow states"} />
         <Kpi label={locale?.t("adminOverview.kpi.openQueue", "Open queue") ?? "Open queue"} value={loading ? "-" : sla?.openTotal ?? 0} helper={locale?.t("adminOverview.kpi.openQueueHelper", "Submitted + under review") ?? "Submitted + under review"} tone="amber" />
         <Kpi label={locale?.t("status.approved", "Approved") ?? "Approved"} value={loading ? "-" : counts.approved ?? 0} helper={locale?.t("adminOverview.kpi.approvedHelper", "Finalized approvals") ?? "Finalized approvals"} tone="emerald" />
         <Kpi label={locale?.t("status.rejected", "Rejected") ?? "Rejected"} value={loading ? "-" : counts.rejected ?? 0} helper={locale?.t("adminOverview.kpi.rejectedHelper", "Finalized rejections") ?? "Finalized rejections"} tone="blue" />
         <Kpi label={locale?.t("adminOverview.kpi.overdueSla", "Overdue SLA") ?? "Overdue SLA"} value={loading ? "-" : sla?.overdue ?? 0} helper={locale?.t("adminOverview.kpi.overdueSlaHelper", "Needs immediate action") ?? "Needs immediate action"} tone="amber" />
-      </div>
+      </KpiGrid>
 
       <div className="mt-6 grid lg:grid-cols-[1.2fr_0.8fr] gap-5">
         <section className="rounded-3xl border border-border bg-surface elev-card p-6">
@@ -216,7 +217,7 @@ export default function AdminOverview() {
       </div>
         </>
       )}
-    </div>
+    </ResponsivePageShell>
   );
 }
 

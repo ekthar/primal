@@ -49,9 +49,98 @@ export function DataCardList({ items, renderItem, className = "" }) {
   return <div className={cn("space-y-3", className)}>{items.map(renderItem)}</div>;
 }
 
-export function StickyActionBar({ children, className = "" }) {
+/**
+ * DashboardSection — a consistently-styled card panel for dashboards.
+ *
+ * Wraps content in a rounded-3xl border + bg-surface card with a
+ * normalized header (eyebrow + title + optional description + actions)
+ * and standard padding that steps down on phones.
+ *
+ *   <DashboardSection
+ *     eyebrow="Submissions"
+ *     title="Recent applications"
+ *     actions={<Button>Refresh</Button>}
+ *   >
+ *     ...content...
+ *   </DashboardSection>
+ */
+export function DashboardSection({
+  eyebrow,
+  title,
+  description,
+  actions,
+  children,
+  className = "",
+  bodyClassName = "",
+  compact = false,
+}) {
+  const hasHeader = eyebrow || title || description || actions;
   return (
-    <div className={cn("sticky bottom-[calc(5rem+env(safe-area-inset-bottom))] z-20 mt-4 rounded-2xl border border-border bg-background/92 p-3 backdrop-blur-xl shadow-[0_16px_40px_rgba(0,0,0,0.12)] md:bottom-4", className)}>
+    <section
+      className={cn(
+        "rounded-3xl border border-border bg-surface p-4 sm:p-6 elev-card",
+        compact && "p-3 sm:p-4",
+        className,
+      )}
+    >
+      {hasHeader ? (
+        <header className="mb-4 flex flex-col gap-2 sm:mb-5 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            {eyebrow ? (
+              <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">{eyebrow}</div>
+            ) : null}
+            {title ? (
+              <h2 className="font-display text-lg sm:text-xl font-semibold tracking-tight mt-0.5">{title}</h2>
+            ) : null}
+            {description ? (
+              <p className="mt-1 max-w-2xl text-xs sm:text-sm text-secondary-muted">{description}</p>
+            ) : null}
+          </div>
+          {actions ? (
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end">{actions}</div>
+          ) : null}
+        </header>
+      ) : null}
+      <div className={cn(bodyClassName)}>{children}</div>
+    </section>
+  );
+}
+
+/**
+ * KpiGrid — a uniform responsive grid for KPI / stat cards.
+ *
+ *   <KpiGrid columns={4}>
+ *     <Kpi ... />
+ *     <Kpi ... />
+ *   </KpiGrid>
+ */
+export function KpiGrid({ children, columns = 4, className = "" }) {
+  const colClass = {
+    2: "sm:grid-cols-2",
+    3: "sm:grid-cols-2 lg:grid-cols-3",
+    4: "sm:grid-cols-2 lg:grid-cols-4",
+    5: "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5",
+    6: "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6",
+  }[columns] || "sm:grid-cols-2 lg:grid-cols-4";
+  return (
+    <div className={cn("grid grid-cols-1 gap-3 sm:gap-4", colClass, className)}>
+      {children}
+    </div>
+  );
+}
+
+export function StickyActionBar({ children, className = "" }) {
+  // The 5rem mobile offset clears the AppShell MobileBottomNav (z-30) so the
+  // sticky action bar (z-20) is always tappable above it. md+ has no bottom
+  // nav and uses bottom-4.
+  return (
+    <div
+      className={cn(
+        "sticky z-20 mt-4 rounded-2xl border border-border bg-background/92 p-3 backdrop-blur-xl shadow-[0_16px_40px_rgba(0,0,0,0.12)]",
+        "bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-4",
+        className,
+      )}
+    >
       <div className="flex flex-wrap gap-2">{children}</div>
     </div>
   );
