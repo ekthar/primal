@@ -221,6 +221,20 @@ export function ApplicationFormEditor({
   const [pincodeHint, setPincodeHint] = useState("");
   const lastResolvedPin = useRef("");
 
+  // Refs that always point at the freshest profileForm / onProfileChange so
+  // the async pincode lookup callback can read and merge against the latest
+  // value, not the stale closure from when the effect kicked off. Without
+  // this, edits made to other profile fields while the API call is in
+  // flight get silently overwritten when the callback resolves.
+  const profileFormRef = useRef(profileForm);
+  const onProfileChangeRef = useRef(onProfileChange);
+  useEffect(() => {
+    profileFormRef.current = profileForm;
+  }, [profileForm]);
+  useEffect(() => {
+    onProfileChangeRef.current = onProfileChange;
+  }, [onProfileChange]);
+
   useEffect(() => {
     if (!profileEditable) return undefined;
     let cancelled = false;
@@ -275,8 +289,11 @@ export function ApplicationFormEditor({
       setPincodeHint(
         [result.state, result.district].filter(Boolean).join(" · ") || "PIN resolved",
       );
-      // Only auto-fill empty fields so we never clobber a user choice.
-      const next = { ...profileForm };
+      // Read the freshest form value and emitter via refs to avoid clobbering
+      // edits the user made to other fields while the lookup was in flight.
+      const latestForm = profileFormRef.current || {};
+      const emit = onProfileChangeRef.current;
+      const next = { ...latestForm };
       let dirty = false;
       if (!next.state && result.state) {
         next.state = result.state;
@@ -286,7 +303,7 @@ export function ApplicationFormEditor({
         next.district = result.district;
         dirty = true;
       }
-      if (dirty) onProfileChange(next);
+      if (dirty && emit) emit(next);
     });
     return () => {
       cancelled = true;
