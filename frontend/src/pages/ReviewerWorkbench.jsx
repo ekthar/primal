@@ -573,7 +573,7 @@ export default function ReviewerWorkbench() {
           </div>
         </header>
 
-        <div className="p-3 sm:p-6 space-y-4 sm:space-y-5 pb-24 lg:pb-6">
+        <div className="p-3 sm:p-6 space-y-4 sm:space-y-5 pb-40 md:pb-24 lg:pb-6">
           <CredentialCard
             applicationDisplayId={activeApplication.application_display_id || activeApplication.id}
             applicantName={activeApplication.applicant_display_name || formatPersonName(activeApplication.first_name, activeApplication.last_name)}
