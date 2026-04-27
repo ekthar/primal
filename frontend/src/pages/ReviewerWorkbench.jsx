@@ -28,10 +28,10 @@ import { StickyActionBar } from "@/components/shared/ResponsivePrimitives";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import api, { isApiLive, resolveBackendUrl } from "@/lib/api";
 import {
-  ApplicationEditFields,
   pickEditableFormData,
   serializeFormDataForPatch,
 } from "@/components/application/ApplicationEditFields";
+import { ApplicationFormEditor } from "@/components/application/ApplicationFormEditor";
 import { formatPersonName } from "@/lib/person";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
@@ -1026,9 +1026,10 @@ export default function ReviewerWorkbench() {
                 ))}
               </div>
             ) : null}
-            <ApplicationEditFields
-              value={adminEditDraft}
-              onChange={setAdminEditDraft}
+            <ApplicationFormEditor
+              mode="admin"
+              formDataValue={adminEditDraft}
+              onFormDataChange={setAdminEditDraft}
               flaggedFields={activeApplication?.correction_fields}
               idPrefix={activeApplication ? `admin-edit-${activeApplication.id}` : "admin-edit"}
             />

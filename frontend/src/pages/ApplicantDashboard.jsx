@@ -12,10 +12,14 @@ import { formatPersonName } from "@/lib/person";
 import { toast } from "sonner";
 import LiveDocumentScanner from "@/components/scanner/LiveDocumentScanner";
 import {
-  ApplicationEditFields,
   pickEditableFormData,
   serializeFormDataForPatch,
 } from "@/components/application/ApplicationEditFields";
+import {
+  ApplicationFormEditor,
+  pickEditableProfile,
+  serializeProfileForPatch,
+} from "@/components/application/ApplicationFormEditor";
 import { useLocale } from "@/context/LocaleContext";
 
 function getAccessMessage(application) {
@@ -88,6 +92,7 @@ export default function ApplicantDashboard() {
   const [draftUploads, setDraftUploads] = useState({});
   const [submittingDraftId, setSubmittingDraftId] = useState(null);
   const [correctionEdits, setCorrectionEdits] = useState({});
+  const [correctionProfileEdits, setCorrectionProfileEdits] = useState({});
   const [submittingCorrectionId, setSubmittingCorrectionId] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -231,8 +236,18 @@ export default function ApplicantDashboard() {
     setCorrectionEdits((current) => ({ ...current, [applicationId]: next }));
   }
 
+  function getCorrectionProfileEdits(application) {
+    if (correctionProfileEdits[application.id]) return correctionProfileEdits[application.id];
+    return pickEditableProfile(profile);
+  }
+
+  function setCorrectionProfileEditsFor(applicationId, next) {
+    setCorrectionProfileEdits((current) => ({ ...current, [applicationId]: next }));
+  }
+
   async function saveCorrections(application, { resubmit = false } = {}) {
     const edits = getCorrectionEdits(application);
+    const profileEdits = getCorrectionProfileEdits(application);
     setSubmittingCorrectionId(application.id);
     const filesByKind = draftUploads[application.id] || {};
     for (const kind of Object.keys(filesByKind)) {
@@ -245,6 +260,16 @@ export default function ApplicantDashboard() {
         toast.error(uploadError.message || `Failed to replace ${kind}`);
         return;
       }
+    }
+    if (profile && correctionProfileEdits[application.id]) {
+      const profilePayload = serializeProfileForPatch(profileEdits, profile);
+      const { data: profileRes, error: profileError } = await api.upsertMyProfile(profilePayload);
+      if (profileError) {
+        setSubmittingCorrectionId(null);
+        toast.error(profileError.message || "Failed to save profile changes");
+        return;
+      }
+      if (profileRes?.profile) setProfile(profileRes.profile);
     }
     const { data: patchData, error: patchError } = await api.updateApplication(application.id, {
       formData: serializeFormDataForPatch(edits),
@@ -268,6 +293,7 @@ export default function ApplicantDashboard() {
     setApplications((current) => current.map((item) => (item.id === application.id ? next : item)));
     setDraftUploads((current) => ({ ...current, [application.id]: {} }));
     setCorrectionEdits((current) => { const c = { ...current }; delete c[application.id]; return c; });
+    setCorrectionProfileEdits((current) => { const c = { ...current }; delete c[application.id]; return c; });
     setSubmittingCorrectionId(null);
     toast.success(resubmit ? "Corrections sent for re-review" : "Corrections saved");
   }
@@ -601,9 +627,13 @@ export default function ApplicantDashboard() {
                       ) : null}
 
                       <div className="mt-4">
-                        <ApplicationEditFields
-                          value={getCorrectionEdits(application)}
-                          onChange={(next) => setCorrectionEditsFor(application.id, next)}
+                        <ApplicationFormEditor
+                          mode="applicant"
+                          profile={profile}
+                          profileValue={getCorrectionProfileEdits(application)}
+                          onProfileChange={(next) => setCorrectionProfileEditsFor(application.id, next)}
+                          formDataValue={getCorrectionEdits(application)}
+                          onFormDataChange={(next) => setCorrectionEditsFor(application.id, next)}
                           flaggedFields={application.correction_fields}
                           idPrefix={`applicant-correction-${application.id}`}
                         />
