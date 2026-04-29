@@ -1,4 +1,5 @@
-const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.REACT_APP_BACKEND_URL || "";
+const RAW_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.REACT_APP_BACKEND_URL || "";
+const BASE_URL = String(RAW_BASE_URL).replace(/\/+$/, "");
 const ACCESS_TOKEN_KEY = "tos-access-token";
 const REFRESH_TOKEN_KEY = "tos-refresh-token";
 
@@ -8,7 +9,7 @@ export function resolveBackendUrl(pathOrUrl) {
   if (/^https?:\/\//i.test(raw) || /^data:/i.test(raw) || /^blob:/i.test(raw)) return raw;
   const normalizedPath = raw.startsWith("/") ? raw : `/${raw}`;
   if (!BASE_URL) return normalizedPath;
-  return `${String(BASE_URL).replace(/\/+$/, "")}${normalizedPath}`;
+  return `${BASE_URL}${normalizedPath}`;
 }
 
 export function setSession({ accessToken, refreshToken }) {
