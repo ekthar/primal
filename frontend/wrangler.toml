@@ -1,3 +1,6 @@
 name = "primal"
-pages_build_output_dir = "./out"
 compatibility_date = "2026-04-29"
+
+[assets]
+directory = "./out"
+not_found_handling = "single-page-application"

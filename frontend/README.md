@@ -76,18 +76,18 @@ Recommended Netlify settings:
 
 If your workspace root also contains a lockfile from another project tree, prefer building from `frontend/` directly to avoid lockfile ambiguity warnings.
 
-## Cloudflare Pages deployment
+## Cloudflare Workers deployment
 
-This app can deploy to Cloudflare Pages as a static Next.js export.
+This app can deploy to Cloudflare Workers static assets as a static Next.js export.
 
-Recommended Cloudflare Pages settings:
+Recommended Cloudflare Workers build settings:
 
 - Root directory: `frontend`
 - Build command: `npm run build:cloudflare-pages`
-- Build output directory: `out`
+- Deploy command: `npm run deploy:cloudflare`
 - Environment variable: `NEXT_PUBLIC_BACKEND_URL=https://your-api-origin.example.com`
 
-The Cloudflare build writes static assets to `frontend/out` and uses [wrangler.toml](wrangler.toml) to declare that output directory for Pages.
+The Cloudflare build writes static assets to `frontend/out` and uses [wrangler.toml](wrangler.toml) to upload that directory as Worker static assets.
 
 ## Notes
 
