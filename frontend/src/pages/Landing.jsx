@@ -30,6 +30,9 @@ import ScrambleText from "@/components/landing/anime/ScrambleText";
 import MagneticCTA from "@/components/landing/anime/MagneticCTA";
 import StaggerGrid from "@/components/landing/anime/StaggerGrid";
 import RippleField from "@/components/landing/anime/RippleField";
+import MeshGradient from "@/components/landing/anime/MeshGradient";
+import Spotlight from "@/components/landing/anime/Spotlight";
+import LiveConsoleCard from "@/components/landing/anime/LiveConsoleCard";
 import { HERO_IMAGE, TEXTURE_IMAGE } from "@/lib/mockData";
 import { api } from "@/lib/api";
 import { useMotionProfile } from "@/lib/motion";
@@ -216,7 +219,7 @@ function Nav({ registrationOpen }) {
   );
 }
 
-function Hero({ registrationOpen, nextTournamentLabel }) {
+function Hero({ registrationOpen, nextTournamentLabel, heroConsole }) {
   const ref = useRef(null);
   const reduced = useReducedMotion();
   const { allowCinematicMotion } = useMotionProfile();
@@ -224,20 +227,28 @@ function Hero({ registrationOpen, nextTournamentLabel }) {
   const imgY = useTransform(scrollYProgress, [0, 1], [0, 120]);
   const imgScale = useTransform(scrollYProgress, [0, 1], [1.05, 1.15]);
   const textY = useTransform(scrollYProgress, [0, 1], [0, -40]);
+  const textRotateX = useTransform(scrollYProgress, [0, 1], [0, -8]);
+  const consoleY = useTransform(scrollYProgress, [0, 1], [0, -80]);
   const overlay = useTransform(scrollYProgress, [0, 1], [0.35, 0.75]);
 
   return (
     <section ref={ref} className="relative isolate min-h-screen overflow-hidden flex items-center pt-16 sm:pt-20 short-screen-tight">
-      <CageEnergyCanvas />
+      {/* z-0: hero photo */}
       <motion.div
         style={{ y: !allowCinematicMotion || reduced ? 0 : imgY, scale: !allowCinematicMotion || reduced ? 1 : imgScale, backgroundImage: `url(${HERO_IMAGE})` }}
         className="absolute inset-0 z-0 bg-cover bg-center opacity-[0.9] dark:opacity-[0.82]"
       />
+      {/* z-[1]: ambient mesh gradient drifting behind everything */}
+      <MeshGradient className="z-[1]" />
+      {/* z-[2]: cage energy canvas */}
+      <CageEnergyCanvas />
       <div
         className="absolute inset-0 z-[2] opacity-[0.08] dark:opacity-[0.12] pointer-events-none"
         style={{ backgroundImage: `url(${TEXTURE_IMAGE})`, backgroundSize: "cover", backgroundPosition: "center" }}
         aria-hidden
       />
+      {/* z-[5]: pointer-tracked spotlight */}
+      {allowCinematicMotion && !reduced ? <Spotlight /> : null}
       <motion.div
         style={{ opacity: reduced ? 0.5 : overlay }}
         className="absolute inset-0 z-[3] bg-[linear-gradient(180deg,rgba(255,255,255,0.54)_0%,rgba(255,255,255,0.28)_34%,rgba(255,255,255,0.66)_100%)] dark:bg-[linear-gradient(180deg,rgba(10,10,10,0.28)_0%,rgba(10,10,10,0.2)_34%,rgba(10,10,10,0.7)_100%)]"
@@ -249,7 +260,14 @@ function Hero({ registrationOpen, nextTournamentLabel }) {
 
       <div className="relative z-[10] max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
         <div className="grid lg:grid-cols-[1.12fr_0.88fr] gap-8 lg:gap-12 items-center">
-          <motion.div style={{ y: !allowCinematicMotion || reduced ? 0 : textY }}>
+          <motion.div
+            style={{
+              y: !allowCinematicMotion || reduced ? 0 : textY,
+              rotateX: !allowCinematicMotion || reduced ? 0 : textRotateX,
+              transformPerspective: 1200,
+              transformStyle: "preserve-3d",
+            }}
+          >
             <Reveal>
               <div className="inline-flex items-center gap-2 rounded-full border border-border bg-surface/70 backdrop-blur px-3 py-1 text-xs font-medium">
                 <span className="size-1.5 rounded-full bg-primary animate-pulse" />
@@ -330,7 +348,37 @@ function Hero({ registrationOpen, nextTournamentLabel }) {
             </Reveal>
           </motion.div>
 
-          <div className="hidden lg:block min-h-[420px]" aria-hidden />
+          <motion.div
+            style={{ y: !allowCinematicMotion || reduced ? 0 : consoleY }}
+            className="hidden lg:block"
+          >
+            <Reveal delay={0.45}>
+              <LiveConsoleCard
+                registration={{
+                  open: registrationOpen,
+                  tournament: nextTournamentLabel,
+                  dates: heroConsole?.registrationDates,
+                }}
+                liveCount={heroConsole?.liveCount}
+                latestResult={heroConsole?.latestResult}
+              />
+            </Reveal>
+          </motion.div>
+        </div>
+
+        {/* mobile-only inline console — keeps the live feel below CTAs on small screens */}
+        <div className="mt-10 lg:hidden">
+          <Reveal delay={0.5}>
+            <LiveConsoleCard
+              registration={{
+                open: registrationOpen,
+                tournament: nextTournamentLabel,
+                dates: heroConsole?.registrationDates,
+              }}
+              liveCount={heroConsole?.liveCount}
+              latestResult={heroConsole?.latestResult}
+            />
+          </Reveal>
         </div>
       </div>
 
@@ -1070,10 +1118,42 @@ export default function Landing() {
     [tournaments]
   );
 
+  const heroConsole = useMemo(() => {
+    const open = tournaments.find((t) => t.registrationOpen) || tournaments[0];
+    const fmt = (iso) => {
+      if (!iso) return null;
+      try {
+        return new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short" }).format(new Date(iso));
+      } catch {
+        return null;
+      }
+    };
+    let registrationDates = "Window TBA";
+    if (open?.registrationOpenAt && open?.registrationCloseAt) {
+      const start = fmt(open.registrationOpenAt);
+      const end = fmt(open.registrationCloseAt);
+      if (start && end) registrationDates = `${start} → ${end}`;
+    } else if (open?.starts_on) {
+      const start = fmt(open.starts_on);
+      const end = fmt(open.ends_on);
+      registrationDates = end ? `${start} → ${end}` : start || registrationDates;
+    }
+    return {
+      registrationDates,
+      liveCount: tournaments.filter((t) => t.live || t.bracket_published).length || tournaments.length || 4,
+      latestResult: {
+        winner: "K. Rao",
+        opponent: "S. Iyer",
+        method: "TKO",
+        round: 2,
+      },
+    };
+  }, [tournaments]);
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Nav registrationOpen={registrationOpen} />
-      <Hero registrationOpen={registrationOpen} nextTournamentLabel={nextTournamentLabel} />
+      <Hero registrationOpen={registrationOpen} nextTournamentLabel={nextTournamentLabel} heroConsole={heroConsole} />
       <Announcements />
       <Marquee items={[
         "Primal - Fight Series",
