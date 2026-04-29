@@ -76,6 +76,19 @@ Recommended Netlify settings:
 
 If your workspace root also contains a lockfile from another project tree, prefer building from `frontend/` directly to avoid lockfile ambiguity warnings.
 
+## Cloudflare Pages deployment
+
+This app can deploy to Cloudflare Pages as a static Next.js export.
+
+Recommended Cloudflare Pages settings:
+
+- Root directory: `frontend`
+- Build command: `npm run build:cloudflare-pages`
+- Build output directory: `out`
+- Environment variable: `NEXT_PUBLIC_BACKEND_URL=https://your-api-origin.example.com`
+
+The Cloudflare build writes static assets to `frontend/out` and uses [wrangler.toml](wrangler.toml) to declare that output directory for Pages.
+
 ## Notes
 
 - User-facing branding is `Primal`.

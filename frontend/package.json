@@ -60,6 +60,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:cloudflare-pages": "node scripts/build-cloudflare-pages.mjs",
     "start": "next start",
     "test": "node -e \"console.log('No frontend tests configured')\""
   },
