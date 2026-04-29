@@ -283,7 +283,6 @@ export default function Register() {
     if (step === 2 && !isClubTrack) {
       if (form.selectedDisciplines.length === 0) nextErrors.selectedDisciplines = rt("Select at least one discipline", "कम से कम एक डिसिप्लिन चुनें");
       if (entryPreview.some((entry) => !entry.valid)) nextErrors.selectedDisciplines = rt("Fix the invalid discipline selection", "अमान्य डिसिप्लिन चयन ठीक करें");
-      if (!form.experienceLevel) nextErrors.experienceLevel = rt("Required", "आवश्यक है");
       if (!tournamentId && !tournamentsLoading && tournaments.length > 0) nextErrors.tournament = rt("Select a tournament", "एक टूर्नामेंट चुनें");
     }
     if (step === 3 && !isClubTrack) {
@@ -395,7 +394,8 @@ export default function Register() {
       bio: form.notes || null,
       metadata: {
         selectedDisciplines: form.selectedDisciplines,
-        experienceLevel: form.experienceLevel,
+        experienceLevel: form.experienceLevel || null,
+        categoryEntries: validEntries,
         phone: form.phone,
         address: {
           country: "India",
@@ -417,7 +417,8 @@ export default function Register() {
       tournamentId: selectedTournamentId,
       formData: {
         selectedDisciplines: form.selectedDisciplines,
-        experienceLevel: form.experienceLevel,
+        experienceLevel: form.experienceLevel || null,
+        categoryEntries: validEntries,
         notes: form.notes,
       },
     });
@@ -703,7 +704,18 @@ export default function Register() {
                                 <Check className="size-3.5" />
                               </div>
                             </div>
-                            {active && preview && <div className="mt-4 text-sm text-secondary-muted">{preview.categoryLabel}</div>}
+                            {active && preview && (
+                              <div className="mt-4 text-sm text-secondary-muted">
+                                <div>{preview.categoryLabel}</div>
+                                {!preview.valid && preview.issues?.length ? (
+                                  <ul className="mt-2 list-disc pl-4 text-xs text-amber-600 dark:text-amber-400">
+                                    {preview.issues.map((issue, index) => (
+                                      <li key={index}>{issue}</li>
+                                    ))}
+                                  </ul>
+                                ) : null}
+                              </div>
+                            )}
                           </button>
                         );
                       })}

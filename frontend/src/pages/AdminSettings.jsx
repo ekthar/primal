@@ -11,6 +11,7 @@ import { PageSectionHeader, ResponsivePageShell } from "@/components/shared/Resp
 import api from "@/lib/api";
 import { toast } from "sonner";
 import { useLocale } from "@/context/LocaleContext";
+import { deriveOfficialWeightClass } from "@/lib/categoryRules";
 
 const BACKLOG_ITEMS = [
   "Public brackets/results page",
@@ -23,36 +24,16 @@ const BACKLOG_ITEMS = [
   "Production deployment/wiring for the Node backend",
 ];
 
-const WEIGHT_CLASSES = {
-  male: [
-    { label: "-54 kg", max: 54 },
-    { label: "-57 kg", max: 57 },
-    { label: "-60 kg", max: 60 },
-    { label: "-63.5 kg", max: 63.5 },
-    { label: "-67 kg", max: 67 },
-    { label: "-71 kg", max: 71 },
-    { label: "-75 kg", max: 75 },
-    { label: "-81 kg", max: 81 },
-    { label: "-86 kg", max: 86 },
-    { label: "-91 kg", max: 91 },
-    { label: "+91 kg", max: 999 },
-  ],
-  female: [
-    { label: "-48 kg", max: 48 },
-    { label: "-52 kg", max: 52 },
-    { label: "-56 kg", max: 56 },
-    { label: "-60 kg", max: 60 },
-    { label: "-65 kg", max: 65 },
-    { label: "-70 kg", max: 70 },
-    { label: "+70 kg", max: 999 },
-  ],
-};
-
-function deriveWeightClass(gender, weightKg) {
-  const normalizedGender = String(gender || "").toLowerCase() === "female" ? "female" : "male";
-  const numeric = Number(weightKg || 0);
-  const table = WEIGHT_CLASSES[normalizedGender] || WEIGHT_CLASSES.male;
-  return table.find((entry) => numeric <= entry.max)?.label || "-";
+function deriveWeightClass(participant, weightKg) {
+  const selectedDisciplines = Array.isArray(participant?.metadata?.selectedDisciplines)
+    ? participant.metadata.selectedDisciplines
+    : [];
+  return deriveOfficialWeightClass({
+    disciplineId: selectedDisciplines[0] || participant?.discipline,
+    gender: participant?.gender,
+    dateOfBirth: participant?.date_of_birth,
+    weightKg,
+  }) || "-";
 }
 
 function formatDateTimeInput(value) {
@@ -739,7 +720,7 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
                             <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
                               <DetailLite label="Current weight" value={participant.weight_kg ? `${participant.weight_kg} kg` : "-"} />
                               <DetailLite label="Current class" value={participant.weight_class || "-"} />
-                              <DetailLite label="New class" value={draftWeight ? deriveWeightClass(participant.gender, draftWeight) : "-"} />
+                              <DetailLite label="New class" value={draftWeight ? deriveWeightClass(participant, draftWeight) : "-"} />
                             </div>
                             <div className="mt-4">
                               <Input
@@ -799,7 +780,7 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
                                     onChange={(event) => setWeightDrafts((current) => ({ ...current, [participant.id]: event.target.value }))}
                                   />
                                 </td>
-                                <td className="px-4 py-3 text-sm">{draftWeight ? deriveWeightClass(participant.gender, draftWeight) : "-"}</td>
+                                <td className="px-4 py-3 text-sm">{draftWeight ? deriveWeightClass(participant, draftWeight) : "-"}</td>
                                 <td className="px-4 py-3 text-right">
                                   <Button size="sm" onClick={() => saveReweigh(participant.id)} disabled={savingProfileId === participant.id}>
                                     <InlineLoadingLabel loading={savingProfileId === participant.id} loadingText="Saving...">

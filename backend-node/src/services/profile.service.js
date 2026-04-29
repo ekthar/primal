@@ -5,39 +5,18 @@ const { validateIndiaAddress } = require('../indiaLocations');
 const { query } = require('../db');
 const bracketService = require('./bracket.service');
 const { resolveAvatarUrl } = require('./avatar.service');
+const { deriveOfficialWeightClass } = require('../domain/categoryRules');
 
-const WEIGHT_CLASSES = {
-  male: [
-    { label: '-54 kg', max: 54 },
-    { label: '-57 kg', max: 57 },
-    { label: '-60 kg', max: 60 },
-    { label: '-63.5 kg', max: 63.5 },
-    { label: '-67 kg', max: 67 },
-    { label: '-71 kg', max: 71 },
-    { label: '-75 kg', max: 75 },
-    { label: '-81 kg', max: 81 },
-    { label: '-86 kg', max: 86 },
-    { label: '-91 kg', max: 91 },
-    { label: '+91 kg', max: 999 },
-  ],
-  female: [
-    { label: '-48 kg', max: 48 },
-    { label: '-52 kg', max: 52 },
-    { label: '-56 kg', max: 56 },
-    { label: '-60 kg', max: 60 },
-    { label: '-65 kg', max: 65 },
-    { label: '-70 kg', max: 70 },
-    { label: '+70 kg', max: 999 },
-  ],
-};
-
-function deriveWeightClass(gender, weightKg) {
-  const key = String(gender || '').toLowerCase();
-  const normalized = key === 'female' ? 'female' : 'male';
-  const table = WEIGHT_CLASSES[normalized] || WEIGHT_CLASSES.male;
-  const weight = Number(weightKg || 0);
-  const hit = table.find((item) => weight <= item.max);
-  return hit?.label || null;
+function deriveWeightClass(profile, weightKg) {
+  const selectedDisciplines = Array.isArray(profile?.metadata?.selectedDisciplines)
+    ? profile.metadata.selectedDisciplines
+    : [];
+  return deriveOfficialWeightClass({
+    disciplineId: selectedDisciplines[0] || profile?.discipline,
+    gender: profile?.gender,
+    dateOfBirth: profile?.date_of_birth,
+    weightKg,
+  });
 }
 
 async function upsertMyProfile(userId, data, ctx = {}) {
@@ -62,6 +41,16 @@ async function upsertMyProfile(userId, data, ctx = {}) {
     const c = await clubsRepo.findById(data.clubId);
     if (!c) throw ApiError.badRequest('Unknown club', { field: 'clubId' });
   }
+  const selectedDisciplines = Array.isArray(payload.metadata.selectedDisciplines)
+    ? payload.metadata.selectedDisciplines
+    : [];
+  const derivedWeightClass = deriveOfficialWeightClass({
+    disciplineId: selectedDisciplines[0] || payload.discipline,
+    gender: payload.gender,
+    dateOfBirth: payload.dateOfBirth,
+    weightKg: payload.weightKg,
+  });
+  payload.weightClass = derivedWeightClass || payload.weightClass || null;
   const profile = await profilesRepo.upsertForUser(userId, payload);
   await usersRepo.updatePhone(userId, payload.metadata.phone);
   await auditWrite({ actorUserId: userId, action: 'profile.upsert', entityType: 'profile',
@@ -119,7 +108,7 @@ async function adminReweigh(actor, profileId, { weightKg }, ctx = {}) {
       throw ApiError.forbidden();
     }
   }
-  const weightClass = deriveWeightClass(profile.gender, weightKg);
+  const weightClass = deriveWeightClass(profile, weightKg);
   const updated = await profilesRepo.updateWeightByProfileId(profileId, { weightKg, weightClass });
   await auditWrite({
     actorUserId: actor.id,

@@ -7,6 +7,7 @@ const { issuePasswordResetForUser, publicUser } = require('./auth.service');
 const { randomBytes } = require('crypto');
 const { customAlphabet } = require('nanoid');
 const { splitPersonName } = require('./identity.service');
+const { deriveOfficialWeightClass } = require('../domain/categoryRules');
 
 const createCode = customAlphabet('ABCDEFGHJKLMNPQRSTUVWXYZ23456789', 10);
 
@@ -135,6 +136,13 @@ async function createParticipant(user, clubId, payload, ctx = {}) {
   if (existingProfile && existingProfile.club_id && existingProfile.club_id !== club.id) {
     throw ApiError.conflict('Participant already belongs to another club', { field: 'email' });
   }
+  const selectedDisciplines = Array.isArray(payload.selectedDisciplines) ? payload.selectedDisciplines : [];
+  const weightClass = deriveOfficialWeightClass({
+    disciplineId: selectedDisciplines[0] || payload.discipline,
+    gender: payload.gender,
+    dateOfBirth: payload.dateOfBirth,
+    weightKg: payload.weightKg,
+  });
 
   const profile = await profilesRepo.upsertForUser(participantUser.id, {
     firstName,
@@ -144,7 +152,7 @@ async function createParticipant(user, clubId, payload, ctx = {}) {
     nationality: 'India',
     discipline: payload.discipline || null,
     weightKg: payload.weightKg || null,
-    weightClass: payload.weightClass || null,
+    weightClass: payload.weightClass || weightClass || null,
     recordWins: existingProfile?.record_wins || 0,
     recordLosses: existingProfile?.record_losses || 0,
     recordDraws: existingProfile?.record_draws || 0,
@@ -156,7 +164,7 @@ async function createParticipant(user, clubId, payload, ctx = {}) {
       address: addressValidation.normalized,
       managedByClub: true,
       fighterCode: existingProfile?.metadata?.fighterCode || `FIG-${createCode()}`,
-      selectedDisciplines: Array.isArray(payload.selectedDisciplines) ? payload.selectedDisciplines : [],
+      selectedDisciplines,
     },
   });
 
