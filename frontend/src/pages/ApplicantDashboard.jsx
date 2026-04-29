@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, Camera, Download, Eye, FileCheck2, FileText, Gavel, Mail as MailIcon, ScanLine, ShieldAlert, Upload, XCircle } from "lucide-react";
+import { AlertCircle, Camera, Download, Eye, FileCheck2, FileText, Gavel, Mail as MailIcon, Save, ScanLine, ShieldAlert, Upload, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
@@ -7,7 +7,7 @@ import StatusPill from "@/components/shared/StatusPill";
 import EmptyState from "@/components/shared/EmptyState";
 import { InlineLoadingLabel, SectionLoader } from "@/components/shared/PrimalLoader";
 import { ResponsivePageShell, StickyActionBar } from "@/components/shared/ResponsivePrimitives";
-import api from "@/lib/api";
+import api, { resolveBackendUrl } from "@/lib/api";
 import { formatPersonName } from "@/lib/person";
 import { toast } from "sonner";
 import LiveDocumentScanner from "@/components/scanner/LiveDocumentScanner";
@@ -90,6 +90,9 @@ export default function ApplicantDashboard() {
   const [publicTournaments, setPublicTournaments] = useState([]);
   const [startingSeasonId, setStartingSeasonId] = useState(null);
   const [draftUploads, setDraftUploads] = useState({});
+  const [draftEdits, setDraftEdits] = useState({});
+  const [draftProfileEdits, setDraftProfileEdits] = useState({});
+  const [savingDraftId, setSavingDraftId] = useState(null);
   const [submittingDraftId, setSubmittingDraftId] = useState(null);
   const [correctionEdits, setCorrectionEdits] = useState({});
   const [correctionProfileEdits, setCorrectionProfileEdits] = useState({});
@@ -227,6 +230,24 @@ export default function ApplicantDashboard() {
     }));
   }
 
+  function getDraftEdits(application) {
+    if (draftEdits[application.id]) return draftEdits[application.id];
+    return pickEditableFormData(application);
+  }
+
+  function setDraftEditsFor(applicationId, next) {
+    setDraftEdits((current) => ({ ...current, [applicationId]: next }));
+  }
+
+  function getDraftProfileEdits(application) {
+    if (draftProfileEdits[application.id]) return draftProfileEdits[application.id];
+    return pickEditableProfile(profile);
+  }
+
+  function setDraftProfileEditsFor(applicationId, next) {
+    setDraftProfileEdits((current) => ({ ...current, [applicationId]: next }));
+  }
+
   function getCorrectionEdits(application) {
     if (correctionEdits[application.id]) return correctionEdits[application.id];
     return pickEditableFormData(application);
@@ -243,6 +264,42 @@ export default function ApplicantDashboard() {
 
   function setCorrectionProfileEditsFor(applicationId, next) {
     setCorrectionProfileEdits((current) => ({ ...current, [applicationId]: next }));
+  }
+
+  async function saveDraftApplication(application) {
+    const edits = getDraftEdits(application);
+    const profileEdits = getDraftProfileEdits(application);
+    setSavingDraftId(application.id);
+
+    if (profile && draftProfileEdits[application.id]) {
+      const profilePayload = serializeProfileForPatch(profileEdits, profile);
+      const { data: profileRes, error: profileError } = await api.upsertMyProfile(profilePayload);
+      if (profileError) {
+        setSavingDraftId(null);
+        toast.error(profileError.message || "Failed to save participant profile");
+        return false;
+      }
+      if (profileRes?.profile) setProfile(profileRes.profile);
+    }
+
+    const { data, error } = await api.updateApplication(application.id, {
+      formData: serializeFormDataForPatch(edits),
+    });
+    setSavingDraftId(null);
+
+    if (error) {
+      toast.error(error.message || "Failed to save application draft");
+      return false;
+    }
+
+    const savedApplication = { ...application, ...(data?.application || {}) };
+    setApplications((current) => current.map((item) => (item.id === application.id ? { ...item, ...savedApplication } : item)));
+    setActiveApplication((current) => (current?.id === application.id ? { ...current, ...savedApplication } : current));
+    setActiveApplicationDetails((current) => (current?.id === application.id ? { ...current, ...savedApplication } : current));
+    setDraftEdits((current) => { const next = { ...current }; delete next[application.id]; return next; });
+    setDraftProfileEdits((current) => { const next = { ...current }; delete next[application.id]; return next; });
+    toast.success("Application draft saved");
+    return true;
   }
 
   async function saveCorrections(application, { resubmit = false } = {}) {
@@ -299,6 +356,9 @@ export default function ApplicantDashboard() {
   }
 
   async function uploadAndSubmitDraft(application) {
+    const saved = await saveDraftApplication(application);
+    if (!saved) return;
+
     const files = draftUploads[application.id] || {};
     const requiredKinds = REQUIRED_UPLOADS.map((item) => item.kind);
     const missing = requiredKinds.filter((kind) => !files[kind]);
@@ -573,8 +633,19 @@ export default function ApplicantDashboard() {
                     <div className="mt-4 rounded-xl border border-border bg-surface p-4">
                       <div className="font-medium text-sm">Finish this season application</div>
                       <p className="mt-2 text-sm text-secondary-muted">
-                        Upload or scan each required document here, confirm the preview, then submit while registration is still open.
+                        Complete participant details, upload or scan each required document, then submit while registration is still open.
                       </p>
+                      <div className="mt-4 rounded-2xl border border-border bg-background/70 p-4">
+                        <ApplicationFormEditor
+                          mode="applicant"
+                          profile={profile}
+                          profileValue={getDraftProfileEdits(application)}
+                          onProfileChange={(next) => setDraftProfileEditsFor(application.id, next)}
+                          formDataValue={getDraftEdits(application)}
+                          onFormDataChange={(next) => setDraftEditsFor(application.id, next)}
+                          idPrefix={`applicant-draft-${application.id}`}
+                        />
+                      </div>
                       <div className="mt-4 rounded-2xl border border-border bg-background/70 p-4">
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                           <div>
@@ -599,7 +670,14 @@ export default function ApplicantDashboard() {
                           ))}
                         </div>
                       </div>
-                      <div className="mt-4 flex justify-end">
+                      <div className="mt-4 flex flex-col justify-end gap-2 sm:flex-row">
+                        <Button variant="outline" className="w-full sm:w-auto" onClick={() => saveDraftApplication(application)} disabled={savingDraftId === application.id}>
+                          <InlineLoadingLabel loading={savingDraftId === application.id} loadingText="Saving...">
+                            <>
+                              <Save className="size-3.5" /> Save draft
+                            </>
+                          </InlineLoadingLabel>
+                        </Button>
                         <Button className="w-full sm:w-auto" onClick={() => uploadAndSubmitDraft(application)} disabled={submittingDraftId === application.id}>
                           <InlineLoadingLabel loading={submittingDraftId === application.id} loadingText="Submitting...">
                             Submit this season application
@@ -786,35 +864,7 @@ export default function ApplicantDashboard() {
                 {getAccessMessage(activeApplication)}
               </div>
 
-              <div className="mt-5 grid sm:grid-cols-2 gap-3 text-sm">
-                <Detail label="Status" value={activeApplicationDetails.status?.replace(/_/g, " ") || "-"} />
-                <Detail label="Tournament" value={activeApplicationDetails.tournament_name || "-"} />
-                <Detail label="Club" value={activeApplicationDetails.club_name || "Individual"} />
-                <Detail label="Phone" value={activeApplicationDetails.phone || profile?.phone || profile?.metadata?.phone || "-"} />
-                <Detail label="Weight class" value={activeApplicationDetails.weight_class || "-"} />
-              </div>
-
-              <div className="mt-5">
-                <div className="text-[10px] uppercase tracking-wider text-tertiary font-semibold">Submitted form data</div>
-                <pre className="mt-2 w-full min-h-[220px] text-xs font-mono overflow-auto rounded-lg border border-border bg-background p-3">
-                  {JSON.stringify(activeApplicationDetails.form_data || {}, null, 2)}
-                </pre>
-              </div>
-
-              <div className="mt-5">
-                <div className="text-[10px] uppercase tracking-wider text-tertiary font-semibold">Status timeline</div>
-                <div className="mt-2 space-y-2">
-                  {(activeApplicationDetails.statusEvents || []).map((event) => (
-                    <div key={event.id} className="rounded-xl border border-border bg-background/60 px-3 py-3 text-sm">
-                      <div className="font-medium">{event.to_status?.replace(/_/g, " ") || "-"}</div>
-                      <div className="text-secondary-muted mt-1">{event.reason || "No reason captured"}</div>
-                    </div>
-                  ))}
-                  {!(activeApplicationDetails.statusEvents || []).length && (
-                    <div className="text-sm text-secondary-muted">No timeline events available.</div>
-                  )}
-                </div>
-              </div>
+              <ApplicationDetailsView application={activeApplicationDetails} profile={profile} />
             </div>
           ) : null}
         </div>
@@ -875,6 +925,192 @@ function Detail({ label, value }) {
       <dt className="text-[10px] uppercase tracking-wider text-tertiary font-semibold">{label}</dt>
       <dd className="text-right">{value}</dd>
     </div>
+  );
+}
+
+function formatDateTime(value) {
+  if (!value) return "-";
+  return new Date(value).toLocaleString();
+}
+
+function formatDisplayValue(value) {
+  if (value === null || value === undefined || value === "") return "-";
+  if (Array.isArray(value)) return value.length ? value.map(formatToken).join(", ") : "-";
+  if (typeof value === "number") return Number.isFinite(value) ? String(value) : "-";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  return String(value);
+}
+
+function formatToken(value) {
+  return String(value)
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
+function getApplicationAddress(application, profile) {
+  return application?.metadata?.address || profile?.metadata?.address || {};
+}
+
+function getLatestDocumentByKind(documents, kind) {
+  if (!Array.isArray(documents)) return null;
+  return documents.find((documentRow) => documentRow.kind === kind) || null;
+}
+
+function ApplicationDetailsView({ application, profile }) {
+  const formData = application.form_data || {};
+  const address = getApplicationAddress(application, profile);
+  const categoryEntries = Array.isArray(formData.categoryEntries) ? formData.categoryEntries : [];
+
+  return (
+    <div className="mt-5 space-y-5">
+      <section className="rounded-2xl border border-border bg-background/60 p-4">
+        <SectionTitle title="Participant profile" />
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 text-sm">
+          <DetailCard label="Full name" value={application.applicant_display_name || formatPersonName(application.first_name, application.last_name)} />
+          <DetailCard label="Application ID" value={application.application_display_id || application.id} />
+          <DetailCard label="Status" value={formatToken(application.status || "")} />
+          <DetailCard label="Tournament" value={application.tournament_name || "-"} />
+          <DetailCard label="Club" value={application.club_name || "Individual"} />
+          <DetailCard label="Email" value={application.email || "-"} />
+          <DetailCard label="Phone" value={application.phone || profile?.phone || profile?.metadata?.phone || "-"} />
+          <DetailCard label="Gender" value={formatDisplayValue(application.gender || profile?.gender)} />
+          <DetailCard label="Date of birth" value={application.date_of_birth ? new Date(application.date_of_birth).toLocaleDateString() : "-"} />
+          <DetailCard label="Nationality" value={application.nationality || profile?.nationality || "-"} />
+          <DetailCard label="Address" value={[address.line1, address.line2, address.district, address.state, address.postalCode].filter(Boolean).join(", ") || "-"} wide />
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-border bg-background/60 p-4">
+        <SectionTitle title="Competition entry" />
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 text-sm">
+          <DetailCard label="Selected disciplines" value={formatDisplayValue(formData.selectedDisciplines || application.discipline)} />
+          <DetailCard label="Experience level" value={formatDisplayValue(formData.experienceLevel)} />
+          <DetailCard label="Years training" value={formatDisplayValue(formData.yearsTraining)} />
+          <DetailCard label="Profile weight" value={application.weight_kg ? `${application.weight_kg} kg` : "-"} />
+          <DetailCard label="Entry weight" value={formData.weightKg ? `${formData.weightKg} kg` : "-"} />
+          <DetailCard label="Weight class" value={application.weight_class || "-"} />
+          <DetailCard label="Reviewer notes" value={formData.notes || "-"} wide />
+        </div>
+        {categoryEntries.length ? (
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            {categoryEntries.map((entry, index) => (
+              <div key={`${entry.disciplineId || "entry"}-${index}`} className="rounded-xl border border-border bg-surface px-3 py-3 text-sm">
+                <div className="font-medium">{formatDisplayValue(entry.disciplineLabel || entry.disciplineId)}</div>
+                <div className="mt-1 text-secondary-muted">{formatDisplayValue(entry.categoryLabel || entry.weightClass || entry.category)}</div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </section>
+
+      <section className="rounded-2xl border border-border bg-background/60 p-4">
+        <SectionTitle title="Corner and emergency contact" />
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 text-sm">
+          <DetailCard label="Coach name" value={formData.cornerCoachName || "-"} />
+          <DetailCard label="Coach phone" value={formData.cornerCoachPhone || "-"} />
+          <DetailCard label="Emergency contact" value={formData.emergencyContactName || "-"} />
+          <DetailCard label="Relation" value={formData.emergencyContactRelation || "-"} />
+          <DetailCard label="Emergency phone" value={formData.emergencyContactPhone || "-"} />
+          <DetailCard label="Medical notes" value={formData.medicalNotes || "-"} wide />
+        </div>
+      </section>
+
+      <DocumentsView documents={application.documents || []} />
+      <StatusTimelineView events={application.statusEvents || []} />
+    </div>
+  );
+}
+
+function SectionTitle({ title }) {
+  return (
+    <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">
+      {title}
+    </div>
+  );
+}
+
+function DetailCard({ label, value, wide }) {
+  return (
+    <div className={`rounded-xl border border-border bg-surface px-3 py-3 ${wide ? "sm:col-span-2" : ""}`}>
+      <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">{label}</div>
+      <div className="mt-1 break-words text-sm text-foreground">{formatDisplayValue(value)}</div>
+    </div>
+  );
+}
+
+function DocumentsView({ documents }) {
+  return (
+    <section className="rounded-2xl border border-border bg-background/60 p-4">
+      <SectionTitle title="Documents" />
+      <div className="mt-4 grid gap-3">
+        {REQUIRED_UPLOADS.map((item) => {
+          const documentRow = getLatestDocumentByKind(documents, item.kind);
+          return (
+            <DocumentCard key={item.kind} item={item} documentRow={documentRow} />
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function DocumentCard({ item, documentRow }) {
+  const Icon = item.icon;
+  const documentUrl = resolveBackendUrl(documentRow?.url || "");
+  const verified = Boolean(documentRow?.verified_at);
+  return (
+    <div className="rounded-xl border border-border bg-surface p-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-border bg-background text-primary">
+            <Icon className="size-4" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm font-medium">{item.label}</div>
+            <div className="mt-1 text-xs text-secondary-muted">
+              {documentRow ? `${documentRow.label || documentRow.original_filename || "Uploaded file"} / ${formatFileSize({ size: documentRow.size_bytes })}` : "Not uploaded yet"}
+            </div>
+            {documentRow?.verify_reason ? (
+              <div className="mt-1 text-xs text-amber-700">{documentRow.verify_reason}</div>
+            ) : null}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className={`rounded-full border px-2 py-1 text-[11px] ${verified ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-border bg-background text-secondary-muted"}`}>
+            {verified ? "Verified" : documentRow ? "Uploaded" : "Missing"}
+          </span>
+          {documentUrl ? (
+            <Button size="sm" variant="outline" asChild>
+              <a href={documentUrl} target="_blank" rel="noreferrer">
+                <Eye className="size-3.5" /> Open
+              </a>
+            </Button>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatusTimelineView({ events }) {
+  return (
+    <section className="rounded-2xl border border-border bg-background/60 p-4">
+      <SectionTitle title="Status timeline" />
+      <div className="mt-4 space-y-2">
+        {events.map((event) => (
+          <div key={event.id} className="rounded-xl border border-border bg-surface px-3 py-3 text-sm">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+              <div className="font-medium">{formatToken(event.to_status || "")}</div>
+              <div className="text-xs text-tertiary">{formatDateTime(event.created_at)}</div>
+            </div>
+            <div className="text-secondary-muted mt-1">{event.reason || "No reason captured"}</div>
+          </div>
+        ))}
+        {!events.length ? (
+          <div className="text-sm text-secondary-muted">No timeline events available.</div>
+        ) : null}
+      </div>
+    </section>
   );
 }
 
