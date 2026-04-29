@@ -77,6 +77,9 @@ const config = {
   uploadStorageProvider: process.env.UPLOAD_STORAGE_PROVIDER
     || (process.env.BLOB_READ_WRITE_TOKEN ? 'vercel-blob' : 'local'),
   maxUploadMb: parseInt(process.env.MAX_UPLOAD_MB || '10', 10),
+  observability: {
+    slowQueryMs: parseInt(process.env.SLOW_QUERY_MS || '250', 10),
+  },
   blob: {
     readWriteToken: process.env.BLOB_READ_WRITE_TOKEN || '',
     access: process.env.BLOB_ACCESS || 'public',

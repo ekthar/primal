@@ -24,9 +24,8 @@ import {
  * - In `mode="applicant"` AND when both `profile` + `profileValue` are
  *   provided, the "Identity & address" section is editable. The parent is
  *   responsible for PUT /api/profiles/me on save.
- * - In `mode="club"` / `mode="admin"`, the profile section is hidden (no
- *   admin-edits-other-profile endpoint exists today). Only `form_data` is
- *   editable. Parent PATCH /api/applications/:id only.
+ * - In `mode="club"`, clubs can edit identity/address for managed fighters.
+ *   Admin/reviewer usage keeps profile details read-only and edits `form_data`.
  *
  * Both sections are fully controlled. The component never calls the API on
  * its own except for the public state / district / pincode lookups used to
@@ -193,7 +192,7 @@ export function ApplicationFormEditor({
   const flaggedSet = useMemo(() => buildFlaggedSet(flaggedFields), [flaggedFields]);
 
   const profileEditable =
-    mode === "applicant" && Boolean(profile) && Boolean(profileValue) && Boolean(onProfileChange);
+    ["applicant", "club"].includes(mode) && Boolean(profile) && Boolean(profileValue) && Boolean(onProfileChange);
 
   const formData = useMemo(
     () => ({ ...DEFAULT_FORM_DATA, ...(formDataValue || {}) }),

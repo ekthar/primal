@@ -234,6 +234,18 @@ const schemas = {
       address: indiaAddressSchema,
       sendResetLink: Joi.boolean().default(true),
     }),
+    updateParticipant: Joi.object({
+      fullName: Joi.string().min(2).max(120).required(),
+      phone: Joi.string().max(30).allow(null, ''),
+      dateOfBirth: Joi.date().iso().less('now').allow(null),
+      gender: Joi.string().max(30).allow(null, ''),
+      discipline: Joi.string().max(60).allow(null, ''),
+      selectedDisciplines: Joi.array().items(Joi.string().max(120)).max(20).default([]),
+      weightKg: Joi.number().positive().max(300).allow(null),
+      weightClass: Joi.string().max(60).allow(null, ''),
+      bio: Joi.string().max(2000).allow(null, ''),
+      address: indiaAddressSchema,
+    }),
   },
 
   application: {

@@ -188,6 +188,82 @@ async function createParticipant(user, clubId, payload, ctx = {}) {
   return out;
 }
 
+async function updateParticipant(user, clubId, profileId, payload, ctx) {
+  const club = await assertClubAccess(user, clubId);
+  const existingProfile = await profilesRepo.findById(profileId);
+  if (!existingProfile || existingProfile.club_id !== club.id) {
+    throw ApiError.notFound('Club participant not found');
+  }
+
+  const fullName = String(payload.fullName || '').trim();
+  const { firstName, lastName } = splitPersonName(fullName);
+  const addressValidation = validateIndiaAddress(payload.address);
+  if (!addressValidation.valid) {
+    throw ApiError.badRequest('Invalid India address', {
+      field: addressValidation.field,
+      reason: addressValidation.reason,
+    });
+  }
+
+  const participantUser = await usersRepo.findById(existingProfile.user_id);
+  if (!participantUser) throw ApiError.notFound('Participant user not found');
+  const selectedDisciplines = Array.isArray(payload.selectedDisciplines) ? payload.selectedDisciplines : [];
+  const nextPhone = payload.phone ? payload.phone : null;
+  const weightClass = deriveOfficialWeightClass({
+    disciplineId: selectedDisciplines[0] || payload.discipline,
+    gender: payload.gender,
+    dateOfBirth: payload.dateOfBirth,
+    weightKg: payload.weightKg,
+  });
+
+  const updated = await profilesRepo.upsertForUser(participantUser.id, {
+    firstName,
+    lastName,
+    dateOfBirth: payload.dateOfBirth || null,
+    gender: payload.gender || null,
+    nationality: 'India',
+    discipline: payload.discipline || selectedDisciplines[0] || null,
+    weightKg: payload.weightKg || null,
+    weightClass: payload.weightClass || weightClass || null,
+    recordWins: existingProfile.record_wins || 0,
+    recordLosses: existingProfile.record_losses || 0,
+    recordDraws: existingProfile.record_draws || 0,
+    bio: payload.bio || null,
+    clubId: club.id,
+    metadata: {
+      ...(existingProfile.metadata || {}),
+      phone: nextPhone,
+      address: addressValidation.normalized,
+      managedByClub: true,
+      fighterCode: existingProfile?.metadata?.fighterCode || `FIG-${createCode()}`,
+      selectedDisciplines,
+    },
+  });
+
+  if (payload.phone !== undefined) {
+    await usersRepo.updatePhone(participantUser.id, nextPhone);
+  }
+
+  await auditWrite({
+    actorUserId: user.id,
+    actorRole: user.role,
+    action: 'club.participant.update',
+    entityType: 'profile',
+    entityId: updated.id,
+    payload: { clubId: club.id, userId: participantUser.id },
+    requestIp: ctx.ip,
+  });
+
+  return {
+    profile: {
+      ...updated,
+      email: participantUser.email,
+      phone: nextPhone,
+      role: participantUser.role,
+    },
+  };
+}
+
 async function issueParticipantResetLink(user, clubId, profileId, ctx = {}) {
   const club = await assertClubAccess(user, clubId);
   const profile = await profilesRepo.findById(profileId);
@@ -227,5 +303,6 @@ module.exports = {
   restoreClub,
   listParticipants,
   createParticipant,
+  updateParticipant,
   issueParticipantResetLink,
 };

@@ -2,6 +2,7 @@ const RAW_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.REACT_AP
 const BASE_URL = String(RAW_BASE_URL).replace(/\/+$/, "");
 const ACCESS_TOKEN_KEY = "tos-access-token";
 const REFRESH_TOKEN_KEY = "tos-refresh-token";
+const inFlightGetRequests = new Map();
 
 export function resolveBackendUrl(pathOrUrl) {
   const raw = String(pathOrUrl || "").trim();
@@ -110,7 +111,7 @@ async function request(method, path, { body, query, headers = {}, raw = false, r
   };
   if (body !== undefined) init.body = isFormData ? body : JSON.stringify(body);
 
-  try {
+  const run = async () => {
     const res = await fetch(url.toString(), init);
     if (res.status === 401 && retry && !path.includes("/api/auth/")) {
       const refreshed = await refreshAccessToken();
@@ -125,6 +126,20 @@ async function request(method, path, { body, query, headers = {}, raw = false, r
     const payload = isJson ? await res.json() : await res.text();
     if (!res.ok) return { data: null, error: buildApiError(payload, res.status, res.statusText) };
     return { data: payload, error: null };
+  };
+
+  const dedupeKey = method === "GET" && !raw ? `${url.toString()}|${authHeaders.Authorization || ""}` : null;
+  if (dedupeKey && inFlightGetRequests.has(dedupeKey)) {
+    return inFlightGetRequests.get(dedupeKey);
+  }
+
+  try {
+    const promise = run();
+    if (dedupeKey) {
+      inFlightGetRequests.set(dedupeKey, promise);
+      promise.finally(() => inFlightGetRequests.delete(dedupeKey)).catch(() => {});
+    }
+    return await promise;
   } catch (err) {
     return { data: null, error: { code: "NETWORK", message: err.message } };
   }
@@ -214,6 +229,7 @@ export const api = {
   updateClub: (id, body) => request("PATCH", `/api/clubs/${id}`, { body }),
   listClubParticipants: (clubId, query) => request("GET", `/api/clubs/${clubId}/participants`, { query }),
   createClubParticipant: (clubId, body) => request("POST", `/api/clubs/${clubId}/participants`, { body }),
+  updateClubParticipant: (clubId, profileId, body) => request("PATCH", `/api/clubs/${clubId}/participants/${profileId}`, { body }),
   createClubParticipantResetLink: (clubId, profileId) => request("POST", `/api/clubs/${clubId}/participants/${profileId}/reset-link`),
 
   createApplication: (body) => request("POST", "/api/applications", { body }),
@@ -253,7 +269,7 @@ export const api = {
   openAppeals: () => request("GET", "/api/appeals/open"),
   decideAppeal: (id, body) => request("POST", `/api/appeals/${id}/decision`, { body }),
 
-  reportSummary: () => request("GET", "/api/reports/summary"),
+  reportSummary: (query) => request("GET", "/api/reports/summary", { query }),
   reportParticipants: (query) => request("GET", "/api/reports/participants", { query }),
   reportAnalytics: (query) => request("GET", "/api/reports/analytics", { query }),
   reportSeason: (id) => request("GET", `/api/reports/seasons/${id}`),

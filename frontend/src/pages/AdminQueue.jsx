@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import { CheckCheck, Download, Filter, Search, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import EmptyState from "@/components/shared/EmptyState";
 import { SectionLoader } from "@/components/shared/PrimalLoader";
 import { PageSectionHeader, ResponsivePageShell, StickyActionBar } from "@/components/shared/ResponsivePrimitives";
 import StatusPill from "@/components/shared/StatusPill";
-import api, { isApiLive } from "@/lib/api";
+import api from "@/lib/api";
 import { formatPersonName } from "@/lib/person";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
@@ -25,6 +25,7 @@ const STATUS_FILTERS = [
   { id: "approved", labelKey: "status.approved", label: "Approved" },
   { id: "rejected", labelKey: "status.rejected", label: "Rejected" },
 ];
+const PAGE_SIZE = 100;
 
 export default function AdminQueue() {
   const router = useRouter();
@@ -33,6 +34,8 @@ export default function AdminQueue() {
   const [items, setItems] = useState([]);
   const [counts, setCounts] = useState({});
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [runningBulkAction, setRunningBulkAction] = useState(false);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -40,6 +43,7 @@ export default function AdminQueue() {
   const [stateOptions, setStateOptions] = useState([]);
   const [selected, setSelected] = useState(new Set());
   const [bulkDialog, setBulkDialog] = useState({ open: false, action: null, reason: "", fields: "" });
+  const queueRequestRef = useRef(0);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -54,31 +58,30 @@ export default function AdminQueue() {
     }).catch(() => setStateOptions([]));
   }, []);
 
-  useEffect(() => {
-    isApiLive().then((live) => {
-      if (!live) {
-        toast.error("Backend API is not reachable. Queue actions may fail until the API is back online.");
-      }
-    });
-  }, []);
-
-  async function loadQueue() {
-    setLoading(true);
+  async function loadQueue({ append = false, offset = 0 } = {}) {
+    const requestId = queueRequestRef.current + 1;
+    queueRequestRef.current = requestId;
+    if (append) setLoadingMore(true);
+    else setLoading(true);
     const { data, error } = await api.queueBoard({
       status: statusFilter,
       stateCode: stateFilter === "all" ? undefined : stateFilter,
       q: query || undefined,
-      limit: 200,
-      offset: 0,
+      limit: PAGE_SIZE,
+      offset,
     });
-    setLoading(false);
+    if (requestId !== queueRequestRef.current) return;
+    if (append) setLoadingMore(false);
+    else setLoading(false);
     if (error) {
       toast.error(error.message || "Failed to load review queue");
       return;
     }
-    setItems(data.items || []);
+    const nextItems = data.items || [];
+    setItems((current) => append ? [...current, ...nextItems] : nextItems);
     setCounts(data.counts || {});
-    setSelected(new Set());
+    setHasMore(nextItems.length === PAGE_SIZE);
+    if (!append) setSelected(new Set());
   }
 
   const countByStatus = useMemo(() => {
@@ -125,6 +128,11 @@ export default function AdminQueue() {
       toast.success(`Bulk action applied to ${ok} application${ok === 1 ? "" : "s"}`);
     }
     loadQueue();
+  };
+
+  const loadMore = () => {
+    if (loading || loadingMore || !hasMore) return;
+    loadQueue({ append: true, offset: items.length });
   };
 
   function openBulkDialog(action) {
@@ -309,6 +317,13 @@ export default function AdminQueue() {
               ))}
             </tbody>
           </table>
+          {hasMore ? (
+            <div className="flex justify-center py-5">
+              <Button variant="outline" onClick={loadMore} disabled={loadingMore}>
+                {loadingMore ? "Loading..." : "Load more"}
+              </Button>
+            </div>
+          ) : null}
           </>
         )}
       </div>

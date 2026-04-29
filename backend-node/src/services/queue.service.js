@@ -5,8 +5,10 @@ const { formatPersonName, applicationDisplayId, reviewerDisplayId } = require('.
 
 async function board(filters = {}, actor = null) {
   const stateCode = String(filters.stateCode || actor?.stateCode || '').trim() || null;
-  const items = await appsRepo.query({ ...filters, stateCode });
-  const counts = await appsRepo.counts({ stateCode });
+  const [items, counts] = await Promise.all([
+    appsRepo.query({ ...filters, stateCode }),
+    appsRepo.counts({ stateCode }),
+  ]);
   const queueCounts = { ...counts };
   delete queueCounts[STATUS.SEASON_CLOSED];
   return {
@@ -18,6 +20,14 @@ async function board(filters = {}, actor = null) {
     })),
     counts: queueCounts,
   };
+}
+
+async function countsSummary(filters = {}, actor = null) {
+  const stateCode = String(filters.stateCode || actor?.stateCode || '').trim() || null;
+  const counts = await appsRepo.counts({ stateCode });
+  const queueCounts = { ...counts };
+  delete queueCounts[STATUS.SEASON_CLOSED];
+  return queueCounts;
 }
 
 async function slaSummary(filters = {}, actor = null) {
@@ -79,4 +89,4 @@ async function reviewerWorkload() {
   }));
 }
 
-module.exports = { board, slaSummary, reviewerWorkload, STATUS };
+module.exports = { board, countsSummary, slaSummary, reviewerWorkload, STATUS };

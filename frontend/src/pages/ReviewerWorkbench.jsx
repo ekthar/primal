@@ -26,7 +26,7 @@ import EmptyState from "@/components/shared/EmptyState";
 import { SectionLoader } from "@/components/shared/PrimalLoader";
 import { StickyActionBar } from "@/components/shared/ResponsivePrimitives";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import api, { isApiLive, resolveBackendUrl } from "@/lib/api";
+import api, { resolveBackendUrl } from "@/lib/api";
 import {
   pickEditableFormData,
   serializeFormDataForPatch,
@@ -54,6 +54,7 @@ const CORRECTION_FIELD_OPTIONS = [
   { id: "photo_id", label: "Photo ID" },
   { id: "consent", label: "Signed consent" },
 ];
+const PAGE_SIZE = 100;
 
 function parseFieldTokens(fieldsString) {
   if (!fieldsString) return [];
@@ -74,6 +75,8 @@ export default function ReviewerWorkbench() {
   const routeId = Array.isArray(router.query.id) ? router.query.id[0] : router.query.id;
   const [queue, setQueue] = useState([]);
   const [loadingQueue, setLoadingQueue] = useState(true);
+  const [loadingMoreQueue, setLoadingMoreQueue] = useState(false);
+  const [hasMoreQueue, setHasMoreQueue] = useState(false);
   const [search, setSearch] = useState("");
   const [activeId, setActiveId] = useState(routeId || null);
   const [activeApplication, setActiveApplication] = useState(null);
@@ -91,6 +94,7 @@ export default function ReviewerWorkbench() {
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState(null);
   const [pdfPreviewError, setPdfPreviewError] = useState(null);
   const scannerRequestRef = useRef("");
+  const queueRequestRef = useRef(0);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -146,18 +150,6 @@ export default function ReviewerWorkbench() {
   }, [activeApplication?.id]);
 
   useEffect(() => {
-    isApiLive().then((live) => {
-      if (!live) {
-        const marker = "review-workbench-api-unreachable-toast-shown";
-        if (typeof window !== "undefined" && !window.sessionStorage.getItem(marker)) {
-          window.sessionStorage.setItem(marker, "1");
-          toast.error("Backend API is not reachable. Review actions will fail until the API is back online.");
-        }
-      }
-    });
-  }, []);
-
-  useEffect(() => {
     if (!scannerOpen) {
       setScannerError("");
       setScannerBusy(false);
@@ -166,16 +158,27 @@ export default function ReviewerWorkbench() {
     }
   }, [scannerOpen]);
 
-  async function loadQueue() {
-    setLoadingQueue(true);
-    const { data, error } = await api.queueBoard({ status: "all", q: search || undefined, limit: 200, offset: 0 });
-    setLoadingQueue(false);
+  async function loadQueue({ append = false, offset = 0 } = {}) {
+    const requestId = queueRequestRef.current + 1;
+    queueRequestRef.current = requestId;
+    if (append) setLoadingMoreQueue(true);
+    else setLoadingQueue(true);
+    const { data, error } = await api.queueBoard({ status: "all", q: search || undefined, limit: PAGE_SIZE, offset });
+    if (requestId !== queueRequestRef.current) return;
+    if (append) setLoadingMoreQueue(false);
+    else setLoadingQueue(false);
     if (error) {
       toast.error(error.message || "Failed to load reviewer queue");
       return;
     }
     const items = data.items || [];
-    setQueue(items);
+    setQueue((current) => append ? [...current, ...items] : items);
+    setHasMoreQueue(items.length === PAGE_SIZE);
+  }
+
+  function loadMoreQueue() {
+    if (loadingQueue || loadingMoreQueue || !hasMoreQueue) return;
+    loadQueue({ append: true, offset: queue.length });
   }
 
   async function loadApplication(id) {
@@ -467,6 +470,13 @@ export default function ReviewerWorkbench() {
               </div>
             </button>
           ))}
+          {hasMoreQueue ? (
+            <div className="p-4">
+              <Button variant="outline" className="w-full" onClick={loadMoreQueue} disabled={loadingMoreQueue}>
+                {loadingMoreQueue ? "Loading..." : "Load more"}
+              </Button>
+            </div>
+          ) : null}
         </div>
       </aside>
 
@@ -573,6 +583,13 @@ export default function ReviewerWorkbench() {
                         </div>
                       </button>
                     ))}
+                    {hasMoreQueue ? (
+                      <div className="p-4">
+                        <Button variant="outline" className="w-full" onClick={loadMoreQueue} disabled={loadingMoreQueue}>
+                          {loadingMoreQueue ? "Loading..." : "Load more"}
+                        </Button>
+                      </div>
+                    ) : null}
                   </div>
                 </SheetContent>
               </Sheet>

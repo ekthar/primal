@@ -9,12 +9,19 @@ const router = Router();
 router.use(requireAuth);
 
 router.get('/summary', requireRole('admin', 'reviewer', 'state_coordinator'), ah(async (req, res) => {
-  const [sla, workload, production] = await Promise.all([
+  const includeDiagnostics = req.query.includeDiagnostics === 'true';
+  const [sla, workload, counts, production] = await Promise.all([
     queue.slaSummary({}, req.user),
     queue.reviewerWorkload(),
-    reportService.productionDiagnostics(),
+    queue.countsSummary({}, req.user),
+    includeDiagnostics ? reportService.productionDiagnostics() : Promise.resolve(null),
   ]);
-  res.json({ sla, workload, production });
+  res.json({
+    sla,
+    workload,
+    counts,
+    ...(includeDiagnostics ? { production } : {}),
+  });
 }));
 
 router.get('/approved.xlsx', requireRole('admin', 'reviewer', 'state_coordinator'), ah(async (req, res) => {
