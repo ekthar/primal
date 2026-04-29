@@ -24,6 +24,7 @@ const STEPS = [
   { id: 3, key: "documents", icon: Shield },
   { id: 4, key: "review", icon: FileCheck2 },
 ];
+const DOCUMENT_ORDER = ["medical", "photo_id", "consent"];
 
 export default function Register() {
   const router = useRouter();
@@ -68,6 +69,7 @@ export default function Register() {
   });
   const [documents, setDocuments] = useState({ medical: null, photo_id: null, consent: null });
   const [documentSources, setDocumentSources] = useState({ medical: null, photo_id: null, consent: null });
+  const [activeDocumentScanner, setActiveDocumentScanner] = useState(null);
   const [idNumberLast4, setIdNumberLast4] = useState("");
   const [errors, setErrors] = useState({});
 
@@ -307,6 +309,26 @@ export default function Register() {
   };
 
   const prev = () => setStep((current) => Math.max(1, current - 1));
+
+  const handleDocumentCapture = (documentKey, file) => {
+    const nextDocuments = { ...documents, [documentKey]: file };
+    setDocuments(nextDocuments);
+    setDocumentSources((current) => ({ ...current, [documentKey]: "scan" }));
+    setErrors((current) => ({ ...current, [documentKey]: null }));
+
+    const nextMissingDocument = DOCUMENT_ORDER.find((key) => !nextDocuments[key]);
+    if (nextMissingDocument) {
+      toast.success(rt("Scan accepted. Opening next document.", "Scan accepted. Opening next document."));
+      window.setTimeout(() => setActiveDocumentScanner(nextMissingDocument), 180);
+      return;
+    }
+
+    toast.success(rt("All scans accepted. Review and submit.", "All scans accepted. Review and submit."));
+    window.setTimeout(() => {
+      setActiveDocumentScanner(null);
+      setStep(4);
+    }, 180);
+  };
 
   const submit = async () => {
     if (applicantRegistrationClosed) {
@@ -755,7 +777,17 @@ export default function Register() {
                           scanHint={hint}
                           value={documents[key]}
                           capturedVia={documentSources[key]}
-                          onChange={(file) => setDocuments((current) => ({ ...current, [key]: file }))}
+                          scannerOpen={activeDocumentScanner === key}
+                          onScannerOpenChange={(open) => {
+                            setActiveDocumentScanner((current) => (open ? key : current === key ? null : current));
+                          }}
+                          onChange={(file) => {
+                            if (file) {
+                              handleDocumentCapture(key, file);
+                              return;
+                            }
+                            setDocuments((current) => ({ ...current, [key]: file }));
+                          }}
                           onCapturedViaChange={(tag) => setDocumentSources((current) => ({ ...current, [key]: tag }))}
                         />
                         {key === "photo_id" ? (

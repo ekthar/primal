@@ -15,23 +15,114 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Camera, FlashlightOff, Flashlight, RotateCcw, Check, X, AlertTriangle } from "lucide-react";
+import { Camera, FlashlightOff, Flashlight, RotateCcw, Check, X, AlertTriangle, Loader2 } from "lucide-react";
 
 const DEFAULT_GUIDE_RATIO = 0.71; // A4 portrait, ~1:1.41
+const ANALYSIS_WIDTH = 120;
+const ANALYSIS_HEIGHT = 160;
+const AUTO_CAPTURE_GOOD_FRAMES = 4;
+
+function analyzeFrame(video, previousSample) {
+  const canvas = document.createElement("canvas");
+  canvas.width = ANALYSIS_WIDTH;
+  canvas.height = ANALYSIS_HEIGHT;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return { ready: false, message: "Camera analysis unavailable" };
+
+  ctx.drawImage(video, 0, 0, ANALYSIS_WIDTH, ANALYSIS_HEIGHT);
+  const data = ctx.getImageData(0, 0, ANALYSIS_WIDTH, ANALYSIS_HEIGHT).data;
+  const luminance = [];
+  let total = 0;
+  let min = 255;
+  let max = 0;
+  let edgeScore = 0;
+
+  for (let index = 0; index < data.length; index += 4) {
+    const value = Math.round((data[index] * 0.299) + (data[index + 1] * 0.587) + (data[index + 2] * 0.114));
+    luminance.push(value);
+    total += value;
+    min = Math.min(min, value);
+    max = Math.max(max, value);
+  }
+
+  for (let y = 1; y < ANALYSIS_HEIGHT - 1; y += 2) {
+    for (let x = 1; x < ANALYSIS_WIDTH - 1; x += 2) {
+      const current = luminance[(y * ANALYSIS_WIDTH) + x];
+      const horizontal = Math.abs(current - luminance[(y * ANALYSIS_WIDTH) + x + 1]);
+      const vertical = Math.abs(current - luminance[((y + 1) * ANALYSIS_WIDTH) + x]);
+      if (horizontal + vertical > 42) edgeScore += 1;
+    }
+  }
+
+  let motion = 0;
+  if (previousSample?.length === luminance.length) {
+    for (let index = 0; index < luminance.length; index += 16) {
+      motion += Math.abs(luminance[index] - previousSample[index]);
+    }
+    motion /= Math.ceil(luminance.length / 16);
+  }
+
+  const brightness = total / luminance.length;
+  const contrast = max - min;
+  const edgeDensity = edgeScore / ((ANALYSIS_WIDTH / 2) * (ANALYSIS_HEIGHT / 2));
+  const brightEnough = brightness >= 72 && brightness <= 225;
+  const contrastEnough = contrast >= 58;
+  const documentLike = edgeDensity >= 0.025;
+  const stable = !previousSample || motion < 9;
+
+  let message = "Hold steady";
+  if (!brightEnough) message = brightness < 72 ? "Move to better light" : "Reduce glare";
+  else if (!contrastEnough || !documentLike) message = "Fill the guide with the document";
+  else if (!stable) message = "Hold steady";
+  else message = "Analyzing document";
+
+  return {
+    ready: brightEnough && contrastEnough && documentLike && stable,
+    sample: luminance,
+    message,
+  };
+}
+
+function captureVideoFrame(video, maxWidth, quality, callback) {
+  if (!video || video.readyState < 2) return false;
+  const width = video.videoWidth;
+  const height = video.videoHeight;
+  if (!width || !height) return false;
+  const scale = width > maxWidth ? maxWidth / width : 1;
+  const outW = Math.round(width * scale);
+  const outH = Math.round(height * scale);
+  const canvas = document.createElement("canvas");
+  canvas.width = outW;
+  canvas.height = outH;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return false;
+  ctx.drawImage(video, 0, 0, outW, outH);
+  canvas.toBlob(
+    (blob) => {
+      if (blob) callback(blob, { width: outW, height: outH });
+    },
+    "image/jpeg",
+    quality,
+  );
+  return true;
+}
 
 export default function LiveDocumentScanner({
   open,
   onClose,
   onCapture,
   guideRatio = DEFAULT_GUIDE_RATIO,
-  maxWidth = 1920,
+  maxWidth = 1280,
+  autoCapture = true,
   title = "Scan document",
   hint = "Hold steady, fill the frame, ensure even lighting.",
 }) {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
+  const analysisRef = useRef({ frame: 0, goodFrames: 0, sample: null, captured: false });
   const [stage, setStage] = useState("idle"); // idle | live | preview | error
   const [errorMsg, setErrorMsg] = useState("");
+  const [analysisMsg, setAnalysisMsg] = useState("Starting camera...");
   const [previewUrl, setPreviewUrl] = useState(null);
   const [previewBlob, setPreviewBlob] = useState(null);
   const [previewDims, setPreviewDims] = useState(null);
@@ -56,8 +147,8 @@ export default function LiveDocumentScanner({
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: { ideal: "environment" },
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
         },
         audio: false,
       });
@@ -87,6 +178,8 @@ export default function LiveDocumentScanner({
     setPreviewBlob(null);
     setPreviewDims(null);
     setTorchOn(false);
+    setAnalysisMsg("Starting camera...");
+    analysisRef.current = { frame: 0, goodFrames: 0, sample: null, captured: false };
     startStream();
     return () => {
       stopStream();
@@ -109,31 +202,13 @@ export default function LiveDocumentScanner({
 
   const handleCapture = () => {
     const video = videoRef.current;
-    if (!video || video.readyState < 2) return;
-    const w = video.videoWidth;
-    const h = video.videoHeight;
-    if (!w || !h) return;
-    const scale = w > maxWidth ? maxWidth / w : 1;
-    const outW = Math.round(w * scale);
-    const outH = Math.round(h * scale);
-    const canvas = document.createElement("canvas");
-    canvas.width = outW;
-    canvas.height = outH;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.drawImage(video, 0, 0, outW, outH);
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) return;
-        const url = URL.createObjectURL(blob);
-        setPreviewBlob(blob);
-        setPreviewUrl(url);
-        setPreviewDims({ width: outW, height: outH });
-        setStage("preview");
-      },
-      "image/jpeg",
-      0.85,
-    );
+    captureVideoFrame(video, maxWidth, 0.82, (blob, dims) => {
+      const url = URL.createObjectURL(blob);
+      setPreviewBlob(blob);
+      setPreviewUrl(url);
+      setPreviewDims(dims);
+      setStage("preview");
+    });
   };
 
   const handleRetake = () => {
@@ -144,18 +219,59 @@ export default function LiveDocumentScanner({
     setStage("live");
   };
 
-  const handleConfirm = () => {
-    if (!previewBlob) return;
-    const file = new File([previewBlob], `scan-${Date.now()}.jpg`, { type: "image/jpeg" });
-    onCapture?.(file, { ...previewDims, kind: "scan" });
-    handleClose();
-  };
-
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     stopStream();
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     onClose?.();
+  }, [onClose, previewUrl, stopStream]);
+
+  const handleConfirm = () => {
+    if (!previewBlob) return;
+    const file = new File([previewBlob], `scan-${Date.now()}.jpg`, { type: "image/jpeg" });
+    onCapture?.(file, { ...previewDims, kind: "scan", autoAccepted: false });
+    handleClose();
   };
+
+  const handleAutoCapture = useCallback(() => {
+    if (analysisRef.current.captured) return;
+    const video = videoRef.current;
+    const captured = captureVideoFrame(video, maxWidth, 0.78, (blob, dims) => {
+      analysisRef.current.captured = true;
+      const file = new File([blob], `scan-${Date.now()}.jpg`, { type: "image/jpeg" });
+      onCapture?.(file, { ...dims, kind: "scan", autoAccepted: true });
+      handleClose();
+    });
+    if (captured) {
+      setAnalysisMsg("Captured");
+    }
+  }, [handleClose, maxWidth, onCapture]);
+
+  useEffect(() => {
+    if (!open || stage !== "live" || !autoCapture) return undefined;
+    let cancelled = false;
+
+    function tick() {
+      if (cancelled || analysisRef.current.captured) return;
+      const video = videoRef.current;
+      if (video && video.readyState >= 2) {
+        const result = analyzeFrame(video, analysisRef.current.sample);
+        analysisRef.current.sample = result.sample || analysisRef.current.sample;
+        analysisRef.current.goodFrames = result.ready ? analysisRef.current.goodFrames + 1 : 0;
+        setAnalysisMsg(result.message);
+        if (analysisRef.current.goodFrames >= AUTO_CAPTURE_GOOD_FRAMES) {
+          handleAutoCapture();
+          return;
+        }
+      }
+      analysisRef.current.frame = window.setTimeout(tick, 140);
+    }
+
+    analysisRef.current.frame = window.setTimeout(tick, 260);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(analysisRef.current.frame);
+    };
+  }, [autoCapture, handleAutoCapture, open, stage]);
 
   if (!open) return null;
 
@@ -194,6 +310,12 @@ export default function LiveDocumentScanner({
         ) : null}
 
         {stage === "live" ? <GuideOverlay ratio={guideRatio} /> : null}
+        {stage === "live" && autoCapture ? (
+          <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/20 bg-black/55 px-3 py-2 text-xs text-white shadow-lg backdrop-blur">
+            <Loader2 className="size-3.5 animate-spin" />
+            <span>{analysisMsg}</span>
+          </div>
+        ) : null}
 
         {stage === "preview" && previewUrl ? (
           <img src={previewUrl} alt="Captured document preview" className="absolute inset-0 h-full w-full object-contain bg-black" />

@@ -44,6 +44,33 @@ const frame050Src = frame050?.src || frame050;
 const frame080Src = frame080?.src || frame080;
 const frame100Src = frame100?.src || frame100;
 const toImgSrc = (img) => (img?.src || img);
+const PUBLIC_HOME_CACHE_KEY = "primal-public-home-v1";
+const PUBLIC_HOME_CACHE_TTL_MS = 5 * 60 * 1000;
+
+function readCachedPublicHome() {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(PUBLIC_HOME_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.cachedAt || Date.now() - parsed.cachedAt > PUBLIC_HOME_CACHE_TTL_MS) return null;
+    return parsed.payload || null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedPublicHome(payload) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(
+      PUBLIC_HOME_CACHE_KEY,
+      JSON.stringify({ cachedAt: Date.now(), payload }),
+    );
+  } catch {
+    // Browser storage can be unavailable in private modes; the live API response still renders.
+  }
+}
 
 // ---------- primitives ---------------------------------------------------------
 function Reveal({ children, delay = 0, y = 24, className = "" }) {
@@ -361,12 +388,13 @@ function Hero({ registrationOpen, nextTournamentLabel }) {
   );
 }
 
-function Announcements() {
+function Announcements({ initialItems = null, initialStatus = null } = {}) {
   const reduced = useReducedMotion();
-  const [items, setItems] = useState([]);
-  const [status, setStatus] = useState("loading"); // loading | live | fallback
+  const [items, setItems] = useState(initialItems || []);
+  const [status, setStatus] = useState(initialStatus || "loading"); // loading | live | fallback
 
   useEffect(() => {
+    if (initialItems || initialStatus) return undefined;
     let cancelled = false;
     (async () => {
       const { data, error } = await api.publicCirculars({ limit: 8 });
@@ -402,6 +430,15 @@ function Announcements() {
       return null;
     }
   };
+  const displayStatus = initialStatus || status;
+  const sourceItems = initialItems || items;
+  const fallbackItems = [
+    { id: "demo-1", kind: "registration", title: "Registration is open", subtitle: "Athletes & gyms", body: "Create your profile, pick your division, and lock your entry. Early entries get priority seeding.", pinned: true, publishedAt: new Date().toISOString(), coverImageUrl: frame080Src, ctaLabel: "Register", ctaUrl: "/register" },
+    { id: "demo-2", kind: "window", title: "Editing window closes in 48 hours", subtitle: "Weight class - documents", body: "Update weight class, documents, and discipline before the lock to avoid delays at check-in.", pinned: false, publishedAt: new Date().toISOString(), coverImageUrl: frame020Src },
+    { id: "demo-3", kind: "notice", title: "Gym roster verification", subtitle: "Managers only", body: "Add fighters to your gym roster and verify identity once - reuse across events.", pinned: false, publishedAt: new Date().toISOString(), coverImageUrl: frame001Src },
+    { id: "demo-4", kind: "rules", title: "Ruleset & weigh-in circular published", subtitle: "Read before check-in", body: "Unified check-in flow across MMA, striking, and grappling divisions. Bring photo ID and medical clearance.", pinned: false, publishedAt: new Date().toISOString(), coverImageUrl: frame100Src },
+  ];
+  const displayItems = displayStatus === "fallback" && !sourceItems.length ? fallbackItems : sourceItems;
 
   return (
     <section id="updates" className="py-20 sm:py-24">
@@ -415,14 +452,14 @@ function Announcements() {
               </h2>
             </div>
             <div className="inline-flex items-center gap-2 rounded-full border border-border bg-surface/70 backdrop-blur px-3 py-1 text-xs font-medium">
-              <span className={`size-1.5 rounded-full ${status === "live" ? "bg-emerald-500" : "bg-primary"} ${status === "loading" ? "animate-pulse" : ""}`} />
-              <span>{status === "live" ? "Live from admin desk" : status === "loading" ? "Loading..." : "Demo data (API offline)"}</span>
+              <span className={`size-1.5 rounded-full ${displayStatus === "live" ? "bg-emerald-500" : "bg-primary"} ${displayStatus === "loading" ? "animate-pulse" : ""}`} />
+              <span>{displayStatus === "live" ? "Live from admin desk" : displayStatus === "loading" ? "Loading..." : "Demo data (API offline)"}</span>
             </div>
           </div>
         </Reveal>
 
         <div className="mt-10 grid md:grid-cols-2 gap-5">
-          {items.map((u, i) => {
+          {displayItems.map((u, i) => {
             const meta = kindMeta[u.kind] || kindMeta.notice;
             const Icon = meta.icon;
             const date = fmt(u.publishedAt || u.createdAt);
@@ -870,11 +907,12 @@ function TournamentsByPrimal() {
   );
 }
 
-function MatchDayMoments() {
-  const [photos, setPhotos] = useState([]);
-  const [loaded, setLoaded] = useState(false);
+function MatchDayMoments({ initialPhotos = null, initialLoaded = false } = {}) {
+  const [photos, setPhotos] = useState(initialPhotos || []);
+  const [loaded, setLoaded] = useState(initialLoaded);
 
   useEffect(() => {
+    if (initialPhotos) return undefined;
     let cancel = false;
     (async () => {
       const { data } = await api.publicRecentAlbumPhotos(14);
@@ -885,7 +923,10 @@ function MatchDayMoments() {
     return () => { cancel = true; };
   }, []);
 
-  if (loaded && !photos.length) return null;
+  const displayPhotos = initialPhotos || photos;
+  const displayLoaded = initialLoaded || loaded;
+
+  if (displayLoaded && !displayPhotos.length) return null;
 
   return (
     <section className="py-20 sm:py-24 border-y border-border bg-surface-muted/20">
@@ -901,7 +942,7 @@ function MatchDayMoments() {
             All albums <ArrowUpRight className="size-3.5" />
           </Link>
         </div>
-        {!loaded ? (
+        {!displayLoaded ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="aspect-square rounded-xl bg-surface-muted animate-pulse" />
@@ -909,7 +950,7 @@ function MatchDayMoments() {
           </div>
         ) : (
           <StaggerGrid className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3" grid={[4, 2]}>
-            {photos.slice(0, 8).map((photo) => (
+            {displayPhotos.slice(0, 8).map((photo) => (
               <Link
                 key={photo.id}
                 href={photo.albumId ? `/albums?id=${photo.albumId}` : "/albums"}
@@ -1047,20 +1088,46 @@ function Footer() {
 // ---------- page ---------------------------------------------------------------
 
 export default function Landing() {
-  const [tournaments, setTournaments] = useState([]);
+  const [homeData, setHomeData] = useState({
+    tournaments: [],
+    circulars: [],
+    recentPhotos: [],
+  });
+  const [homeStatus, setHomeStatus] = useState("loading");
 
   useEffect(() => {
     let ignore = false;
+    const cached = readCachedPublicHome();
+    if (cached) {
+      setHomeData({
+        tournaments: cached.tournaments || [],
+        circulars: cached.circulars || [],
+        recentPhotos: cached.recentPhotos || [],
+      });
+      setHomeStatus("live");
+    }
     (async () => {
-      const { data } = await api.publicTournaments();
+      const { data, error } = await api.publicHome();
       if (ignore) return;
-      setTournaments(data?.tournaments || []);
+      if (error || !data) {
+        if (!cached) setHomeStatus("fallback");
+        return;
+      }
+      const nextHomeData = {
+        tournaments: data.tournaments || [],
+        circulars: data.circulars || [],
+        recentPhotos: data.recentPhotos || [],
+      };
+      setHomeData(nextHomeData);
+      setHomeStatus("live");
+      writeCachedPublicHome(nextHomeData);
     })();
     return () => {
       ignore = true;
     };
   }, []);
 
+  const tournaments = homeData.tournaments;
   const registrationOpen = useMemo(
     () => tournaments.some((tournament) => tournament.registrationOpen),
     [tournaments]
@@ -1074,7 +1141,7 @@ export default function Landing() {
     <div className="min-h-screen bg-background text-foreground">
       <Nav registrationOpen={registrationOpen} />
       <Hero registrationOpen={registrationOpen} nextTournamentLabel={nextTournamentLabel} />
-      <Announcements />
+      <Announcements initialItems={homeData.circulars} initialStatus={homeStatus} />
       <Marquee items={[
         "Primal - Fight Series",
         "Registration - Open",
@@ -1090,7 +1157,7 @@ export default function Landing() {
       <WorkflowScrollytell />
       <AdminShowcase />
       <Stats />
-      <MatchDayMoments />
+      <MatchDayMoments initialPhotos={homeData.recentPhotos} initialLoaded={homeStatus !== "loading"} />
       <Testimonial />
       <CTA registrationOpen={registrationOpen} />
       <Footer />

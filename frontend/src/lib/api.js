@@ -88,7 +88,7 @@ async function refreshAccessToken() {
   return true;
 }
 
-async function request(method, path, { body, query, headers = {}, raw = false, retry = true } = {}) {
+async function request(method, path, { body, query, headers = {}, raw = false, retry = true, auth = true } = {}) {
   const url = new URL(`${BASE_URL}${path}`, window.location.origin);
   if (query) {
     Object.entries(query).forEach(([key, value]) => {
@@ -98,11 +98,13 @@ async function request(method, path, { body, query, headers = {}, raw = false, r
 
   const accessToken = getAccessToken();
   const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
+  const jsonHeaders = body !== undefined && !isFormData ? { "Content-Type": "application/json" } : {};
+  const authHeaders = auth && accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
   const init = {
     method,
     headers: {
-      ...(isFormData ? {} : { "Content-Type": "application/json" }),
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      ...jsonHeaders,
+      ...authHeaders,
       ...headers,
     },
   };
@@ -113,7 +115,7 @@ async function request(method, path, { body, query, headers = {}, raw = false, r
     if (res.status === 401 && retry && !path.includes("/api/auth/")) {
       const refreshed = await refreshAccessToken();
       if (refreshed) {
-        return request(method, path, { body, query, headers, raw, retry: false });
+        return request(method, path, { body, query, headers, raw, retry: false, auth });
       }
     }
 
@@ -297,25 +299,26 @@ export const api = {
     filename: "primal-audit-trail.xlsx",
   }),
 
-  publicTournaments: () => request("GET", "/api/public/tournaments"),
-  publicTournamentBySlug: (slug) => request("GET", `/api/public/tournaments/${encodeURIComponent(slug)}`),
-  publicAthlete: (id) => request("GET", `/api/public/athletes/${encodeURIComponent(id)}`),
+  publicHome: () => request("GET", "/api/public/home", { auth: false }),
+  publicTournaments: () => request("GET", "/api/public/tournaments", { auth: false }),
+  publicTournamentBySlug: (slug) => request("GET", `/api/public/tournaments/${encodeURIComponent(slug)}`, { auth: false }),
+  publicAthlete: (id) => request("GET", `/api/public/athletes/${encodeURIComponent(id)}`, { auth: false }),
   publicCurrentTournament: async () => {
-    const current = await request("GET", "/api/public/tournaments/current");
+    const current = await request("GET", "/api/public/tournaments/current", { auth: false });
     if (!current.error) return current;
     if (!String(current.error?.code || "").includes("404")) return current;
-    const list = await request("GET", "/api/public/tournaments");
+    const list = await request("GET", "/api/public/tournaments", { auth: false });
     if (list.error) return current;
     const tournaments = list.data?.tournaments || [];
     const fallback = tournaments.find((item) => item.registrationOpen) || tournaments[0] || null;
     return { data: { tournament: fallback }, error: null };
   },
-  publicParticipants: (query) => request("GET", "/api/public/participants", { query }),
-  publicClubs: (query) => request("GET", "/api/public/clubs", { query }),
-  publicCirculars: (query) => request("GET", "/api/public/circulars", { query }),
-  publicIndiaStates: () => request("GET", "/api/public/india/states"),
-  publicIndiaDistricts: (state) => request("GET", "/api/public/india/districts", { query: { state } }),
-  publicIndiaPincodeLookup: (pincode) => request("GET", `/api/public/india/pincode/${encodeURIComponent(pincode)}`),
+  publicParticipants: (query) => request("GET", "/api/public/participants", { query, auth: false }),
+  publicClubs: (query) => request("GET", "/api/public/clubs", { query, auth: false }),
+  publicCirculars: (query) => request("GET", "/api/public/circulars", { query, auth: false }),
+  publicIndiaStates: () => request("GET", "/api/public/india/states", { auth: false }),
+  publicIndiaDistricts: (state) => request("GET", "/api/public/india/districts", { query: { state }, auth: false }),
+  publicIndiaPincodeLookup: (pincode) => request("GET", `/api/public/india/pincode/${encodeURIComponent(pincode)}`, { auth: false }),
   verifyApplicationSignatureUrl: (verificationUrl) => requestAbsolute(verificationUrl),
 
   adminTournaments: (query) => request("GET", "/api/tournaments", { query }),
@@ -358,9 +361,9 @@ export const api = {
     return request("POST", `/api/albums/${id}/photos`, { body });
   },
   adminDeleteAlbumPhoto: (albumId, photoId) => request("DELETE", `/api/albums/${albumId}/photos/${photoId}`),
-  publicListAlbums: (query) => request("GET", "/api/public/albums", { query }),
-  publicGetAlbum: (id) => request("GET", `/api/public/albums/${id}`),
-  publicRecentAlbumPhotos: (limit = 12) => request("GET", "/api/public/albums/recent-photos", { query: { limit } }),
+  publicListAlbums: (query) => request("GET", "/api/public/albums", { query, auth: false }),
+  publicGetAlbum: (id) => request("GET", `/api/public/albums/${id}`, { auth: false }),
+  publicRecentAlbumPhotos: (limit = 12) => request("GET", "/api/public/albums/recent-photos", { query: { limit }, auth: false }),
 
   // Weigh-ins (cage-side / weigh-in tablet)
   listWeighInsForTournament: (tournamentId) => request("GET", `/api/weigh-ins/by-tournament/${encodeURIComponent(tournamentId)}`),

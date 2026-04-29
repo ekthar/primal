@@ -90,7 +90,7 @@ export default function ReviewerWorkbench() {
   const [adminEditSaving, setAdminEditSaving] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState(null);
   const [pdfPreviewError, setPdfPreviewError] = useState(null);
-  // QR scanner refs are owned by <LiveQrScanner /> now.
+  const scannerRequestRef = useRef("");
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -162,6 +162,7 @@ export default function ReviewerWorkbench() {
       setScannerError("");
       setScannerBusy(false);
       setScannerResult(null);
+      scannerRequestRef.current = "";
     }
   }, [scannerOpen]);
 
@@ -217,22 +218,27 @@ export default function ReviewerWorkbench() {
   }
 
   async function verifyScannedCode(rawValue) {
+    const normalizedValue = String(rawValue || "").trim();
+    if (!normalizedValue || scannerBusy || scannerRequestRef.current === normalizedValue) return;
+    scannerRequestRef.current = normalizedValue;
     setScannerBusy(true);
     setScannerError("");
     setScannerResult(null);
-    setScannedValue(rawValue);
+    setScannedValue(normalizedValue);
 
     let verificationUrl;
     try {
-      verificationUrl = new URL(rawValue, window.location.origin);
+      verificationUrl = new URL(normalizedValue, window.location.origin);
     } catch (_error) {
       setScannerBusy(false);
+      scannerRequestRef.current = "";
       setScannerError("The scanned QR code is not a valid verification URL.");
       return;
     }
 
     if (!verificationUrl.pathname.includes("/api/public/verify/application-signature")) {
       setScannerBusy(false);
+      scannerRequestRef.current = "";
       setScannerError("This QR code is not a Primal application verification code.");
       return;
     }
@@ -241,11 +247,20 @@ export default function ReviewerWorkbench() {
     setScannerBusy(false);
     if (error) {
       setScannerResult(null);
+      scannerRequestRef.current = "";
       setScannerError(error.message || error.reason || "Verification failed.");
       return;
     }
 
     setScannerResult(data);
+    if (data?.valid && data?.application?.id) {
+      toast.success("Signature verified. Opening application.");
+      setScannerOpen(false);
+      setActiveId(data.application.id);
+      router.replace(`/admin/review/${data.application.id}`);
+    } else {
+      scannerRequestRef.current = "";
+    }
   }
 
   function openVerifiedApplication() {
@@ -769,6 +784,12 @@ export default function ReviewerWorkbench() {
               onScan={(value) => verifyScannedCode(value)}
               onError={(message) => setScannerError(message)}
             />
+            {scannerBusy ? (
+              <div className="rounded-2xl border border-border bg-surface-muted/40 px-4 py-3 text-sm text-secondary-muted">
+                Verifying scanned application...
+              </div>
+            ) : null}
+            {scannerError || (scannerResult && !scannerResult.valid) ? (
             <div className="space-y-2">
               <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-tertiary">{locale?.t("reviewer.qr.pasteUrl", "Paste verification URL") ?? "Paste verification URL"}</div>
               <Input
@@ -781,6 +802,7 @@ export default function ReviewerWorkbench() {
                 {locale?.t("reviewer.qr.verifyCode", "Verify code") ?? "Verify code"}
               </Button>
             </div>
+            ) : null}
             {scannerError ? (
               <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
                 {scannerError}
