@@ -1,0 +1,7 @@
+{
+  "name": "primal",
+  "private": true,
+  "scripts": {
+    "build:cloudflare-pages": "npm --prefix frontend run build:cloudflare-pages"
+  }
+}
