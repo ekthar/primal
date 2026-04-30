@@ -11,6 +11,7 @@
     "seed": "node src/db/seed.js",
     "seed:loadtest": "node src/db/seed.loadtest.js",
     "smoke:export": "node src/scripts/exportSmokeCheck.js",
+    "smoke:whatsapp": "node src/scripts/twilioWhatsappSmoke.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint src server.js"
