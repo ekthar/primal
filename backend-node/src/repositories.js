@@ -334,7 +334,7 @@ const applications = {
              'seasonClosure',
              jsonb_build_object(
                'closedAt', NOW(),
-               'closedBy', $3,
+                'closedBy', $3::uuid,
                'reason', 'Season rollover'
              )
            )
