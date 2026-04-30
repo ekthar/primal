@@ -8,7 +8,7 @@ const { randomBytes } = require('crypto');
 const { customAlphabet } = require('nanoid');
 const { splitPersonName } = require('./identity.service');
 const { deriveOfficialWeightClass } = require('../domain/categoryRules');
-const { dispatch: notify } = require('../notifications');
+const { dispatchDeferred: notify } = require('../notifications');
 
 const createCode = customAlphabet('ABCDEFGHJKLMNPQRSTUVWXYZ23456789', 10);
 const MOBILE_FALLBACK_CHANNELS = ['whatsapp', 'email', 'sms'];

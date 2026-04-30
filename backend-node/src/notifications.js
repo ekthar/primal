@@ -655,6 +655,25 @@ async function dispatch({ userId, applicationId, channels = ['email'], to, templ
   }
 }
 
+function dispatchDeferred(params) {
+  const run = () => {
+    dispatch(params).catch((err) => {
+      logger.warn({
+        err,
+        userId: params?.userId || null,
+        applicationId: params?.applicationId || null,
+        template: params?.template || null,
+        channels: params?.channels || [],
+      }, 'Deferred notification dispatch failed');
+    });
+  };
+  if (typeof setImmediate === 'function') {
+    setImmediate(run);
+    return;
+  }
+  setTimeout(run, 0);
+}
+
 async function record({ userId, applicationId, channel, template, payload, status, providerRef, error }) {
   try {
     await query(
@@ -667,4 +686,4 @@ async function record({ userId, applicationId, channel, template, payload, statu
   }
 }
 
-module.exports = { dispatch, TEMPLATES };
+module.exports = { dispatch, dispatchDeferred, TEMPLATES };

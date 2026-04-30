@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, Camera, Download, Eye, FileCheck2, FileText, Gavel, Mail as MailIcon, Save, ScanLine, ShieldAlert, Upload, XCircle } from "lucide-react";
+import { AlertCircle, Camera, Download, Eye, FileCheck2, FileEdit, FileText, History, Mail as MailIcon, Save, ScanLine, Send, ShieldAlert, Upload, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,6 +20,7 @@ import {
   pickEditableProfile,
   serializeProfileForPatch,
 } from "@/components/application/ApplicationFormEditor";
+import { ApplicationWorkspace, WorkspacePanel } from "@/components/application/ApplicationWorkspace";
 import { useLocale } from "@/context/LocaleContext";
 
 function getAccessMessage(application) {
@@ -86,9 +87,11 @@ export default function ApplicantDashboard() {
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [activeApplication, setActiveApplication] = useState(null);
   const [activeApplicationDetails, setActiveApplicationDetails] = useState(null);
+  const [activeWorkspaceSection, setActiveWorkspaceSection] = useState("documents");
   const [loadingApplicationId, setLoadingApplicationId] = useState(null);
   const [publicTournaments, setPublicTournaments] = useState([]);
   const [startingSeasonId, setStartingSeasonId] = useState(null);
+  const [reapplyChoice, setReapplyChoice] = useState(null);
   const [draftUploads, setDraftUploads] = useState({});
   const [draftEdits, setDraftEdits] = useState({});
   const [draftProfileEdits, setDraftProfileEdits] = useState({});
@@ -148,7 +151,7 @@ export default function ApplicantDashboard() {
     toast.success("Application PDF download started");
   }
 
-  async function openApplication(application) {
+  async function openApplication(application, section = null) {
     setLoadingApplicationId(application.id);
     const { data, error } = await api.getApplication(application.id);
     setLoadingApplicationId(null);
@@ -158,6 +161,7 @@ export default function ApplicantDashboard() {
     }
     setActiveApplication(application);
     setActiveApplicationDetails(data?.application || null);
+    setActiveWorkspaceSection(section || (["draft", "needs_correction"].includes(application.status) ? "edit" : "documents"));
   }
 
   async function startSeasonApplication(tournament) {
@@ -186,6 +190,7 @@ export default function ApplicantDashboard() {
     if (nextApplication) {
       setApplications((current) => [nextApplication, ...current]);
       toast.success(`Draft created for ${tournament.name}`);
+      await openApplication(nextApplication, "edit");
     }
   }
 
@@ -202,7 +207,9 @@ export default function ApplicantDashboard() {
     const nextApplication = data?.application;
     if (nextApplication) {
       setApplications((current) => [nextApplication, ...current]);
+      setReapplyChoice(null);
       toast.success(`Reapplied into ${tournament.name}`);
+      await openApplication(nextApplication, "edit");
     }
   }
 
@@ -348,10 +355,13 @@ export default function ApplicantDashboard() {
       next = subData?.application || next;
     }
     setApplications((current) => current.map((item) => (item.id === application.id ? next : item)));
+    setActiveApplication((current) => (current?.id === application.id ? { ...current, ...next } : current));
+    setActiveApplicationDetails((current) => (current?.id === application.id ? { ...current, ...next } : current));
     setDraftUploads((current) => ({ ...current, [application.id]: {} }));
     setCorrectionEdits((current) => { const c = { ...current }; delete c[application.id]; return c; });
     setCorrectionProfileEdits((current) => { const c = { ...current }; delete c[application.id]; return c; });
     setSubmittingCorrectionId(null);
+    if (resubmit) setActiveWorkspaceSection("history");
     toast.success(resubmit ? "Corrections sent for re-review" : "Corrections saved");
   }
 
@@ -394,6 +404,9 @@ export default function ApplicantDashboard() {
     const submittedApplication = data?.application;
     if (submittedApplication) {
       setApplications((current) => current.map((item) => (item.id === application.id ? submittedApplication : item)));
+      setActiveApplication((current) => (current?.id === application.id ? { ...current, ...submittedApplication } : current));
+      setActiveApplicationDetails((current) => (current?.id === application.id ? { ...current, ...submittedApplication } : current));
+      setActiveWorkspaceSection("history");
     }
     setDraftUploads((current) => ({ ...current, [application.id]: {} }));
     toast.success("Season application submitted");
@@ -440,6 +453,218 @@ export default function ApplicantDashboard() {
     return { currentApplications: current, archivedApplications: archived };
   }, [applications, openSeasonTournamentIds]);
   const [archivedExpanded, setArchivedExpanded] = useState(false);
+
+  function renderApplicationEditor(application) {
+    if (application.status === "draft") {
+      return (
+        <WorkspacePanel title="Edit draft" helper="Complete participant details before uploading documents and submitting.">
+          <ApplicationFormEditor
+            mode="applicant"
+            profile={profile}
+            profileValue={getDraftProfileEdits(application)}
+            onProfileChange={(next) => setDraftProfileEditsFor(application.id, next)}
+            formDataValue={getDraftEdits(application)}
+            onFormDataChange={(next) => setDraftEditsFor(application.id, next)}
+            idPrefix={`applicant-draft-${application.id}`}
+          />
+          <div className="mt-4 flex justify-end">
+            <Button variant="outline" onClick={() => saveDraftApplication(application)} disabled={savingDraftId === application.id}>
+              <InlineLoadingLabel loading={savingDraftId === application.id} loadingText="Saving...">
+                <>
+                  <Save className="size-3.5" /> Save draft
+                </>
+              </InlineLoadingLabel>
+            </Button>
+          </div>
+        </WorkspacePanel>
+      );
+    }
+    if (application.status === "needs_correction") {
+      return (
+        <WorkspacePanel title="Correct application" helper="Update the flagged profile or application fields, then resubmit from Actions.">
+          <ApplicationFormEditor
+            mode="applicant"
+            profile={profile}
+            profileValue={getCorrectionProfileEdits(application)}
+            onProfileChange={(next) => setCorrectionProfileEditsFor(application.id, next)}
+            formDataValue={getCorrectionEdits(application)}
+            onFormDataChange={(next) => setCorrectionEditsFor(application.id, next)}
+            flaggedFields={application.correction_fields}
+            idPrefix={`applicant-correction-${application.id}`}
+          />
+        </WorkspacePanel>
+      );
+    }
+    return (
+      <WorkspacePanel title="Read-only application" helper={getAccessMessage(application)}>
+        <ApplicationDetailsView application={activeApplicationDetails || application} profile={profile} showDocuments={false} showHistory={false} />
+      </WorkspacePanel>
+    );
+  }
+
+  function renderDocumentWorkspace(application) {
+    const documents = activeApplicationDetails?.documents || [];
+    const editable = ["draft", "needs_correction"].includes(application.status);
+    return (
+      <div className="space-y-4">
+        {editable ? (
+          <WorkspacePanel
+            title={application.status === "draft" ? "Required documents" : "Replace documents"}
+            helper={application.status === "draft" ? "Scan or upload every required document before submitting." : "Replace only the documents requested by the reviewer, if needed."}
+          >
+            <div className="grid gap-3 xl:grid-cols-3">
+              {REQUIRED_UPLOADS.map((item) => (
+                <DraftUploadCard
+                  key={item.kind}
+                  applicationId={application.id}
+                  item={item}
+                  file={draftUploads[application.id]?.[item.kind] || null}
+                  onFileChange={setDraftFile}
+                />
+              ))}
+            </div>
+          </WorkspacePanel>
+        ) : null}
+        <DocumentsView documents={documents} />
+      </div>
+    );
+  }
+
+  function renderApplicantActions(application) {
+    const showAppeal = ["rejected", "needs_correction"].includes(application.status);
+    return (
+      <div className="grid gap-4 xl:grid-cols-[1fr_1fr]">
+        <WorkspacePanel title="Workflow actions" helper={getAccessMessage(application)}>
+          <div className="grid gap-2">
+            {application.status === "draft" ? (
+              <Button onClick={() => uploadAndSubmitDraft(application)} disabled={submittingDraftId === application.id}>
+                <InlineLoadingLabel loading={submittingDraftId === application.id} loadingText="Submitting...">
+                  Submit this season application
+                </InlineLoadingLabel>
+              </Button>
+            ) : null}
+            {application.status === "needs_correction" ? (
+              <>
+                <Button variant="outline" onClick={() => saveCorrections(application, { resubmit: false })} disabled={submittingCorrectionId === application.id}>
+                  <InlineLoadingLabel loading={submittingCorrectionId === application.id} loadingText="Saving...">Save correction</InlineLoadingLabel>
+                </Button>
+                <Button onClick={() => saveCorrections(application, { resubmit: true })} disabled={submittingCorrectionId === application.id}>
+                  <InlineLoadingLabel loading={submittingCorrectionId === application.id} loadingText="Resubmitting...">Resubmit for review</InlineLoadingLabel>
+                </Button>
+              </>
+            ) : null}
+            {!["approved", "rejected", "season_closed"].includes(application.status) ? (
+              <Button variant="outline" onClick={() => withdrawApplication(application)}>
+                <XCircle className="size-3.5" /> Withdraw
+              </Button>
+            ) : null}
+            <Button variant="outline" onClick={() => downloadApplicationPdf(application.id)} disabled={downloadingPdf}>
+              <Download className="size-3.5" /> PDF
+            </Button>
+            <Button variant="ghost" asChild>
+              <a href="mailto:operations@primalfight.io?subject=Application%20help" title="Contact the tournament operations team">
+                <MailIcon className="size-3.5" /> Contact organizers
+              </a>
+            </Button>
+          </div>
+        </WorkspacePanel>
+
+        {showAppeal ? (
+          <WorkspacePanel title="Appeal" helper="If you disagree with the review outcome, submit an appeal for admin decision.">
+            {appealsByApplication[application.id] ? (
+              <div className="text-sm text-secondary-muted">
+                Appeal status: <span className="capitalize">{appealsByApplication[application.id].status?.replace("_", " ")}</span>
+              </div>
+            ) : (
+              <>
+                <Textarea
+                  className="bg-background"
+                  rows={4}
+                  placeholder="Explain why this decision should be reconsidered"
+                  value={appealDrafts[application.id] || ""}
+                  onChange={(event) => setAppealDrafts((current) => ({ ...current, [application.id]: event.target.value }))}
+                />
+                <Button
+                  className="mt-3 w-full sm:w-auto"
+                  variant="outline"
+                  onClick={() => submitAppeal(application.id)}
+                  disabled={filingAppealId === application.id}
+                >
+                  {filingAppealId === application.id ? "Submitting..." : "File appeal"}
+                </Button>
+              </>
+            )}
+          </WorkspacePanel>
+        ) : null}
+      </div>
+    );
+  }
+
+  function renderActiveApplicationWorkspace() {
+    if (!activeApplicationDetails || !activeApplication) return null;
+    const application = { ...activeApplication, ...activeApplicationDetails };
+    const correctionBanner = application.status === "needs_correction" && (application.correction_reason || application.correction_fields?.length) ? (
+      <div className="rounded-2xl border border-amber-300/60 bg-amber-50/50 p-4 text-sm">
+        <div className="flex items-center gap-2 font-medium text-amber-900">
+          <AlertCircle className="size-4" /> Reviewer correction request
+        </div>
+        {application.correction_reason ? <div className="mt-2 text-secondary">{application.correction_reason}</div> : null}
+        {application.correction_fields?.length ? (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {application.correction_fields.map((field) => (
+              <span key={field} className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] text-amber-900">
+                {String(field).replace(/_/g, " ")}
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    ) : null;
+    const sections = [
+      {
+        id: "edit",
+        label: "Edit",
+        icon: FileEdit,
+        content: renderApplicationEditor(application),
+      },
+      {
+        id: "documents",
+        label: "Documents",
+        icon: FileText,
+        content: renderDocumentWorkspace(application),
+      },
+      {
+        id: "history",
+        label: "History",
+        icon: History,
+        content: <StatusTimelineView events={application.statusEvents || []} />,
+      },
+      {
+        id: "actions",
+        label: "Actions",
+        icon: Send,
+        content: renderApplicantActions(application),
+      },
+    ];
+
+    return (
+      <ApplicationWorkspace
+        title={application.tournament_name || "Application"}
+        subtitle={application.applicant_display_name || formatPersonName(profile.first_name, profile.last_name)}
+        status={<StatusPill status={application.status} />}
+        meta={[
+          { label: "Application", value: application.application_display_id || application.id },
+          { label: "Discipline", value: application.discipline || "-" },
+          { label: "Weight class", value: application.weight_class || "-" },
+        ]}
+        banner={correctionBanner}
+        sections={sections}
+        activeSection={activeWorkspaceSection}
+        onSectionChange={setActiveWorkspaceSection}
+        onClose={() => { setActiveApplication(null); setActiveApplicationDetails(null); }}
+      />
+    );
+  }
 
   if (loading) {
     return (
@@ -536,10 +761,8 @@ export default function ApplicantDashboard() {
                       ) : (
                         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
                           {latestReusableApplication ? (
-                            <Button onClick={() => reapplyFromPreviousSeason(latestReusableApplication, tournament)} disabled={startingSeasonId === tournament.id}>
-                              <InlineLoadingLabel loading={startingSeasonId === tournament.id} loadingText="Reapplying...">
-                                Reapply from last season
-                              </InlineLoadingLabel>
+                            <Button onClick={() => setReapplyChoice({ sourceApplication: latestReusableApplication, tournament })} disabled={startingSeasonId === tournament.id}>
+                              Reapply from last season
                             </Button>
                           ) : null}
                           <Button variant={latestReusableApplication ? "outline" : "default"} onClick={() => startSeasonApplication(tournament)} disabled={startingSeasonId === tournament.id}>
@@ -560,6 +783,33 @@ export default function ApplicantDashboard() {
               )}
             </div>
           </div>
+
+          {reapplyChoice ? (
+            <div className="rounded-3xl border border-border bg-surface elev-card p-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">Reapply</div>
+                  <h2 className="font-display text-2xl font-semibold tracking-tight mt-1">Create draft from past application</h2>
+                  <p className="mt-2 text-sm text-secondary-muted">
+                    Source: {reapplyChoice.sourceApplication.tournament_name || "Previous season"} / Target: {reapplyChoice.tournament.name}
+                  </p>
+                </div>
+                <Button variant="ghost" onClick={() => setReapplyChoice(null)}>Close</Button>
+              </div>
+              <div className="mt-5 grid gap-3 sm:grid-cols-3 text-sm">
+                <DetailCard label="Copied profile" value={formatPersonName(profile.first_name, profile.last_name)} />
+                <DetailCard label="Source application" value={reapplyChoice.sourceApplication.application_display_id || reapplyChoice.sourceApplication.id} />
+                <DetailCard label="Target tournament" value={reapplyChoice.tournament.name} />
+              </div>
+              <div className="mt-5 flex justify-end">
+                <Button onClick={() => reapplyFromPreviousSeason(reapplyChoice.sourceApplication, reapplyChoice.tournament)} disabled={startingSeasonId === reapplyChoice.tournament.id}>
+                  <InlineLoadingLabel loading={startingSeasonId === reapplyChoice.tournament.id} loadingText="Creating draft...">
+                    Create draft
+                  </InlineLoadingLabel>
+                </Button>
+              </div>
+            </div>
+          ) : null}
 
           <div className="rounded-3xl border border-border bg-surface elev-card p-6">
             <div>
@@ -607,83 +857,18 @@ export default function ApplicantDashboard() {
                   )}
 
                   <div className="mt-4 flex flex-wrap justify-end gap-2">
-                    <Button variant="ghost" size="sm" onClick={() => downloadApplicationPdf(application.id)} disabled={downloadingPdf}>
-                      <Download className="size-3.5" /> PDF
-                    </Button>
-                    <Button variant="ghost" size="sm" asChild>
-                      <a href="mailto:operations@primalfight.io?subject=Application%20help" title="Contact the tournament operations team">
-                        <MailIcon className="size-3.5" /> Contact organizers
-                      </a>
-                    </Button>
-                    {!["approved", "rejected", "season_closed"].includes(application.status) && (
-                      <Button variant="ghost" size="sm" onClick={() => withdrawApplication(application)}>
-                        <XCircle className="size-3.5" /> Withdraw
-                      </Button>
-                    )}
                     <Button className="w-full sm:w-auto" variant="outline" onClick={() => openApplication(application)} disabled={loadingApplicationId === application.id}>
                       <InlineLoadingLabel loading={loadingApplicationId === application.id} loadingText="Opening...">
                         <>
-                          <Eye className="size-3.5" /> View application
+                          <Eye className="size-3.5" /> Open workspace
                         </>
                       </InlineLoadingLabel>
                     </Button>
                   </div>
 
                   {application.status === "draft" ? (
-                    <div className="mt-4 rounded-xl border border-border bg-surface p-4">
-                      <div className="font-medium text-sm">Finish this season application</div>
-                      <p className="mt-2 text-sm text-secondary-muted">
-                        Complete participant details, upload or scan each required document, then submit while registration is still open.
-                      </p>
-                      <div className="mt-4 rounded-2xl border border-border bg-background/70 p-4">
-                        <ApplicationFormEditor
-                          mode="applicant"
-                          profile={profile}
-                          profileValue={getDraftProfileEdits(application)}
-                          onProfileChange={(next) => setDraftProfileEditsFor(application.id, next)}
-                          formDataValue={getDraftEdits(application)}
-                          onFormDataChange={(next) => setDraftEditsFor(application.id, next)}
-                          idPrefix={`applicant-draft-${application.id}`}
-                        />
-                      </div>
-                      <div className="mt-4 rounded-2xl border border-border bg-background/70 p-4">
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                          <div>
-                            <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">Mobile capture</div>
-                            <div className="mt-1 text-sm text-secondary-muted">
-                              On mobile, use scan to open the camera directly and preview each document before submission.
-                            </div>
-                          </div>
-                          <div className="rounded-full border border-border bg-surface px-3 py-1 text-[11px] font-medium text-secondary-muted">
-                            3 required items
-                          </div>
-                        </div>
-                        <div className="mt-4 grid gap-3 xl:grid-cols-3">
-                          {REQUIRED_UPLOADS.map((item) => (
-                            <DraftUploadCard
-                              key={item.kind}
-                              applicationId={application.id}
-                              item={item}
-                              file={draftUploads[application.id]?.[item.kind] || null}
-                              onFileChange={setDraftFile}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                      <div className="mt-4 flex flex-col justify-end gap-2 sm:flex-row">
-                        <Button variant="outline" className="w-full sm:w-auto" onClick={() => saveDraftApplication(application)} disabled={savingDraftId === application.id}>
-                          <InlineLoadingLabel loading={savingDraftId === application.id} loadingText="Saving...">
-                            <>
-                              <Save className="size-3.5" /> Save draft
-                            </>
-                          </InlineLoadingLabel>
-                        </Button>
-                        <Button className="w-full sm:w-auto" onClick={() => uploadAndSubmitDraft(application)} disabled={submittingDraftId === application.id}>
-                          <InlineLoadingLabel loading={submittingDraftId === application.id} loadingText="Submitting...">
-                            Submit this season application
-                          </InlineLoadingLabel>
-                        </Button>
-                      </div>
+                    <div className="mt-4 rounded-xl border border-border bg-surface p-4 text-sm text-secondary-muted">
+                      Draft editing, document upload, and submit actions are in the application workspace.
                     </div>
                   ) : null}
 
@@ -703,81 +888,9 @@ export default function ApplicantDashboard() {
                       {application.correction_reason ? (
                         <div className="mt-2 text-sm text-secondary"><strong>Reviewer note:</strong> {application.correction_reason}</div>
                       ) : null}
-
-                      <div className="mt-4">
-                        <ApplicationFormEditor
-                          mode="applicant"
-                          profile={profile}
-                          profileValue={getCorrectionProfileEdits(application)}
-                          onProfileChange={(next) => setCorrectionProfileEditsFor(application.id, next)}
-                          formDataValue={getCorrectionEdits(application)}
-                          onFormDataChange={(next) => setCorrectionEditsFor(application.id, next)}
-                          flaggedFields={application.correction_fields}
-                          idPrefix={`applicant-correction-${application.id}`}
-                        />
-                      </div>
-
-                      <div className="mt-4">
-                        <div className="text-xs uppercase tracking-wider text-tertiary mb-2">Replace flagged documents (optional)</div>
-                        <div className="grid gap-3 xl:grid-cols-3">
-                          {REQUIRED_UPLOADS.map((item) => (
-                            <DraftUploadCard
-                              key={item.kind}
-                              applicationId={application.id}
-                              item={item}
-                              file={draftUploads[application.id]?.[item.kind] || null}
-                              onFileChange={setDraftFile}
-                            />
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="mt-4 flex flex-wrap justify-end gap-2">
-                        <Button variant="outline" size="sm" onClick={() => saveCorrections(application, { resubmit: false })} disabled={submittingCorrectionId === application.id}>
-                          <InlineLoadingLabel loading={submittingCorrectionId === application.id} loadingText="Saving...">Save changes</InlineLoadingLabel>
-                        </Button>
-                        <Button size="sm" onClick={() => saveCorrections(application, { resubmit: true })} disabled={submittingCorrectionId === application.id}>
-                          <InlineLoadingLabel loading={submittingCorrectionId === application.id} loadingText="Resubmitting...">Resubmit for review</InlineLoadingLabel>
-                        </Button>
-                      </div>
+                      <p className="mt-3 text-sm text-secondary-muted">Open the workspace to edit flagged fields, replace documents, and resubmit.</p>
                     </div>
                   ) : null}
-
-                  {(["rejected", "needs_correction"].includes(application.status)) && (
-                    <div className="mt-4 rounded-xl border border-border bg-surface p-4">
-                      <div className="flex items-center gap-2 text-sm font-medium">
-                        <Gavel className="size-4 text-primary" /> Appeal panel
-                      </div>
-                      {appealsByApplication[application.id] ? (
-                        <div className="mt-2 text-sm text-secondary-muted">
-                          Appeal status: <span className="capitalize">{appealsByApplication[application.id].status?.replace("_", " ")}</span>
-                        </div>
-                      ) : (
-                        <>
-                          <p className="mt-2 text-sm text-secondary-muted">
-                            If you disagree with the review outcome, submit an appeal for admin decision.
-                          </p>
-                          <Textarea
-                            className="mt-3 bg-background"
-                            rows={3}
-                            placeholder="Explain why this decision should be reconsidered"
-                            value={appealDrafts[application.id] || ""}
-                            onChange={(event) => setAppealDrafts((current) => ({ ...current, [application.id]: event.target.value }))}
-                          />
-                          <div className="mt-3">
-                            <Button
-                              className="w-full sm:w-auto"
-                              variant="outline"
-                              onClick={() => submitAppeal(application.id)}
-                              disabled={filingAppealId === application.id}
-                            >
-                              {filingAppealId === application.id ? "Submitting..." : "File appeal"}
-                            </Button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )}
                 </article>
               ))}
             </div>
@@ -833,12 +946,10 @@ export default function ApplicantDashboard() {
                           {canReapply && (
                             <Button
                               size="sm"
-                              onClick={() => reapplyFromPreviousSeason(application, matchingOpenTournament)}
+                              onClick={() => setReapplyChoice({ sourceApplication: application, tournament: matchingOpenTournament })}
                               disabled={startingSeasonId === matchingOpenTournament.id}
                             >
-                              <InlineLoadingLabel loading={startingSeasonId === matchingOpenTournament.id} loadingText="Reapplying...">
-                                Reapply to {matchingOpenTournament.name}
-                              </InlineLoadingLabel>
+                              Reapply to {matchingOpenTournament.name}
                             </Button>
                           )}
                         </div>
@@ -850,23 +961,7 @@ export default function ApplicantDashboard() {
             </div>
           )}
 
-          {activeApplicationDetails && activeApplication ? (
-            <div className="rounded-3xl border border-border bg-surface elev-card p-6">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="font-display text-2xl font-semibold tracking-tight">Application details</h2>
-                  <p className="text-sm text-secondary-muted mt-1">{activeApplication.tournament_name}</p>
-                </div>
-                <Button variant="ghost" onClick={() => { setActiveApplication(null); setActiveApplicationDetails(null); }}>Close</Button>
-              </div>
-
-              <div className="mt-4 rounded-2xl border border-border bg-background/60 p-4 text-sm text-secondary-muted">
-                {getAccessMessage(activeApplication)}
-              </div>
-
-              <ApplicationDetailsView application={activeApplicationDetails} profile={profile} />
-            </div>
-          ) : null}
+          {renderActiveApplicationWorkspace()}
         </div>
 
         <div className="space-y-5 lg:sticky lg:top-6 lg:self-start">
@@ -956,7 +1051,7 @@ function getLatestDocumentByKind(documents, kind) {
   return documents.find((documentRow) => documentRow.kind === kind) || null;
 }
 
-function ApplicationDetailsView({ application, profile }) {
+function ApplicationDetailsView({ application, profile, showDocuments = true, showHistory = true }) {
   const formData = application.form_data || {};
   const address = getApplicationAddress(application, profile);
   const categoryEntries = Array.isArray(formData.categoryEntries) ? formData.categoryEntries : [];
@@ -1015,8 +1110,8 @@ function ApplicationDetailsView({ application, profile }) {
         </div>
       </section>
 
-      <DocumentsView documents={application.documents || []} />
-      <StatusTimelineView events={application.statusEvents || []} />
+      {showDocuments ? <DocumentsView documents={application.documents || []} /> : null}
+      {showHistory ? <StatusTimelineView events={application.statusEvents || []} /> : null}
     </div>
   );
 }

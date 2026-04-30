@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Inbox, AlertTriangle, FileEdit, Plus, Search, Send, Download, Printer, Pencil, Save, Eye, FileText, Camera, ScanLine, Upload, CheckCircle2 } from "lucide-react";
+import { Inbox, AlertTriangle, FileEdit, Plus, Search, Send, Download, Printer, Pencil, Save, Eye, FileText, Camera, ScanLine, Upload, CheckCircle2, History } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,7 @@ import {
   ApplicationFormEditor,
   pickEditableProfile,
 } from "@/components/application/ApplicationFormEditor";
+import { ApplicationWorkspace, WorkspacePanel } from "@/components/application/ApplicationWorkspace";
 import DocumentInputField from "@/components/scanner/DocumentInputField";
 import LiveDocumentScanner from "@/components/scanner/LiveDocumentScanner";
 import api, { resolveBackendUrl } from "@/lib/api";
@@ -37,6 +38,8 @@ const REQUIRED_DOCUMENTS = [
 export default function ClubDashboard() {
   const [clubs, setClubs] = useState([]);
   const [applications, setApplications] = useState([]);
+  const [applicationsLoaded, setApplicationsLoaded] = useState(false);
+  const [loadingApplications, setLoadingApplications] = useState(false);
   const [participants, setParticipants] = useState([]);
   const [tournaments, setTournaments] = useState([]);
   const [loadingParticipants, setLoadingParticipants] = useState(false);
@@ -45,6 +48,7 @@ export default function ClubDashboard() {
   const [pincodeHint, setPincodeHint] = useState("");
   const [pincodeResolved, setPincodeResolved] = useState(null);
   const [query, setQuery] = useState("");
+  const [activeTab, setActiveTab] = useState("inbox");
   const [activeApplication, setActiveApplication] = useState(null);
   const [appealReasonById, setAppealReasonById] = useState({});
   const [cancelReasonById, setCancelReasonById] = useState({});
@@ -76,9 +80,8 @@ export default function ClubDashboard() {
   const clubId = clubs[0]?.id || "";
 
   useEffect(() => {
-    Promise.all([api.listClubs(), api.listApplications(), api.publicTournaments()]).then(([clubsRes, appRes, tRes]) => {
+    Promise.all([api.listClubs(), api.publicTournaments()]).then(([clubsRes, tRes]) => {
       if (!clubsRes.error) setClubs(clubsRes.data.clubs || []);
-      if (!appRes.error) setApplications(appRes.data.items || []);
       if (!tRes.error) {
         const available = tRes.data.tournaments || [];
         setTournaments(available);
@@ -88,6 +91,12 @@ export default function ClubDashboard() {
       }
     });
   }, []);
+
+  useEffect(() => {
+    if (!["inbox", "roster"].includes(activeTab)) return;
+    if (applicationsLoaded || loadingApplications) return;
+    reloadApplications();
+  }, [activeTab, applicationsLoaded, loadingApplications]);
 
   useEffect(() => {
     if (!clubId) {
@@ -201,8 +210,11 @@ export default function ClubDashboard() {
   };
 
   const reloadApplications = async () => {
+    setLoadingApplications(true);
     const refreshed = await api.listApplications();
     if (!refreshed.error) setApplications(refreshed.data.items || []);
+    setApplicationsLoaded(true);
+    setLoadingApplications(false);
   };
 
   const toggleDiscipline = (disciplineId) => {
@@ -714,7 +726,7 @@ export default function ClubDashboard() {
         ) : null}
       </section>
 
-      <Tabs defaultValue="inbox" className="mt-8">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-8">
         <TabsList className="bg-surface-muted p-1 rounded-xl h-auto flex w-full justify-start overflow-x-auto">
           <TabsTrigger value="inbox" className="data-[state=active]:bg-surface data-[state=active]:shadow-soft rounded-lg px-4 py-2">
             Correction inbox
@@ -731,7 +743,15 @@ export default function ClubDashboard() {
         </TabsList>
 
         <TabsContent value="inbox" className="mt-5">
-          {correctionItems.length === 0 ? (
+          {loadingApplications || !applicationsLoaded ? (
+            <SectionLoader
+              title="Loading correction inbox"
+              description="Fetching club applications only for this workflow tab."
+              cards={2}
+              rows={3}
+              compact
+            />
+          ) : correctionItems.length === 0 ? (
             <EmptyState icon={Inbox} title="Inbox zero." description="No correction requests are open for this club." />
           ) : (
             <div className="space-y-3">
@@ -763,6 +783,16 @@ export default function ClubDashboard() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-tertiary" />
             <Input placeholder="Search applications..." value={query} onChange={(event) => setQuery(event.target.value)} className="pl-9 h-9 bg-surface" />
           </div>
+          {loadingApplications || !applicationsLoaded ? (
+            <SectionLoader
+              title="Loading applications"
+              description="Loading full application summaries for the selected applications tab."
+              cards={2}
+              rows={4}
+              compact
+            />
+          ) : (
+          <>
           <div className="space-y-2 md:hidden">
             {filtered.map((application) => (
               <article key={application.id} className="rounded-2xl border border-border bg-surface p-4">
@@ -822,6 +852,8 @@ export default function ClubDashboard() {
               </tbody>
             </table>
           </div>
+          </>
+          )}
 
           {activeApplication ? (
             <ClubApplicationWorkspace
@@ -1067,164 +1099,173 @@ function ClubApplicationWorkspace({
       : application.status === "needs_correction"
         ? "View only: correction window is closed"
         : "View only: application is already in admin/reviewer workflow";
-
-  return (
-    <div className="mt-4 rounded-3xl border border-border bg-surface p-4 sm:p-5 elev-card">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="font-display text-2xl font-semibold tracking-tight">
-              {application.first_name} {application.last_name}
-            </h2>
-            <StatusPill status={application.status} />
-          </div>
-          <div className="mt-1 text-xs text-tertiary font-mono">{application.id}</div>
-          <div className="mt-1 text-sm text-secondary-muted">{application.tournament_name || "Tournament pending"} / {editableLabel}</div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => api.downloadApplicationPdf(application.id)}>
-            <Download className="size-4" /> PDF
-          </Button>
-          <Button variant="ghost" onClick={onClose}>Close</Button>
-        </div>
-      </div>
-
-      {application.status === "needs_correction" && (application.correction_reason || application.correction_fields?.length) ? (
-        <div className="mt-4 rounded-2xl border border-amber-300/60 bg-amber-50/50 p-4 text-sm">
-          <div className="font-medium text-amber-900">Reviewer correction request</div>
-          {application.correction_reason ? <div className="mt-1 text-secondary">{application.correction_reason}</div> : null}
-          {application.correction_fields?.length ? (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {application.correction_fields.map((field) => (
-                <span key={field} className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] text-amber-900">
-                  {String(field).replace(/_/g, " ")}
-                </span>
-              ))}
-            </div>
-          ) : null}
+  const [workspaceSection, setWorkspaceSection] = useState(canEdit ? "edit" : "documents");
+  const correctionBanner = application.status === "needs_correction" && (application.correction_reason || application.correction_fields?.length) ? (
+    <div className="rounded-2xl border border-amber-300/60 bg-amber-50/50 p-4 text-sm">
+      <div className="font-medium text-amber-900">Reviewer correction request</div>
+      {application.correction_reason ? <div className="mt-1 text-secondary">{application.correction_reason}</div> : null}
+      {application.correction_fields?.length ? (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {application.correction_fields.map((field) => (
+            <span key={field} className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] text-amber-900">
+              {String(field).replace(/_/g, " ")}
+            </span>
+          ))}
         </div>
       ) : null}
-
-      <div className="mt-5 grid gap-5 xl:grid-cols-[1.45fr_0.85fr]">
-        <div className="space-y-5">
-          <section className="rounded-2xl border border-border bg-background/60 p-4">
-            <SectionHeader title="Participant and application form" helper="Club can update managed fighter details while draft or correction editing is open." />
-            <div className="mt-4">
-              <ApplicationFormEditor
-                mode="club"
-                profile={application}
-                profileValue={profileEdits}
-                onProfileChange={onProfileChange}
-                formDataValue={formEdits}
-                onFormDataChange={onFormChange}
-                flaggedFields={application.correction_fields}
+    </div>
+  ) : null;
+  const sections = [
+    {
+      id: "edit",
+      label: "Edit",
+      icon: FileEdit,
+      content: (
+        <WorkspacePanel title="Participant and application form" helper="Club can update managed fighter details while draft or correction editing is open.">
+          <ApplicationFormEditor
+            mode="club"
+            profile={application}
+            profileValue={profileEdits}
+            onProfileChange={onProfileChange}
+            formDataValue={formEdits}
+            onFormDataChange={onFormChange}
+            flaggedFields={application.correction_fields}
+            disabled={!canEdit}
+            idPrefix={`club-application-${application.id}`}
+          />
+          {canEdit ? (
+            <div className="mt-4 flex justify-end">
+              <Button onClick={onSave} disabled={saving} className="bg-foreground text-background hover:bg-foreground/90">
+                <Save className="size-4 mr-1" /> {saving ? "Saving..." : "Save profile and application"}
+              </Button>
+            </div>
+          ) : null}
+        </WorkspacePanel>
+      ),
+    },
+    {
+      id: "documents",
+      label: "Documents",
+      icon: FileText,
+      complete: missingKinds.length === 0,
+      content: (
+        <WorkspacePanel title="Documents" helper="Scan or upload replacement documents before submission or correction resubmission.">
+          <div className="grid gap-3 lg:grid-cols-3">
+            {REQUIRED_DOCUMENTS.map((item) => (
+              <ClubDocumentSlot
+                key={item.kind}
+                item={item}
+                documentRow={getLatestDocumentByKind(documents, item.kind)}
+                pendingFile={documentUploads[item.kind]}
                 disabled={!canEdit}
-                idPrefix={`club-application-${application.id}`}
+                onUpload={(file) => onUploadDocument(item.kind, file)}
               />
-            </div>
-            {canEdit ? (
-              <div className="mt-4 flex justify-end">
-                <Button onClick={onSave} disabled={saving} className="bg-foreground text-background hover:bg-foreground/90">
-                  <Save className="size-4 mr-1" /> {saving ? "Saving..." : "Save profile and application"}
-                </Button>
-              </div>
-            ) : null}
-          </section>
-
-          <section className="rounded-2xl border border-border bg-background/60 p-4">
-            <SectionHeader title="Documents" helper="Scan or upload replacement documents before submission or correction resubmission." />
-            <div className="mt-4 grid gap-3 lg:grid-cols-3">
-              {REQUIRED_DOCUMENTS.map((item) => (
-                <ClubDocumentSlot
-                  key={item.kind}
-                  item={item}
-                  documentRow={getLatestDocumentByKind(documents, item.kind)}
-                  pendingFile={documentUploads[item.kind]}
-                  disabled={!canEdit}
-                  onUpload={(file) => onUploadDocument(item.kind, file)}
-                />
-              ))}
-            </div>
-          </section>
-
-          <section className="rounded-2xl border border-border bg-background/60 p-4">
-            <SectionHeader title="Status timeline" helper="The same audit-facing workflow seen by reviewer/admin." />
-            <div className="mt-4 space-y-2">
-              {(application.statusEvents || []).map((event) => (
-                <div key={event.id} className="rounded-xl border border-border bg-surface px-3 py-3 text-sm">
-                  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="font-medium">{formatToken(event.from_status || "-")} to {formatToken(event.to_status || "-")}</div>
-                    <div className="text-xs text-tertiary">{event.created_at ? new Date(event.created_at).toLocaleString() : "-"}</div>
-                  </div>
-                  <div className="mt-1 text-secondary-muted">{event.reason || "No reason recorded"}</div>
+            ))}
+          </div>
+        </WorkspacePanel>
+      ),
+    },
+    {
+      id: "history",
+      label: "History",
+      icon: History,
+      content: (
+        <WorkspacePanel title="Status timeline" helper="The same audit-facing workflow seen by reviewer/admin.">
+          <div className="space-y-2">
+            {(application.statusEvents || []).map((event) => (
+              <div key={event.id} className="rounded-xl border border-border bg-surface px-3 py-3 text-sm">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="font-medium">{formatToken(event.from_status || "-")} to {formatToken(event.to_status || "-")}</div>
+                  <div className="text-xs text-tertiary">{event.created_at ? new Date(event.created_at).toLocaleString() : "-"}</div>
                 </div>
-              ))}
-              {!application.statusEvents?.length ? (
-                <div className="text-sm text-secondary-muted">No timeline events recorded yet.</div>
-              ) : null}
-            </div>
-          </section>
-        </div>
-
-        <div className="space-y-5">
-          <section className="rounded-2xl border border-border bg-background/60 p-4">
-            <SectionHeader title="Readiness analysis" helper="Rule-based checks before admin/reviewer handoff." />
-            <div className="mt-4 space-y-2">
+                <div className="mt-1 text-secondary-muted">{event.reason || "No reason recorded"}</div>
+              </div>
+            ))}
+            {!application.statusEvents?.length ? (
+              <div className="text-sm text-secondary-muted">No timeline events recorded yet.</div>
+            ) : null}
+          </div>
+        </WorkspacePanel>
+      ),
+    },
+    {
+      id: "actions",
+      label: "Actions",
+      icon: Send,
+      content: (
+        <div className="grid gap-4 xl:grid-cols-[1fr_1fr]">
+          <WorkspacePanel title="Readiness analysis" helper="Rule-based checks before admin/reviewer handoff.">
+            <div className="space-y-2">
               <ReadinessRow ok={missingKinds.length === 0} label={missingKinds.length ? `Missing: ${missingKinds.join(", ")}` : "Required documents uploaded"} />
               <ReadinessRow ok={selectedDisciplines.length > 0} label={selectedDisciplines.length ? "Discipline selection present" : "Select at least one discipline"} />
               <ReadinessRow ok={invalidCategories.length === 0} label={invalidCategories.length ? "Category preview has invalid entries" : "Category preview has no invalid entries"} />
               <ReadinessRow ok={application.status !== "needs_correction"} label={application.status === "needs_correction" ? "Correction response is still open" : "No open correction request"} />
               <ReadinessRow ok={canEdit || !["draft", "needs_correction"].includes(application.status)} label={canEdit ? "Edit window open" : "Edit window closed or not required"} />
             </div>
-          </section>
+          </WorkspacePanel>
 
-          <section className="rounded-2xl border border-border bg-background/60 p-4">
-            <SectionHeader title="Workflow actions" helper="Club can submit, resubmit, appeal, or request cancellation. Review decisions stay admin/reviewer only." />
-            <div className="mt-4 grid gap-2">
-              {canSubmitDraft ? (
-                <Button onClick={onSubmit} disabled={missingKinds.length > 0} className="bg-foreground text-background hover:bg-foreground/90">
-                  Submit to admin review
-                </Button>
-              ) : null}
-              {canResubmitCorrection ? (
-                <Button onClick={onResubmit} className="bg-foreground text-background hover:bg-foreground/90">
-                  Resubmit correction
-                </Button>
-              ) : null}
-              {!canSubmitDraft && !canResubmitCorrection ? (
-                <div className="rounded-xl border border-border bg-surface p-3 text-sm text-secondary-muted">
-                  No club submit action is available for status {formatToken(application.status)}.
-                </div>
-              ) : null}
-            </div>
-          </section>
+          <div className="space-y-4">
+            <WorkspacePanel title="Workflow actions" helper="Club can submit, resubmit, appeal, or request cancellation. Review decisions stay admin/reviewer only.">
+              <div className="grid gap-2">
+                {canSubmitDraft ? (
+                  <Button onClick={onSubmit} disabled={missingKinds.length > 0} className="bg-foreground text-background hover:bg-foreground/90">
+                    Submit to admin review
+                  </Button>
+                ) : null}
+                {canResubmitCorrection ? (
+                  <Button onClick={onResubmit} className="bg-foreground text-background hover:bg-foreground/90">
+                    Resubmit correction
+                  </Button>
+                ) : null}
+                {!canSubmitDraft && !canResubmitCorrection ? (
+                  <div className="rounded-xl border border-border bg-surface p-3 text-sm text-secondary-muted">
+                    No club submit action is available for status {formatToken(application.status)}.
+                  </div>
+                ) : null}
+              </div>
+            </WorkspacePanel>
 
-          {showAppeal ? (
-            <section className="rounded-2xl border border-border bg-background/60 p-4">
-              <SectionHeader title="Appeal" helper="Appeals go to admin; this does not approve the application." />
-              <Input className="mt-3 h-9 bg-surface" value={appealReason} onChange={(event) => onAppealReasonChange(event.target.value)} placeholder="Reason, minimum 10 characters" />
-              <Button className="mt-2" onClick={onFileAppeal}>File appeal</Button>
-            </section>
-          ) : null}
+            {showAppeal ? (
+              <WorkspacePanel title="Appeal" helper="Appeals go to admin; this does not approve the application.">
+                <Input className="h-9 bg-surface" value={appealReason} onChange={(event) => onAppealReasonChange(event.target.value)} placeholder="Reason, minimum 10 characters" />
+                <Button className="mt-2" onClick={onFileAppeal}>File appeal</Button>
+              </WorkspacePanel>
+            ) : null}
 
-          {canCancel ? (
-            <section className="rounded-2xl border border-border bg-background/60 p-4">
-              <SectionHeader title="Cancel request" helper="Requests reviewer/admin cancellation without deleting data." />
-              <Input className="mt-3 h-9 bg-surface" value={cancelReason} onChange={(event) => onCancelReasonChange(event.target.value)} placeholder="Reason, minimum 10 characters" />
-              <Button variant="outline" className="mt-2" onClick={onCancelRequest}>Request cancel</Button>
-            </section>
-          ) : null}
+            {canCancel ? (
+              <WorkspacePanel title="Cancel request" helper="Requests reviewer/admin cancellation without deleting data.">
+                <Input className="h-9 bg-surface" value={cancelReason} onChange={(event) => onCancelReasonChange(event.target.value)} placeholder="Reason, minimum 10 characters" />
+                <Button variant="outline" className="mt-2" onClick={onCancelRequest}>Request cancel</Button>
+              </WorkspacePanel>
+            ) : null}
+          </div>
         </div>
-      </div>
-    </div>
-  );
-}
+      ),
+    },
+  ];
 
-function SectionHeader({ title, helper }) {
   return (
-    <div>
-      <h3 className="font-display text-lg font-semibold tracking-tight">{title}</h3>
-      {helper ? <p className="mt-1 text-sm text-secondary-muted">{helper}</p> : null}
+    <div className="mt-4">
+      <ApplicationWorkspace
+        title={`${application.first_name} ${application.last_name}`}
+        subtitle={`${application.tournament_name || "Tournament pending"} / ${editableLabel}`}
+        status={<StatusPill status={application.status} />}
+        meta={[
+          { label: "Application", value: application.id },
+          { label: "Discipline", value: application.discipline || "-" },
+          { label: "Weight class", value: application.weight_class || "-" },
+        ]}
+        banner={correctionBanner}
+        sections={sections}
+        activeSection={workspaceSection}
+        onSectionChange={setWorkspaceSection}
+        onClose={onClose}
+        actions={(
+          <Button variant="outline" onClick={() => api.downloadApplicationPdf(application.id)}>
+            <Download className="size-4" /> PDF
+          </Button>
+        )}
+      />
     </div>
   );
 }

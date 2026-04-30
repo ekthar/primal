@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Bell, CalendarRange, CheckCircle2, Mail, MessageCircle, Plus, RefreshCcw, Save, Scale, Settings2, Trash2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,7 +61,9 @@ function toIsoDateTime(value) {
 export default function AdminSettings({ initialTab = "tournaments" }) {
   const { user } = useAuth();
   const locale = useLocale();
-  const [loadingTournaments, setLoadingTournaments] = useState(true);
+  const [activeTab, setActiveTab] = useState(initialTab);
+  const [loadingTournaments, setLoadingTournaments] = useState(false);
+  const [tournamentsLoaded, setTournamentsLoaded] = useState(false);
   const [savingTournamentId, setSavingTournamentId] = useState(null);
   const [tournaments, setTournaments] = useState([]);
   const [tournamentDrafts, setTournamentDrafts] = useState({});
@@ -79,12 +81,15 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
     isPublic: "true",
   });
 
-  const [loadingClubs, setLoadingClubs] = useState(true);
-  const [loadingReweigh, setLoadingReweigh] = useState(true);
+  const [loadingClubs, setLoadingClubs] = useState(false);
+  const [clubsLoaded, setClubsLoaded] = useState(false);
+  const [loadingReweigh, setLoadingReweigh] = useState(false);
+  const [reweighLoaded, setReweighLoaded] = useState(false);
   const [savingProfileId, setSavingProfileId] = useState(null);
   const [clubs, setClubs] = useState([]);
   const [clubFilter, setClubFilter] = useState("all");
   const [participantQuery, setParticipantQuery] = useState("");
+  const [debouncedParticipantQuery, setDebouncedParticipantQuery] = useState("");
   const [participants, setParticipants] = useState([]);
   const [weightDrafts, setWeightDrafts] = useState({});
   /* Season filter: "current" resolves to the backend-defined current tournament
@@ -93,6 +98,8 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
      events without losing them. */
   const [seasonFilter, setSeasonFilter] = useState("current");
   const [currentSeason, setCurrentSeason] = useState(null);
+  const [currentSeasonLoaded, setCurrentSeasonLoaded] = useState(false);
+  const reweighRequestSeq = useRef(0);
   const publicCurrentSeasonId = currentSeason?.id || null;
   const fallbackPublicSeasonId = useMemo(() => {
     const current = tournaments.find((tournament) => tournament.is_public && !tournament.deleted_at);
@@ -103,20 +110,38 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
     : seasonFilter;
 
   useEffect(() => {
-    if (user?.role !== "admin") return;
-    loadTournaments();
-    loadClubs();
-    loadCurrentSeason();
-  }, [user?.role]);
+    setActiveTab(initialTab);
+  }, [initialTab]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedParticipantQuery(participantQuery), 300);
+    return () => clearTimeout(timer);
+  }, [participantQuery]);
 
   useEffect(() => {
     if (user?.role !== "admin") return;
+    if ((activeTab === "tournaments" || activeTab === "weighin") && !tournamentsLoaded && !loadingTournaments) {
+      loadTournaments();
+    }
+    if (activeTab === "weighin" && !clubsLoaded && !loadingClubs) {
+      loadClubs();
+    }
+    if (activeTab === "weighin" && !currentSeasonLoaded) {
+      loadCurrentSeason();
+    }
+  }, [user?.role, activeTab, tournamentsLoaded, clubsLoaded, currentSeasonLoaded, loadingTournaments, loadingClubs]);
+
+  useEffect(() => {
+    if (user?.role !== "admin" || activeTab !== "weighin") return;
+    const waitingForCurrentSeason = seasonFilter === "current" && !currentSeasonLoaded && !fallbackPublicSeasonId;
+    if (waitingForCurrentSeason) return;
     loadReweighList();
-  }, [user?.role, clubFilter, participantQuery, resolvedSeasonId]);
+  }, [user?.role, activeTab, clubFilter, debouncedParticipantQuery, resolvedSeasonId, seasonFilter, currentSeasonLoaded, fallbackPublicSeasonId]);
 
   async function loadCurrentSeason() {
     const { data } = await api.publicCurrentTournament();
     setCurrentSeason(data?.tournament || null);
+    setCurrentSeasonLoaded(true);
   }
 
   async function loadTournaments() {
@@ -124,11 +149,13 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
     const { data, error } = await api.adminTournaments({ limit: 200, offset: 0 });
     setLoadingTournaments(false);
     if (error) {
+      setTournamentsLoaded(true);
       toast.error(error.message || "Failed to load tournament settings");
       return;
     }
     const rows = data?.tournaments || [];
     setTournaments(rows);
+    setTournamentsLoaded(true);
     setTournamentDrafts(
       Object.fromEntries(
         rows.map((tournament) => [
@@ -154,22 +181,28 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
     const { data, error } = await api.listClubs({ limit: 200, offset: 0 });
     setLoadingClubs(false);
     if (error) {
+      setClubsLoaded(true);
       toast.error(error.message || "Failed to load clubs");
       return;
     }
     setClubs(data?.clubs || []);
+    setClubsLoaded(true);
   }
 
   async function loadReweighList() {
+    const requestId = reweighRequestSeq.current + 1;
+    reweighRequestSeq.current = requestId;
     setLoadingReweigh(true);
     const { data, error } = await api.adminReweighList({
       clubId: clubFilter === "all" ? undefined : clubFilter,
-      q: participantQuery || undefined,
+      q: debouncedParticipantQuery || undefined,
       tournamentId: resolvedSeasonId || undefined,
       limit: 200,
       offset: 0,
     });
+    if (requestId !== reweighRequestSeq.current) return;
     setLoadingReweigh(false);
+    setReweighLoaded(true);
     if (error) {
       toast.error(error.message || "Failed to load weigh-in list");
       return;
@@ -343,7 +376,7 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
         description={locale?.t("adminSettings.description", "Manage per-tournament registration timing, correction windows, and club-wise weigh-in updates that automatically refresh weight class for grouping.") ?? "Manage per-tournament registration timing, correction windows, and club-wise weigh-in updates that automatically refresh weight class for grouping."}
       />
 
-      <Tabs defaultValue={initialTab} className="space-y-5">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-5">
         <TabsList className="bg-surface-muted p-1 rounded-xl h-auto flex w-full justify-start overflow-x-auto">
           <TabsTrigger value="tournaments" className="data-[state=active]:bg-surface rounded-lg px-4 py-2">Tournament windows</TabsTrigger>
           <TabsTrigger value="weighin" className="data-[state=active]:bg-surface rounded-lg px-4 py-2">Weigh-in updates</TabsTrigger>
@@ -368,7 +401,7 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
               </Button>
             </div>
 
-            {loadingTournaments ? (
+            {loadingTournaments || !tournamentsLoaded ? (
               <div className="mt-5">
                 <SectionLoader
                   title="Loading tournament windows"
@@ -695,7 +728,7 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
               {seasonFilter !== "current" ? " · historical season view" : ""}
             </div>
 
-            {loadingClubs || loadingReweigh ? (
+            {loadingClubs || loadingReweigh || !clubsLoaded || !reweighLoaded ? (
               <div className="mt-5">
                 <SectionLoader
                   title="Loading weigh-in board"

@@ -3,6 +3,26 @@ const BASE_URL = String(RAW_BASE_URL).replace(/\/+$/, "");
 const ACCESS_TOKEN_KEY = "tos-access-token";
 const REFRESH_TOKEN_KEY = "tos-refresh-token";
 const inFlightGetRequests = new Map();
+const API_TIMING_KEY = "__PRIMAL_API_TIMINGS__";
+const API_TIMING_LIMIT = 100;
+
+function nowMs() {
+  if (typeof performance !== "undefined" && typeof performance.now === "function") {
+    return performance.now();
+  }
+  return Date.now();
+}
+
+function recordApiTiming(entry) {
+  if (typeof window === "undefined") return;
+  const current = Array.isArray(window[API_TIMING_KEY]) ? window[API_TIMING_KEY] : [];
+  window[API_TIMING_KEY] = [entry, ...current].slice(0, API_TIMING_LIMIT);
+}
+
+export function getApiTimings() {
+  if (typeof window === "undefined") return [];
+  return Array.isArray(window[API_TIMING_KEY]) ? [...window[API_TIMING_KEY]] : [];
+}
 
 export function resolveBackendUrl(pathOrUrl) {
   const raw = String(pathOrUrl || "").trim();
@@ -112,7 +132,36 @@ async function request(method, path, { body, query, headers = {}, raw = false, r
   if (body !== undefined) init.body = isFormData ? body : JSON.stringify(body);
 
   const run = async () => {
-    const res = await fetch(url.toString(), init);
+    const startedAt = nowMs();
+    let res = null;
+    try {
+      res = await fetch(url.toString(), init);
+    } catch (err) {
+      recordApiTiming({
+        method,
+        url: url.toString(),
+        path,
+        status: 0,
+        ok: false,
+        durationMs: Math.round(nowMs() - startedAt),
+        serverTiming: "",
+        error: err.message,
+        at: new Date().toISOString(),
+      });
+      throw err;
+    }
+    const durationMs = Math.round(nowMs() - startedAt);
+    const serverTiming = res.headers.get("server-timing") || "";
+    recordApiTiming({
+      method,
+      url: url.toString(),
+      path,
+      status: res.status,
+      ok: res.ok,
+      durationMs,
+      serverTiming,
+      at: new Date().toISOString(),
+    });
     if (res.status === 401 && retry && !path.includes("/api/auth/")) {
       const refreshed = await refreshAccessToken();
       if (refreshed) {

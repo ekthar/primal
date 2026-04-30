@@ -6,7 +6,7 @@ const { STATUS, assertTransition } = require('../statusMachine');
 const { ApiError } = require('../apiError');
 const { config } = require('../config');
 const { write: auditWrite } = require('../audit');
-const { dispatch: notify } = require('../notifications');
+const { dispatchDeferred: notify } = require('../notifications');
 const { createHash } = require('crypto');
 const tournamentService = require('./tournament.service');
 const documentStorage = require('./documentStorage.service');
@@ -403,7 +403,7 @@ async function listForMe(user, query = {}) {
   // applicant
   const profile = await profilesRepo.findByUserId(user.id);
   if (!profile) return [];
-  return appsRepo.query({ ...query }).then((list) => list.filter((a) => a.profile_id === profile.id).map(withDisplayFields));
+  return appsRepo.query({ ...query, profileId: profile.id }).then((list) => list.map(withDisplayFields));
 }
 
 async function requestCancel(user, id, { reason }, ctx = {}) {
@@ -457,7 +457,7 @@ async function notifySubmission(app, template) {
   const { users: usersRepo } = require('../repositories');
   const u = await usersRepo.findById(user);
   if (!u) return;
-  await notify({
+  notify({
     userId: u.id, applicationId: app.id,
     channels: ['whatsapp', 'email', 'sms'],
     to: { email: u.email, phone: u.phone, whatsapp: u.phone },

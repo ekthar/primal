@@ -5,7 +5,7 @@ const { STATUS, assertTransition } = require('../statusMachine');
 const { ApiError } = require('../apiError');
 const { config } = require('../config');
 const { write: auditWrite } = require('../audit');
-const { dispatch: notify } = require('../notifications');
+const { dispatchDeferred: notify } = require('../notifications');
 const webhookService = require('./webhook.service');
 const bracketService = require('./bracket.service');
 const { formatPersonName, applicationDisplayId } = require('./identity.service');
@@ -148,7 +148,7 @@ async function notifyApplication(app, template, reason) {
   if (!full || !full.submitted_by) return;
   const user = await usersRepo.findById(full.submitted_by);
   if (!user) return;
-  await notify({
+  notify({
     userId: user.id, applicationId: app.id,
     channels: ['whatsapp', 'email', 'sms'],
     to: { email: user.email, phone: user.phone, whatsapp: user.phone },
