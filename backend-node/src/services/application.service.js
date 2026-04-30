@@ -240,7 +240,10 @@ async function submit(user, id, ctx = {}) {
   await auditWrite({ actorUserId: user.id, actorRole: user.role, action: 'application.submit',
     entityType: 'application', entityId: id, payload: { reviewerId: updated.reviewer_id }, requestIp: ctx.ip });
 
-  await notifySubmission(updated);
+  await notifySubmission(
+    updated,
+    app.status === STATUS.NEEDS_CORRECTION ? 'application.resubmitted' : 'application.submitted'
+  );
   return updated;
 }
 
@@ -446,7 +449,7 @@ async function requestCancel(user, id, { reason }, ctx = {}) {
 }
 
 // ---- Notifications -----------------------------------------------------------
-async function notifySubmission(app) {
+async function notifySubmission(app, template) {
   const full = await appsRepo.findFullById(app.id);
   if (!full) return;
   const user = full.submitted_by;
@@ -456,9 +459,9 @@ async function notifySubmission(app) {
   if (!u) return;
   await notify({
     userId: u.id, applicationId: app.id,
-    channels: ['email', 'push', 'whatsapp', 'sms'],
+    channels: ['whatsapp', 'email', 'sms'],
     to: { email: u.email, phone: u.phone, whatsapp: u.phone },
-    template: 'application.submitted',
+    template,
     payload: {
       applicantName: formatPersonName(full.first_name, full.last_name),
       applicationDisplayId: applicationDisplayId(app.id),

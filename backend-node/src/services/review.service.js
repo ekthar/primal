@@ -42,6 +42,7 @@ async function startReview(actor, applicationId, ctx = {}) {
     actorUserId: actor.id, actorRole: actor.role, reason: 'Review started' });
   await auditWrite({ actorUserId: actor.id, actorRole: actor.role, action: 'review.start',
     entityType: 'application', entityId: applicationId, payload: {}, requestIp: ctx.ip });
+  await notifyApplication(updated, 'application.under_review', null);
   return updated;
 }
 
@@ -138,22 +139,18 @@ async function reopen(actor, applicationId, { reason }, ctx = {}) {
   await auditWrite({ actorUserId: actor.id, actorRole: actor.role, action: 'application.reopen',
     entityType: 'application', entityId: applicationId, payload: { reason }, requestIp: ctx.ip });
   await bracketService.refreshSuggestedForTournament(app.tournament_id, { actorUserId: actor.id });
+  await notifyApplication(updated, 'application.reopened', reason);
   return updated;
 }
 
-async function notifyDecision(app, toStatus, reason) {
+async function notifyApplication(app, template, reason) {
   const full = await appsRepo.findFullById(app.id);
   if (!full || !full.submitted_by) return;
   const user = await usersRepo.findById(full.submitted_by);
   if (!user) return;
-  const template =
-    toStatus === STATUS.APPROVED ? 'application.approved' :
-    toStatus === STATUS.REJECTED ? 'application.rejected' :
-    toStatus === STATUS.NEEDS_CORRECTION ? 'application.needs_correction' : null;
-  if (!template) return;
   await notify({
     userId: user.id, applicationId: app.id,
-    channels: ['email', 'push', 'whatsapp', 'sms'],
+    channels: ['whatsapp', 'email', 'sms'],
     to: { email: user.email, phone: user.phone, whatsapp: user.phone },
     template,
     payload: {
@@ -163,8 +160,20 @@ async function notifyDecision(app, toStatus, reason) {
       reason,
       dueAt: app.correction_due_at,
       appealWindowDays: config.workflow.appealWindowDays,
+      slaHours: config.workflow.reviewSlaHours,
     },
   });
+}
+
+async function notifyDecision(app, toStatus, reason) {
+  const template =
+    toStatus === STATUS.APPROVED ? 'application.approved' :
+    toStatus === STATUS.REJECTED ? 'application.rejected' :
+    toStatus === STATUS.NEEDS_CORRECTION ? 'application.needs_correction' : null;
+  if (!template) return;
+  await notifyApplication(app, template, reason);
+  const full = await appsRepo.findFullById(app.id);
+  if (!full) return;
   webhookService.emitAsync(template, {
     applicationId: app.id,
     applicationDisplayId: applicationDisplayId(app.id),

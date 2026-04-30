@@ -943,6 +943,51 @@ function NotificationsHealthPanel() {
           </div>
         </div>
       ) : null}
+
+      {health?.whatsappTemplates?.length ? (
+        <div className="rounded-2xl border border-border bg-background/60 overflow-hidden">
+          <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <h3 className="font-display text-lg font-semibold tracking-tight">WhatsApp message design</h3>
+              <p className="text-xs text-secondary-muted mt-1">Preview copy used by Twilio before email/SMS fallback.</p>
+            </div>
+            <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-800">
+              <MessageCircle className="size-3.5" /> WhatsApp first
+            </span>
+          </div>
+          <div className="grid gap-0 lg:grid-cols-[280px_1fr]">
+            <div className="border-b lg:border-b-0 lg:border-r border-border max-h-[520px] overflow-auto bg-surface-muted/40">
+              {health.whatsappTemplates.map((template) => (
+                <button
+                  key={template.key}
+                  type="button"
+                  className="w-full text-left px-4 py-3 border-b border-border last:border-b-0 hover:bg-surface transition-colors"
+                >
+                  <div className="font-mono text-xs text-foreground truncate">{template.key}</div>
+                  <div className="text-[11px] text-tertiary mt-1 truncate">{template.preview.split("\n").find(Boolean)}</div>
+                </button>
+              ))}
+            </div>
+            <div className="p-5 bg-[linear-gradient(135deg,#f7faf7_0%,#eef6f1_50%,#f7f2e8_100%)]">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {health.whatsappTemplates.slice(0, 9).map((template) => (
+                  <div key={template.key} className="min-w-0">
+                    <div className="mb-2 font-mono text-[11px] text-secondary-muted truncate">{template.key}</div>
+                    <div className="rounded-2xl rounded-tr-md border border-emerald-100 bg-[#dcf8c6] px-4 py-3 shadow-sm">
+                      <pre className="whitespace-pre-wrap break-words font-sans text-[12px] leading-relaxed text-[#1f2d1f]">{template.preview}</pre>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {health.whatsappTemplates.length > 9 ? (
+                <div className="mt-4 text-xs text-secondary-muted">
+                  Showing 9 of {health.whatsappTemplates.length} WhatsApp templates. Full names are listed on the left.
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

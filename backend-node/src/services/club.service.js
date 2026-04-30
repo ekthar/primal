@@ -8,8 +8,55 @@ const { randomBytes } = require('crypto');
 const { customAlphabet } = require('nanoid');
 const { splitPersonName } = require('./identity.service');
 const { deriveOfficialWeightClass } = require('../domain/categoryRules');
+const { dispatch: notify } = require('../notifications');
 
 const createCode = customAlphabet('ABCDEFGHJKLMNPQRSTUVWXYZ23456789', 10);
+const MOBILE_FALLBACK_CHANNELS = ['whatsapp', 'email', 'sms'];
+
+function clubCode(club) {
+  return club?.metadata?.clubCode || null;
+}
+
+function clubRecipient(user) {
+  return { email: user.email, phone: user.phone, whatsapp: user.phone };
+}
+
+function participantRecipient(user, phone) {
+  const targetPhone = phone || user.phone || null;
+  return { email: user.email, phone: targetPhone, whatsapp: targetPhone };
+}
+
+async function notifyClubManager({ user, club, template, payload }) {
+  await notify({
+    userId: user.id,
+    channels: MOBILE_FALLBACK_CHANNELS,
+    to: clubRecipient(user),
+    template,
+    payload: {
+      recipientName: user.name,
+      clubName: club.name,
+      clubCode: clubCode(club),
+      city: club.city,
+      status: club.status,
+      email: user.email,
+      ...payload,
+    },
+  });
+}
+
+async function notifyParticipant({ user, phone, template, payload }) {
+  await notify({
+    userId: user.id,
+    channels: MOBILE_FALLBACK_CHANNELS,
+    to: participantRecipient(user, phone),
+    template,
+    payload: {
+      recipientName: user.name,
+      email: user.email,
+      ...payload,
+    },
+  });
+}
 
 async function assertClubAccess(user, clubId) {
   const club = await clubsRepo.findById(clubId);
@@ -35,6 +82,7 @@ async function createClub(user, data, ctx = {}) {
   await clubsRepo.addMember(club.id, user.id, 'manager');
   await auditWrite({ actorUserId: user.id, actorRole: user.role, action: 'club.create',
     entityType: 'club', entityId: club.id, payload: payload, requestIp: ctx.ip });
+  await notifyClubManager({ user, club, template: 'club.created', payload: {} });
   return club;
 }
 
@@ -61,6 +109,15 @@ async function updateClub(user, id, patch, ctx = {}) {
   const updated = await clubsRepo.update(id, patch);
   await auditWrite({ actorUserId: user.id, actorRole: user.role, action: 'club.update',
     entityType: 'club', entityId: id, payload: patch, requestIp: ctx.ip });
+  const manager = updated.primary_user_id ? await usersRepo.findById(updated.primary_user_id) : null;
+  if (manager) {
+    await notifyClubManager({
+      user: manager,
+      club: updated,
+      template: 'club.updated',
+      payload: { updatedFields: Object.keys(patch).join(', ') },
+    });
+  }
   return updated;
 }
 
@@ -69,6 +126,10 @@ async function approveClub(user, id, ctx = {}) {
   const updated = await clubsRepo.update(id, { status: 'active' });
   await auditWrite({ actorUserId: user.id, actorRole: 'admin', action: 'club.approve',
     entityType: 'club', entityId: id, payload: {}, requestIp: ctx.ip });
+  const manager = updated.primary_user_id ? await usersRepo.findById(updated.primary_user_id) : null;
+  if (manager) {
+    await notifyClubManager({ user: manager, club: updated, template: 'club.approved', payload: {} });
+  }
   return updated;
 }
 
@@ -84,6 +145,10 @@ async function softDeleteClub(user, id, ctx = {}) {
   await clubsRepo.softDelete(id);
   await auditWrite({ actorUserId: user.id, actorRole: user.role, action: 'club.soft_delete',
     entityType: 'club', entityId: id, payload: {}, requestIp: ctx.ip });
+  const manager = club.primary_user_id ? await usersRepo.findById(club.primary_user_id) : null;
+  if (manager) {
+    await notifyClubManager({ user: manager, club, template: 'club.deactivated', payload: {} });
+  }
   return { ok: true };
 }
 
@@ -93,6 +158,10 @@ async function restoreClub(user, id, ctx = {}) {
   if (!restored) throw ApiError.notFound();
   await auditWrite({ actorUserId: user.id, actorRole: user.role, action: 'club.restore',
     entityType: 'club', entityId: id, payload: {}, requestIp: ctx.ip });
+  const manager = restored.primary_user_id ? await usersRepo.findById(restored.primary_user_id) : null;
+  if (manager) {
+    await notifyClubManager({ user: manager, club: restored, template: 'club.restored', payload: {} });
+  }
   return restored;
 }
 
@@ -185,6 +254,17 @@ async function createParticipant(user, clubId, payload, ctx = {}) {
   };
   if (temporaryPassword) out.temporaryPassword = temporaryPassword;
   if (resetUrl && user.role !== 'admin') out.resetUrl = resetUrl;
+  await notifyParticipant({
+    user: participantUser,
+    phone: payload.phone || null,
+    template: 'club.participant_created',
+    payload: {
+      participantName: fullName,
+      clubName: club.name,
+      fighterCode: profile?.metadata?.fighterCode || null,
+      resetUrl,
+    },
+  });
   return out;
 }
 
@@ -253,6 +333,16 @@ async function updateParticipant(user, clubId, profileId, payload, ctx) {
     payload: { clubId: club.id, userId: participantUser.id },
     requestIp: ctx.ip,
   });
+  await notifyParticipant({
+    user: participantUser,
+    phone: nextPhone,
+    template: 'club.participant_updated',
+    payload: {
+      participantName: fullName,
+      clubName: club.name,
+      fighterCode: updated?.metadata?.fighterCode || null,
+    },
+  });
 
   return {
     profile: {
@@ -282,6 +372,16 @@ async function issueParticipantResetLink(user, clubId, profileId, ctx = {}) {
     entityId: profile.id,
     payload: { clubId: club.id, userId: participantUser.id },
     requestIp: ctx.ip,
+  });
+  await notifyParticipant({
+    user: participantUser,
+    phone: participantUser.phone || profile?.metadata?.phone || null,
+    template: 'club.participant_reset_link',
+    payload: {
+      participantName: [profile.first_name, profile.last_name].filter(Boolean).join(' '),
+      fighterCode: profile?.metadata?.fighterCode || null,
+      resetUrl: issued.resetUrl,
+    },
   });
 
   return {

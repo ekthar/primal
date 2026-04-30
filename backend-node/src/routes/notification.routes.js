@@ -9,6 +9,45 @@ const { query } = require('../db');
 
 const router = Router();
 
+const whatsappPreviewPayload = {
+  recipientName: 'Arjun',
+  applicantName: 'Arjun Rao',
+  participantName: 'Arjun Rao',
+  clubName: 'Primal Combat Club',
+  clubCode: 'CLB-PRIMAL01',
+  fighterCode: 'FIG-PRIMAL01',
+  applicationDisplayId: 'APP-2026-0001',
+  tournamentName: 'Primal Fight Series',
+  divisionName: 'MMA Senior 70 kg',
+  email: 'fighter@example.com',
+  role: 'applicant',
+  city: 'Kochi',
+  status: 'Active',
+  reason: 'Medical document needs a clearer upload',
+  dueAt: '2026-05-02 18:00',
+  appealWindowDays: 7,
+  slaHours: 48,
+  resetUrl: 'https://primal.example/reset-password',
+  registrationClosesAt: '2026-05-10 23:59',
+  weighInAt: '2026-05-18 08:00',
+  venue: 'Primal Arena',
+  weightKg: 69.8,
+  firstMatch: 'Mat 1, Bout 4',
+  circularTitle: 'Weigh-in and document circular',
+  audience: 'All registered fighters',
+  ctaUrl: 'https://primal.example/circulars',
+  updatedFields: 'city, contact number',
+};
+
+function buildWhatsappTemplatePreviews() {
+  return Object.entries(TEMPLATES)
+    .filter(([, template]) => typeof template.whatsappText === 'function')
+    .map(([key, template]) => ({
+      key,
+      preview: template.whatsappText(whatsappPreviewPayload),
+    }));
+}
+
 // Health panel — shows which channels are wired without leaking secrets.
 router.get('/health', requireAuth, requireRole('admin'), ah(async (_req, res) => {
   const { rows } = await query(`
@@ -45,6 +84,7 @@ router.get('/health', requireAuth, requireRole('admin'), ah(async (_req, res) =>
       note: 'FCM/APNs wiring is a follow-up',
     },
     templates: Object.keys(TEMPLATES),
+    whatsappTemplates: buildWhatsappTemplatePreviews(),
     recent,
   });
 }));
@@ -53,7 +93,7 @@ async function resendForApplication(req, res) {
   const { applicationId } = req.params;
   const channels = Array.isArray(req.body?.channels) && req.body.channels.length
     ? req.body.channels.filter((c) => ['email', 'sms', 'whatsapp', 'push'].includes(c))
-    : ['email'];
+    : ['whatsapp', 'email', 'sms'];
   if (!channels.length) {
     return res.status(400).json({ error: 'no_valid_channels', hint: 'Allowed: email, sms, whatsapp, push' });
   }

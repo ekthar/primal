@@ -345,7 +345,7 @@ export default function ReviewerWorkbench() {
     setActionBusy(true);
     const { error } = await api.resendNotification(activeId, {
       template,
-      channels: ["email", "whatsapp", "sms"],
+      channels: ["whatsapp", "email", "sms"],
       reason: activeApplication.review_notes || activeApplication.rejection_reason || "",
     });
     setActionBusy(false);
@@ -353,7 +353,7 @@ export default function ReviewerWorkbench() {
       toast.error(error.message || "Failed to resend notification");
       return;
     }
-    toast.success("Notification dispatched (email + SMS fallback)");
+    toast.success("Notification dispatched (WhatsApp, then email/SMS fallback)");
   }
 
   async function handleDocumentVerify(documentId, verified, reason) {
