@@ -1,0 +1,19 @@
+[Unit]
+Description=Primal API
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=primal
+Group=primal
+WorkingDirectory=/opt/primal/backend-node
+EnvironmentFile=/etc/primal/primal-api.env
+ExecStart=/usr/bin/bash -lc 'npm run migrate && npm start'
+Restart=always
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

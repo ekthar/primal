@@ -85,9 +85,30 @@ Notes for Northflank:
 
 ## Deployment architecture
 
-- Frontend: Netlify
-- API: Northflank
-- Database: Neon PostgreSQL
+- Frontend: Cloudflare Pages
+- API: Oracle Cloud Always Free VM or any always-on Node host
+- Database: PostgreSQL on the same VM for the free Oracle setup, or a managed PostgreSQL provider
+
+## Oracle Cloud Always Free VM deployment
+
+Use this when you want the backend to behave like a normal always-on Node server instead of a serverless function.
+
+Repository templates:
+
+- `deploy/oracle/primal-api.service` - systemd service for the API
+- `deploy/oracle/primal-api.env.example` - production environment template for Oracle VM + local PostgreSQL
+- `deploy/oracle/Caddyfile.example` - HTTPS reverse proxy example
+
+Runtime choices:
+
+- `DATABASE_URL=postgresql://primal:<password>@127.0.0.1:5432/primal`
+- `PG_SSL=false`
+- `UPLOAD_STORAGE_PROVIDER=local`
+- `UPLOAD_DIR=/var/lib/primal/uploads`
+- `WEB_BASE_URL=<your Cloudflare Pages URL>`
+- `CORS_ORIGINS=<your Cloudflare Pages URL>,<your custom frontend domain>`
+
+Oracle does not need a special code path. The existing backend uses the normal `pg` driver and reads all deployment behavior from environment variables.
 
 ## Production-readiness notes
 
