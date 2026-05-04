@@ -248,7 +248,7 @@ function Hero({ registrationOpen, nextTournamentLabel, heroConsole }) {
         aria-hidden
       />
       {/* z-[5]: pointer-tracked spotlight */}
-      {allowCinematicMotion && !reduced ? <Spotlight /> : null}
+      {allowCinematicMotion && !reduced ? <Spotlight className="z-[5]" /> : null}
       <motion.div
         style={{ opacity: reduced ? 0.5 : overlay }}
         className="absolute inset-0 z-[3] bg-[linear-gradient(180deg,rgba(255,255,255,0.54)_0%,rgba(255,255,255,0.28)_34%,rgba(255,255,255,0.66)_100%)] dark:bg-[linear-gradient(180deg,rgba(10,10,10,0.28)_0%,rgba(10,10,10,0.2)_34%,rgba(10,10,10,0.7)_100%)]"
@@ -1136,7 +1136,7 @@ export default function Landing() {
     } else if (open?.starts_on) {
       const start = fmt(open.starts_on);
       const end = fmt(open.ends_on);
-      registrationDates = end ? `${start} → ${end}` : start || registrationDates;
+      registrationDates = (start && end) ? `${start} → ${end}` : (start || end || registrationDates);
     }
     return {
       registrationDates,
