@@ -21,24 +21,17 @@ export default function AdminOverview() {
 
   async function loadOverview() {
     setLoading(true);
-    const [summaryRes, queueRes] = await Promise.all([
-      api.reportSummary(),
-      api.queueBoard({ status: "all", limit: 50, offset: 0 }),
-    ]);
+    const summaryRes = await api.reportSummary();
     setLoading(false);
 
     if (summaryRes.error) {
       toast.error(summaryRes.error.message || "Failed to load report summary");
       return;
     }
-    if (queueRes.error) {
-      toast.error(queueRes.error.message || "Failed to load queue stats");
-      return;
-    }
 
     setSla(summaryRes.data?.sla || null);
     setWorkload(summaryRes.data?.workload || []);
-    setCounts(queueRes.data?.counts || {});
+    setCounts(summaryRes.data?.counts || {});
   }
 
   async function handleApprovedParticipantsExport() {

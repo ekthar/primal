@@ -26,7 +26,7 @@ import EmptyState from "@/components/shared/EmptyState";
 import { SectionLoader } from "@/components/shared/PrimalLoader";
 import { StickyActionBar } from "@/components/shared/ResponsivePrimitives";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import api, { isApiLive, resolveBackendUrl } from "@/lib/api";
+import api, { resolveBackendUrl } from "@/lib/api";
 import {
   pickEditableFormData,
   serializeFormDataForPatch,
@@ -54,6 +54,7 @@ const CORRECTION_FIELD_OPTIONS = [
   { id: "photo_id", label: "Photo ID" },
   { id: "consent", label: "Signed consent" },
 ];
+const PAGE_SIZE = 100;
 
 function parseFieldTokens(fieldsString) {
   if (!fieldsString) return [];
@@ -74,6 +75,8 @@ export default function ReviewerWorkbench() {
   const routeId = Array.isArray(router.query.id) ? router.query.id[0] : router.query.id;
   const [queue, setQueue] = useState([]);
   const [loadingQueue, setLoadingQueue] = useState(true);
+  const [loadingMoreQueue, setLoadingMoreQueue] = useState(false);
+  const [hasMoreQueue, setHasMoreQueue] = useState(false);
   const [search, setSearch] = useState("");
   const [activeId, setActiveId] = useState(routeId || null);
   const [activeApplication, setActiveApplication] = useState(null);
@@ -90,7 +93,8 @@ export default function ReviewerWorkbench() {
   const [adminEditSaving, setAdminEditSaving] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState(null);
   const [pdfPreviewError, setPdfPreviewError] = useState(null);
-  // QR scanner refs are owned by <LiveQrScanner /> now.
+  const scannerRequestRef = useRef("");
+  const queueRequestRef = useRef(0);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -146,35 +150,35 @@ export default function ReviewerWorkbench() {
   }, [activeApplication?.id]);
 
   useEffect(() => {
-    isApiLive().then((live) => {
-      if (!live) {
-        const marker = "review-workbench-api-unreachable-toast-shown";
-        if (typeof window !== "undefined" && !window.sessionStorage.getItem(marker)) {
-          window.sessionStorage.setItem(marker, "1");
-          toast.error("Backend API is not reachable. Review actions will fail until the API is back online.");
-        }
-      }
-    });
-  }, []);
-
-  useEffect(() => {
     if (!scannerOpen) {
       setScannerError("");
       setScannerBusy(false);
       setScannerResult(null);
+      scannerRequestRef.current = "";
     }
   }, [scannerOpen]);
 
-  async function loadQueue() {
-    setLoadingQueue(true);
-    const { data, error } = await api.queueBoard({ status: "all", q: search || undefined, limit: 200, offset: 0 });
-    setLoadingQueue(false);
+  async function loadQueue({ append = false, offset = 0 } = {}) {
+    const requestId = queueRequestRef.current + 1;
+    queueRequestRef.current = requestId;
+    if (append) setLoadingMoreQueue(true);
+    else setLoadingQueue(true);
+    const { data, error } = await api.queueBoard({ status: "all", q: search || undefined, limit: PAGE_SIZE, offset });
+    if (requestId !== queueRequestRef.current) return;
+    if (append) setLoadingMoreQueue(false);
+    else setLoadingQueue(false);
     if (error) {
       toast.error(error.message || "Failed to load reviewer queue");
       return;
     }
     const items = data.items || [];
-    setQueue(items);
+    setQueue((current) => append ? [...current, ...items] : items);
+    setHasMoreQueue(items.length === PAGE_SIZE);
+  }
+
+  function loadMoreQueue() {
+    if (loadingQueue || loadingMoreQueue || !hasMoreQueue) return;
+    loadQueue({ append: true, offset: queue.length });
   }
 
   async function loadApplication(id) {
@@ -217,22 +221,27 @@ export default function ReviewerWorkbench() {
   }
 
   async function verifyScannedCode(rawValue) {
+    const normalizedValue = String(rawValue || "").trim();
+    if (!normalizedValue || scannerBusy || scannerRequestRef.current === normalizedValue) return;
+    scannerRequestRef.current = normalizedValue;
     setScannerBusy(true);
     setScannerError("");
     setScannerResult(null);
-    setScannedValue(rawValue);
+    setScannedValue(normalizedValue);
 
     let verificationUrl;
     try {
-      verificationUrl = new URL(rawValue, window.location.origin);
+      verificationUrl = new URL(normalizedValue, window.location.origin);
     } catch (_error) {
       setScannerBusy(false);
+      scannerRequestRef.current = "";
       setScannerError("The scanned QR code is not a valid verification URL.");
       return;
     }
 
     if (!verificationUrl.pathname.includes("/api/public/verify/application-signature")) {
       setScannerBusy(false);
+      scannerRequestRef.current = "";
       setScannerError("This QR code is not a Primal application verification code.");
       return;
     }
@@ -241,11 +250,20 @@ export default function ReviewerWorkbench() {
     setScannerBusy(false);
     if (error) {
       setScannerResult(null);
+      scannerRequestRef.current = "";
       setScannerError(error.message || error.reason || "Verification failed.");
       return;
     }
 
     setScannerResult(data);
+    if (data?.valid && data?.application?.id) {
+      toast.success("Signature verified. Opening application.");
+      setScannerOpen(false);
+      setActiveId(data.application.id);
+      router.replace(`/admin/review/${data.application.id}`);
+    } else {
+      scannerRequestRef.current = "";
+    }
   }
 
   function openVerifiedApplication() {
@@ -327,7 +345,7 @@ export default function ReviewerWorkbench() {
     setActionBusy(true);
     const { error } = await api.resendNotification(activeId, {
       template,
-      channels: ["email", "whatsapp", "sms"],
+      channels: ["whatsapp", "email", "sms"],
       reason: activeApplication.review_notes || activeApplication.rejection_reason || "",
     });
     setActionBusy(false);
@@ -335,7 +353,7 @@ export default function ReviewerWorkbench() {
       toast.error(error.message || "Failed to resend notification");
       return;
     }
-    toast.success("Notification dispatched (email + SMS fallback)");
+    toast.success("Notification dispatched (WhatsApp, then email/SMS fallback)");
   }
 
   async function handleDocumentVerify(documentId, verified, reason) {
@@ -452,6 +470,13 @@ export default function ReviewerWorkbench() {
               </div>
             </button>
           ))}
+          {hasMoreQueue ? (
+            <div className="p-4">
+              <Button variant="outline" className="w-full" onClick={loadMoreQueue} disabled={loadingMoreQueue}>
+                {loadingMoreQueue ? "Loading..." : "Load more"}
+              </Button>
+            </div>
+          ) : null}
         </div>
       </aside>
 
@@ -558,6 +583,13 @@ export default function ReviewerWorkbench() {
                         </div>
                       </button>
                     ))}
+                    {hasMoreQueue ? (
+                      <div className="p-4">
+                        <Button variant="outline" className="w-full" onClick={loadMoreQueue} disabled={loadingMoreQueue}>
+                          {loadingMoreQueue ? "Loading..." : "Load more"}
+                        </Button>
+                      </div>
+                    ) : null}
                   </div>
                 </SheetContent>
               </Sheet>
@@ -769,6 +801,12 @@ export default function ReviewerWorkbench() {
               onScan={(value) => verifyScannedCode(value)}
               onError={(message) => setScannerError(message)}
             />
+            {scannerBusy ? (
+              <div className="rounded-2xl border border-border bg-surface-muted/40 px-4 py-3 text-sm text-secondary-muted">
+                Verifying scanned application...
+              </div>
+            ) : null}
+            {scannerError || (scannerResult && !scannerResult.valid) ? (
             <div className="space-y-2">
               <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-tertiary">{locale?.t("reviewer.qr.pasteUrl", "Paste verification URL") ?? "Paste verification URL"}</div>
               <Input
@@ -781,6 +819,7 @@ export default function ReviewerWorkbench() {
                 {locale?.t("reviewer.qr.verifyCode", "Verify code") ?? "Verify code"}
               </Button>
             </div>
+            ) : null}
             {scannerError ? (
               <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
                 {scannerError}

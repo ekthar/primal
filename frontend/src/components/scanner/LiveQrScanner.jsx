@@ -71,6 +71,7 @@ export default function LiveQrScanner({
   videoClassName = "",
   showPhotoPick = true,
   feedback = true,
+  stopOnScan = true,
 }) {
   const videoRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -98,9 +99,24 @@ export default function LiveQrScanner({
         vibrate();
         beep();
       }
+      if (stopOnScan) {
+        const scanner = scannerRef.current;
+        if (scanner) {
+          scanner.stop().catch(() => {});
+          try {
+            scanner.destroy();
+          } catch {
+            // already destroyed
+          }
+          scannerRef.current = null;
+          setRunning(false);
+          setFlashOn(false);
+          setHasFlash(false);
+        }
+      }
       onScan?.(raw);
     },
-    [onScan, feedback],
+    [onScan, feedback, stopOnScan],
   );
 
   // When the parent provides onError, it owns the error UI and we suppress

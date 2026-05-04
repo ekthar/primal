@@ -1,6 +1,28 @@
-const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.REACT_APP_BACKEND_URL || "";
+const RAW_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.REACT_APP_BACKEND_URL || "";
+const BASE_URL = String(RAW_BASE_URL).replace(/\/+$/, "");
 const ACCESS_TOKEN_KEY = "tos-access-token";
 const REFRESH_TOKEN_KEY = "tos-refresh-token";
+const inFlightGetRequests = new Map();
+const API_TIMING_KEY = "__PRIMAL_API_TIMINGS__";
+const API_TIMING_LIMIT = 100;
+
+function nowMs() {
+  if (typeof performance !== "undefined" && typeof performance.now === "function") {
+    return performance.now();
+  }
+  return Date.now();
+}
+
+function recordApiTiming(entry) {
+  if (typeof window === "undefined") return;
+  const current = Array.isArray(window[API_TIMING_KEY]) ? window[API_TIMING_KEY] : [];
+  window[API_TIMING_KEY] = [entry, ...current].slice(0, API_TIMING_LIMIT);
+}
+
+export function getApiTimings() {
+  if (typeof window === "undefined") return [];
+  return Array.isArray(window[API_TIMING_KEY]) ? [...window[API_TIMING_KEY]] : [];
+}
 
 export function resolveBackendUrl(pathOrUrl) {
   const raw = String(pathOrUrl || "").trim();
@@ -8,7 +30,7 @@ export function resolveBackendUrl(pathOrUrl) {
   if (/^https?:\/\//i.test(raw) || /^data:/i.test(raw) || /^blob:/i.test(raw)) return raw;
   const normalizedPath = raw.startsWith("/") ? raw : `/${raw}`;
   if (!BASE_URL) return normalizedPath;
-  return `${String(BASE_URL).replace(/\/+$/, "")}${normalizedPath}`;
+  return `${BASE_URL}${normalizedPath}`;
 }
 
 export function setSession({ accessToken, refreshToken }) {
@@ -87,7 +109,7 @@ async function refreshAccessToken() {
   return true;
 }
 
-async function request(method, path, { body, query, headers = {}, raw = false, retry = true } = {}) {
+async function request(method, path, { body, query, headers = {}, raw = false, retry = true, auth = true } = {}) {
   const url = new URL(`${BASE_URL}${path}`, window.location.origin);
   if (query) {
     Object.entries(query).forEach(([key, value]) => {
@@ -97,22 +119,53 @@ async function request(method, path, { body, query, headers = {}, raw = false, r
 
   const accessToken = getAccessToken();
   const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
+  const jsonHeaders = body !== undefined && !isFormData ? { "Content-Type": "application/json" } : {};
+  const authHeaders = auth && accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
   const init = {
     method,
     headers: {
-      ...(isFormData ? {} : { "Content-Type": "application/json" }),
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      ...jsonHeaders,
+      ...authHeaders,
       ...headers,
     },
   };
   if (body !== undefined) init.body = isFormData ? body : JSON.stringify(body);
 
-  try {
-    const res = await fetch(url.toString(), init);
+  const run = async () => {
+    const startedAt = nowMs();
+    let res = null;
+    try {
+      res = await fetch(url.toString(), init);
+    } catch (err) {
+      recordApiTiming({
+        method,
+        url: url.toString(),
+        path,
+        status: 0,
+        ok: false,
+        durationMs: Math.round(nowMs() - startedAt),
+        serverTiming: "",
+        error: err.message,
+        at: new Date().toISOString(),
+      });
+      throw err;
+    }
+    const durationMs = Math.round(nowMs() - startedAt);
+    const serverTiming = res.headers.get("server-timing") || "";
+    recordApiTiming({
+      method,
+      url: url.toString(),
+      path,
+      status: res.status,
+      ok: res.ok,
+      durationMs,
+      serverTiming,
+      at: new Date().toISOString(),
+    });
     if (res.status === 401 && retry && !path.includes("/api/auth/")) {
       const refreshed = await refreshAccessToken();
       if (refreshed) {
-        return request(method, path, { body, query, headers, raw, retry: false });
+        return request(method, path, { body, query, headers, raw, retry: false, auth });
       }
     }
 
@@ -122,6 +175,20 @@ async function request(method, path, { body, query, headers = {}, raw = false, r
     const payload = isJson ? await res.json() : await res.text();
     if (!res.ok) return { data: null, error: buildApiError(payload, res.status, res.statusText) };
     return { data: payload, error: null };
+  };
+
+  const dedupeKey = method === "GET" && !raw ? `${url.toString()}|${authHeaders.Authorization || ""}` : null;
+  if (dedupeKey && inFlightGetRequests.has(dedupeKey)) {
+    return inFlightGetRequests.get(dedupeKey);
+  }
+
+  try {
+    const promise = run();
+    if (dedupeKey) {
+      inFlightGetRequests.set(dedupeKey, promise);
+      promise.finally(() => inFlightGetRequests.delete(dedupeKey)).catch(() => {});
+    }
+    return await promise;
   } catch (err) {
     return { data: null, error: { code: "NETWORK", message: err.message } };
   }
@@ -211,6 +278,7 @@ export const api = {
   updateClub: (id, body) => request("PATCH", `/api/clubs/${id}`, { body }),
   listClubParticipants: (clubId, query) => request("GET", `/api/clubs/${clubId}/participants`, { query }),
   createClubParticipant: (clubId, body) => request("POST", `/api/clubs/${clubId}/participants`, { body }),
+  updateClubParticipant: (clubId, profileId, body) => request("PATCH", `/api/clubs/${clubId}/participants/${profileId}`, { body }),
   createClubParticipantResetLink: (clubId, profileId) => request("POST", `/api/clubs/${clubId}/participants/${profileId}/reset-link`),
 
   createApplication: (body) => request("POST", "/api/applications", { body }),
@@ -250,7 +318,7 @@ export const api = {
   openAppeals: () => request("GET", "/api/appeals/open"),
   decideAppeal: (id, body) => request("POST", `/api/appeals/${id}/decision`, { body }),
 
-  reportSummary: () => request("GET", "/api/reports/summary"),
+  reportSummary: (query) => request("GET", "/api/reports/summary", { query }),
   reportParticipants: (query) => request("GET", "/api/reports/participants", { query }),
   reportAnalytics: (query) => request("GET", "/api/reports/analytics", { query }),
   reportSeason: (id) => request("GET", `/api/reports/seasons/${id}`),
@@ -296,25 +364,26 @@ export const api = {
     filename: "primal-audit-trail.xlsx",
   }),
 
-  publicTournaments: () => request("GET", "/api/public/tournaments"),
-  publicTournamentBySlug: (slug) => request("GET", `/api/public/tournaments/${encodeURIComponent(slug)}`),
-  publicAthlete: (id) => request("GET", `/api/public/athletes/${encodeURIComponent(id)}`),
+  publicHome: () => request("GET", "/api/public/home", { auth: false }),
+  publicTournaments: () => request("GET", "/api/public/tournaments", { auth: false }),
+  publicTournamentBySlug: (slug) => request("GET", `/api/public/tournaments/${encodeURIComponent(slug)}`, { auth: false }),
+  publicAthlete: (id) => request("GET", `/api/public/athletes/${encodeURIComponent(id)}`, { auth: false }),
   publicCurrentTournament: async () => {
-    const current = await request("GET", "/api/public/tournaments/current");
+    const current = await request("GET", "/api/public/tournaments/current", { auth: false });
     if (!current.error) return current;
     if (!String(current.error?.code || "").includes("404")) return current;
-    const list = await request("GET", "/api/public/tournaments");
+    const list = await request("GET", "/api/public/tournaments", { auth: false });
     if (list.error) return current;
     const tournaments = list.data?.tournaments || [];
     const fallback = tournaments.find((item) => item.registrationOpen) || tournaments[0] || null;
     return { data: { tournament: fallback }, error: null };
   },
-  publicParticipants: (query) => request("GET", "/api/public/participants", { query }),
-  publicClubs: (query) => request("GET", "/api/public/clubs", { query }),
-  publicCirculars: (query) => request("GET", "/api/public/circulars", { query }),
-  publicIndiaStates: () => request("GET", "/api/public/india/states"),
-  publicIndiaDistricts: (state) => request("GET", "/api/public/india/districts", { query: { state } }),
-  publicIndiaPincodeLookup: (pincode) => request("GET", `/api/public/india/pincode/${encodeURIComponent(pincode)}`),
+  publicParticipants: (query) => request("GET", "/api/public/participants", { query, auth: false }),
+  publicClubs: (query) => request("GET", "/api/public/clubs", { query, auth: false }),
+  publicCirculars: (query) => request("GET", "/api/public/circulars", { query, auth: false }),
+  publicIndiaStates: () => request("GET", "/api/public/india/states", { auth: false }),
+  publicIndiaDistricts: (state) => request("GET", "/api/public/india/districts", { query: { state }, auth: false }),
+  publicIndiaPincodeLookup: (pincode) => request("GET", `/api/public/india/pincode/${encodeURIComponent(pincode)}`, { auth: false }),
   verifyApplicationSignatureUrl: (verificationUrl) => requestAbsolute(verificationUrl),
 
   adminTournaments: (query) => request("GET", "/api/tournaments", { query }),
@@ -357,9 +426,9 @@ export const api = {
     return request("POST", `/api/albums/${id}/photos`, { body });
   },
   adminDeleteAlbumPhoto: (albumId, photoId) => request("DELETE", `/api/albums/${albumId}/photos/${photoId}`),
-  publicListAlbums: (query) => request("GET", "/api/public/albums", { query }),
-  publicGetAlbum: (id) => request("GET", `/api/public/albums/${id}`),
-  publicRecentAlbumPhotos: (limit = 12) => request("GET", "/api/public/albums/recent-photos", { query: { limit } }),
+  publicListAlbums: (query) => request("GET", "/api/public/albums", { query, auth: false }),
+  publicGetAlbum: (id) => request("GET", `/api/public/albums/${id}`, { auth: false }),
+  publicRecentAlbumPhotos: (limit = 12) => request("GET", "/api/public/albums/recent-photos", { query: { limit }, auth: false }),
 
   // Weigh-ins (cage-side / weigh-in tablet)
   listWeighInsForTournament: (tournamentId) => request("GET", `/api/weigh-ins/by-tournament/${encodeURIComponent(tournamentId)}`),

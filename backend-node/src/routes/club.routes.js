@@ -41,6 +41,10 @@ router.post('/:id/participants', requireAuth, validate(schemas.club.createPartic
   res.status(201).json({ participant: await clubs.createParticipant(req.user, req.params.id, req.body, { ip: req.ip }) });
 }));
 
+router.patch('/:id/participants/:profileId', requireAuth, validate(schemas.club.updateParticipant), ah(async (req, res) => {
+  res.json({ participant: await clubs.updateParticipant(req.user, req.params.id, req.params.profileId, req.body, { ip: req.ip }) });
+}));
+
 router.post('/:id/participants/:profileId/reset-link', requireAuth, ah(async (req, res) => {
   res.json({ participant: await clubs.issueParticipantResetLink(req.user, req.params.id, req.params.profileId, { ip: req.ip }) });
 }));

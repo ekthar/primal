@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Bell, CalendarRange, CheckCircle2, Mail, MessageCircle, Plus, RefreshCcw, Save, Scale, Settings2, Trash2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { PageSectionHeader, ResponsivePageShell } from "@/components/shared/Resp
 import api from "@/lib/api";
 import { toast } from "sonner";
 import { useLocale } from "@/context/LocaleContext";
+import { deriveOfficialWeightClass } from "@/lib/categoryRules";
 
 const BACKLOG_ITEMS = [
   "Public brackets/results page",
@@ -23,36 +24,16 @@ const BACKLOG_ITEMS = [
   "Production deployment/wiring for the Node backend",
 ];
 
-const WEIGHT_CLASSES = {
-  male: [
-    { label: "-54 kg", max: 54 },
-    { label: "-57 kg", max: 57 },
-    { label: "-60 kg", max: 60 },
-    { label: "-63.5 kg", max: 63.5 },
-    { label: "-67 kg", max: 67 },
-    { label: "-71 kg", max: 71 },
-    { label: "-75 kg", max: 75 },
-    { label: "-81 kg", max: 81 },
-    { label: "-86 kg", max: 86 },
-    { label: "-91 kg", max: 91 },
-    { label: "+91 kg", max: 999 },
-  ],
-  female: [
-    { label: "-48 kg", max: 48 },
-    { label: "-52 kg", max: 52 },
-    { label: "-56 kg", max: 56 },
-    { label: "-60 kg", max: 60 },
-    { label: "-65 kg", max: 65 },
-    { label: "-70 kg", max: 70 },
-    { label: "+70 kg", max: 999 },
-  ],
-};
-
-function deriveWeightClass(gender, weightKg) {
-  const normalizedGender = String(gender || "").toLowerCase() === "female" ? "female" : "male";
-  const numeric = Number(weightKg || 0);
-  const table = WEIGHT_CLASSES[normalizedGender] || WEIGHT_CLASSES.male;
-  return table.find((entry) => numeric <= entry.max)?.label || "-";
+function deriveWeightClass(participant, weightKg) {
+  const selectedDisciplines = Array.isArray(participant?.metadata?.selectedDisciplines)
+    ? participant.metadata.selectedDisciplines
+    : [];
+  return deriveOfficialWeightClass({
+    disciplineId: selectedDisciplines[0] || participant?.discipline,
+    gender: participant?.gender,
+    dateOfBirth: participant?.date_of_birth,
+    weightKg,
+  }) || "-";
 }
 
 function formatDateTimeInput(value) {
@@ -80,7 +61,9 @@ function toIsoDateTime(value) {
 export default function AdminSettings({ initialTab = "tournaments" }) {
   const { user } = useAuth();
   const locale = useLocale();
-  const [loadingTournaments, setLoadingTournaments] = useState(true);
+  const [activeTab, setActiveTab] = useState(initialTab);
+  const [loadingTournaments, setLoadingTournaments] = useState(false);
+  const [tournamentsLoaded, setTournamentsLoaded] = useState(false);
   const [savingTournamentId, setSavingTournamentId] = useState(null);
   const [tournaments, setTournaments] = useState([]);
   const [tournamentDrafts, setTournamentDrafts] = useState({});
@@ -98,12 +81,15 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
     isPublic: "true",
   });
 
-  const [loadingClubs, setLoadingClubs] = useState(true);
-  const [loadingReweigh, setLoadingReweigh] = useState(true);
+  const [loadingClubs, setLoadingClubs] = useState(false);
+  const [clubsLoaded, setClubsLoaded] = useState(false);
+  const [loadingReweigh, setLoadingReweigh] = useState(false);
+  const [reweighLoaded, setReweighLoaded] = useState(false);
   const [savingProfileId, setSavingProfileId] = useState(null);
   const [clubs, setClubs] = useState([]);
   const [clubFilter, setClubFilter] = useState("all");
   const [participantQuery, setParticipantQuery] = useState("");
+  const [debouncedParticipantQuery, setDebouncedParticipantQuery] = useState("");
   const [participants, setParticipants] = useState([]);
   const [weightDrafts, setWeightDrafts] = useState({});
   /* Season filter: "current" resolves to the backend-defined current tournament
@@ -112,6 +98,8 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
      events without losing them. */
   const [seasonFilter, setSeasonFilter] = useState("current");
   const [currentSeason, setCurrentSeason] = useState(null);
+  const [currentSeasonLoaded, setCurrentSeasonLoaded] = useState(false);
+  const reweighRequestSeq = useRef(0);
   const publicCurrentSeasonId = currentSeason?.id || null;
   const fallbackPublicSeasonId = useMemo(() => {
     const current = tournaments.find((tournament) => tournament.is_public && !tournament.deleted_at);
@@ -122,20 +110,38 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
     : seasonFilter;
 
   useEffect(() => {
-    if (user?.role !== "admin") return;
-    loadTournaments();
-    loadClubs();
-    loadCurrentSeason();
-  }, [user?.role]);
+    setActiveTab(initialTab);
+  }, [initialTab]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedParticipantQuery(participantQuery), 300);
+    return () => clearTimeout(timer);
+  }, [participantQuery]);
 
   useEffect(() => {
     if (user?.role !== "admin") return;
+    if ((activeTab === "tournaments" || activeTab === "weighin") && !tournamentsLoaded && !loadingTournaments) {
+      loadTournaments();
+    }
+    if (activeTab === "weighin" && !clubsLoaded && !loadingClubs) {
+      loadClubs();
+    }
+    if (activeTab === "weighin" && !currentSeasonLoaded) {
+      loadCurrentSeason();
+    }
+  }, [user?.role, activeTab, tournamentsLoaded, clubsLoaded, currentSeasonLoaded, loadingTournaments, loadingClubs]);
+
+  useEffect(() => {
+    if (user?.role !== "admin" || activeTab !== "weighin") return;
+    const waitingForCurrentSeason = seasonFilter === "current" && !currentSeasonLoaded && !fallbackPublicSeasonId;
+    if (waitingForCurrentSeason) return;
     loadReweighList();
-  }, [user?.role, clubFilter, participantQuery, resolvedSeasonId]);
+  }, [user?.role, activeTab, clubFilter, debouncedParticipantQuery, resolvedSeasonId, seasonFilter, currentSeasonLoaded, fallbackPublicSeasonId]);
 
   async function loadCurrentSeason() {
     const { data } = await api.publicCurrentTournament();
     setCurrentSeason(data?.tournament || null);
+    setCurrentSeasonLoaded(true);
   }
 
   async function loadTournaments() {
@@ -143,11 +149,13 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
     const { data, error } = await api.adminTournaments({ limit: 200, offset: 0 });
     setLoadingTournaments(false);
     if (error) {
+      setTournamentsLoaded(true);
       toast.error(error.message || "Failed to load tournament settings");
       return;
     }
     const rows = data?.tournaments || [];
     setTournaments(rows);
+    setTournamentsLoaded(true);
     setTournamentDrafts(
       Object.fromEntries(
         rows.map((tournament) => [
@@ -173,22 +181,28 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
     const { data, error } = await api.listClubs({ limit: 200, offset: 0 });
     setLoadingClubs(false);
     if (error) {
+      setClubsLoaded(true);
       toast.error(error.message || "Failed to load clubs");
       return;
     }
     setClubs(data?.clubs || []);
+    setClubsLoaded(true);
   }
 
   async function loadReweighList() {
+    const requestId = reweighRequestSeq.current + 1;
+    reweighRequestSeq.current = requestId;
     setLoadingReweigh(true);
     const { data, error } = await api.adminReweighList({
       clubId: clubFilter === "all" ? undefined : clubFilter,
-      q: participantQuery || undefined,
+      q: debouncedParticipantQuery || undefined,
       tournamentId: resolvedSeasonId || undefined,
       limit: 200,
       offset: 0,
     });
+    if (requestId !== reweighRequestSeq.current) return;
     setLoadingReweigh(false);
+    setReweighLoaded(true);
     if (error) {
       toast.error(error.message || "Failed to load weigh-in list");
       return;
@@ -362,7 +376,7 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
         description={locale?.t("adminSettings.description", "Manage per-tournament registration timing, correction windows, and club-wise weigh-in updates that automatically refresh weight class for grouping.") ?? "Manage per-tournament registration timing, correction windows, and club-wise weigh-in updates that automatically refresh weight class for grouping."}
       />
 
-      <Tabs defaultValue={initialTab} className="space-y-5">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-5">
         <TabsList className="bg-surface-muted p-1 rounded-xl h-auto flex w-full justify-start overflow-x-auto">
           <TabsTrigger value="tournaments" className="data-[state=active]:bg-surface rounded-lg px-4 py-2">Tournament windows</TabsTrigger>
           <TabsTrigger value="weighin" className="data-[state=active]:bg-surface rounded-lg px-4 py-2">Weigh-in updates</TabsTrigger>
@@ -387,7 +401,7 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
               </Button>
             </div>
 
-            {loadingTournaments ? (
+            {loadingTournaments || !tournamentsLoaded ? (
               <div className="mt-5">
                 <SectionLoader
                   title="Loading tournament windows"
@@ -714,7 +728,7 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
               {seasonFilter !== "current" ? " · historical season view" : ""}
             </div>
 
-            {loadingClubs || loadingReweigh ? (
+            {loadingClubs || loadingReweigh || !clubsLoaded || !reweighLoaded ? (
               <div className="mt-5">
                 <SectionLoader
                   title="Loading weigh-in board"
@@ -739,7 +753,7 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
                             <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
                               <DetailLite label="Current weight" value={participant.weight_kg ? `${participant.weight_kg} kg` : "-"} />
                               <DetailLite label="Current class" value={participant.weight_class || "-"} />
-                              <DetailLite label="New class" value={draftWeight ? deriveWeightClass(participant.gender, draftWeight) : "-"} />
+                              <DetailLite label="New class" value={draftWeight ? deriveWeightClass(participant, draftWeight) : "-"} />
                             </div>
                             <div className="mt-4">
                               <Input
@@ -799,7 +813,7 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
                                     onChange={(event) => setWeightDrafts((current) => ({ ...current, [participant.id]: event.target.value }))}
                                   />
                                 </td>
-                                <td className="px-4 py-3 text-sm">{draftWeight ? deriveWeightClass(participant.gender, draftWeight) : "-"}</td>
+                                <td className="px-4 py-3 text-sm">{draftWeight ? deriveWeightClass(participant, draftWeight) : "-"}</td>
                                 <td className="px-4 py-3 text-right">
                                   <Button size="sm" onClick={() => saveReweigh(participant.id)} disabled={savingProfileId === participant.id}>
                                     <InlineLoadingLabel loading={savingProfileId === participant.id} loadingText="Saving...">
@@ -959,6 +973,51 @@ function NotificationsHealthPanel() {
             {health.templates.map((t) => (
               <span key={t} className="rounded-full px-2.5 py-1 border border-border bg-surface-muted text-xs font-mono">{t}</span>
             ))}
+          </div>
+        </div>
+      ) : null}
+
+      {health?.whatsappTemplates?.length ? (
+        <div className="rounded-2xl border border-border bg-background/60 overflow-hidden">
+          <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <h3 className="font-display text-lg font-semibold tracking-tight">WhatsApp message design</h3>
+              <p className="text-xs text-secondary-muted mt-1">Preview copy used by Twilio before email/SMS fallback.</p>
+            </div>
+            <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-800">
+              <MessageCircle className="size-3.5" /> WhatsApp first
+            </span>
+          </div>
+          <div className="grid gap-0 lg:grid-cols-[280px_1fr]">
+            <div className="border-b lg:border-b-0 lg:border-r border-border max-h-[520px] overflow-auto bg-surface-muted/40">
+              {health.whatsappTemplates.map((template) => (
+                <button
+                  key={template.key}
+                  type="button"
+                  className="w-full text-left px-4 py-3 border-b border-border last:border-b-0 hover:bg-surface transition-colors"
+                >
+                  <div className="font-mono text-xs text-foreground truncate">{template.key}</div>
+                  <div className="text-[11px] text-tertiary mt-1 truncate">{template.preview.split("\n").find(Boolean)}</div>
+                </button>
+              ))}
+            </div>
+            <div className="p-5 bg-[linear-gradient(135deg,#f7faf7_0%,#eef6f1_50%,#f7f2e8_100%)]">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {health.whatsappTemplates.slice(0, 9).map((template) => (
+                  <div key={template.key} className="min-w-0">
+                    <div className="mb-2 font-mono text-[11px] text-secondary-muted truncate">{template.key}</div>
+                    <div className="rounded-2xl rounded-tr-md border border-emerald-100 bg-[#dcf8c6] px-4 py-3 shadow-sm">
+                      <pre className="whitespace-pre-wrap break-words font-sans text-[12px] leading-relaxed text-[#1f2d1f]">{template.preview}</pre>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {health.whatsappTemplates.length > 9 ? (
+                <div className="mt-4 text-xs text-secondary-muted">
+                  Showing 9 of {health.whatsappTemplates.length} WhatsApp templates. Full names are listed on the left.
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
       ) : null}

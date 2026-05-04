@@ -3,6 +3,7 @@ const { query, transaction } = require('../db');
 const { tournaments: tournamentsRepo } = require('../repositories');
 const { ApiError } = require('../apiError');
 const { write: auditWrite } = require('../audit');
+const { buildOfficialCategory } = require('../domain/categoryRules');
 
 const AGE_BANDS = [
   { id: 'cadet', label: 'Cadet', min: 12, max: 15 },
@@ -122,6 +123,7 @@ async function listApprovedApplicationsForTournament(tournamentId) {
         p.gender,
         p.nationality,
         p.discipline,
+        p.weight_kg,
         p.weight_class,
         p.record_wins,
         p.record_losses,
@@ -175,10 +177,27 @@ async function syncTournament(actor, tournamentId, ctx = {}) {
     const disciplines = expandDisciplines(application);
     for (const disciplineRaw of disciplines) {
       const gender = normalizeGender(application.gender);
-      const ageBand = getAgeBand(calculateAge(application.date_of_birth, tournament.starts_on || Date.now()));
-      const experience = normalizeExperience(application.form_data?.experienceLevel || application.metadata?.experienceLevel);
-      const disciplineLabel = titleCase(disciplineRaw);
-      const weightClass = application.weight_class || 'Open';
+      const category = buildOfficialCategory({
+        disciplineId: disciplineRaw,
+        gender: application.gender,
+        dateOfBirth: application.date_of_birth,
+        weightKg: application.form_data?.weightKg || application.weight_kg,
+        onDate: tournament.starts_on || Date.now(),
+      });
+      if (!category.valid) {
+        throw ApiError.unprocessable('Approved application has invalid official category data', {
+          applicationId: application.application_id,
+          disciplineId: disciplineRaw,
+          issues: category.issues,
+        });
+      }
+      const ageBand = {
+        id: category.division.id,
+        label: category.division.label,
+      };
+      const experience = { id: 'open', label: 'Open' };
+      const disciplineLabel = category.discipline?.label || titleCase(disciplineRaw);
+      const weightClass = category.weightClass?.label || 'Grouped by height, weight & size';
       desired.push({
         applicationId: application.application_id,
         profileId: application.profile_id,

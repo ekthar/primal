@@ -24,6 +24,7 @@ const STEPS = [
   { id: 3, key: "documents", icon: Shield },
   { id: 4, key: "review", icon: FileCheck2 },
 ];
+const DOCUMENT_ORDER = ["medical", "photo_id", "consent"];
 
 export default function Register() {
   const router = useRouter();
@@ -68,6 +69,7 @@ export default function Register() {
   });
   const [documents, setDocuments] = useState({ medical: null, photo_id: null, consent: null });
   const [documentSources, setDocumentSources] = useState({ medical: null, photo_id: null, consent: null });
+  const [activeDocumentScanner, setActiveDocumentScanner] = useState(null);
   const [idNumberLast4, setIdNumberLast4] = useState("");
   const [errors, setErrors] = useState({});
 
@@ -283,7 +285,6 @@ export default function Register() {
     if (step === 2 && !isClubTrack) {
       if (form.selectedDisciplines.length === 0) nextErrors.selectedDisciplines = rt("Select at least one discipline", "कम से कम एक डिसिप्लिन चुनें");
       if (entryPreview.some((entry) => !entry.valid)) nextErrors.selectedDisciplines = rt("Fix the invalid discipline selection", "अमान्य डिसिप्लिन चयन ठीक करें");
-      if (!form.experienceLevel) nextErrors.experienceLevel = rt("Required", "आवश्यक है");
       if (!tournamentId && !tournamentsLoading && tournaments.length > 0) nextErrors.tournament = rt("Select a tournament", "एक टूर्नामेंट चुनें");
     }
     if (step === 3 && !isClubTrack) {
@@ -308,6 +309,26 @@ export default function Register() {
   };
 
   const prev = () => setStep((current) => Math.max(1, current - 1));
+
+  const handleDocumentCapture = (documentKey, file) => {
+    const nextDocuments = { ...documents, [documentKey]: file };
+    setDocuments(nextDocuments);
+    setDocumentSources((current) => ({ ...current, [documentKey]: "scan" }));
+    setErrors((current) => ({ ...current, [documentKey]: null }));
+
+    const nextMissingDocument = DOCUMENT_ORDER.find((key) => !nextDocuments[key]);
+    if (nextMissingDocument) {
+      toast.success(rt("Scan accepted. Opening next document.", "Scan accepted. Opening next document."));
+      window.setTimeout(() => setActiveDocumentScanner(nextMissingDocument), 180);
+      return;
+    }
+
+    toast.success(rt("All scans accepted. Review and submit.", "All scans accepted. Review and submit."));
+    window.setTimeout(() => {
+      setActiveDocumentScanner(null);
+      setStep(4);
+    }, 180);
+  };
 
   const submit = async () => {
     if (applicantRegistrationClosed) {
@@ -395,7 +416,8 @@ export default function Register() {
       bio: form.notes || null,
       metadata: {
         selectedDisciplines: form.selectedDisciplines,
-        experienceLevel: form.experienceLevel,
+        experienceLevel: form.experienceLevel || null,
+        categoryEntries: validEntries,
         phone: form.phone,
         address: {
           country: "India",
@@ -417,7 +439,8 @@ export default function Register() {
       tournamentId: selectedTournamentId,
       formData: {
         selectedDisciplines: form.selectedDisciplines,
-        experienceLevel: form.experienceLevel,
+        experienceLevel: form.experienceLevel || null,
+        categoryEntries: validEntries,
         notes: form.notes,
       },
     });
@@ -703,7 +726,18 @@ export default function Register() {
                                 <Check className="size-3.5" />
                               </div>
                             </div>
-                            {active && preview && <div className="mt-4 text-sm text-secondary-muted">{preview.categoryLabel}</div>}
+                            {active && preview && (
+                              <div className="mt-4 text-sm text-secondary-muted">
+                                <div>{preview.categoryLabel}</div>
+                                {!preview.valid && preview.issues?.length ? (
+                                  <ul className="mt-2 list-disc pl-4 text-xs text-amber-600 dark:text-amber-400">
+                                    {preview.issues.map((issue, index) => (
+                                      <li key={index}>{issue}</li>
+                                    ))}
+                                  </ul>
+                                ) : null}
+                              </div>
+                            )}
                           </button>
                         );
                       })}
@@ -743,7 +777,17 @@ export default function Register() {
                           scanHint={hint}
                           value={documents[key]}
                           capturedVia={documentSources[key]}
-                          onChange={(file) => setDocuments((current) => ({ ...current, [key]: file }))}
+                          scannerOpen={activeDocumentScanner === key}
+                          onScannerOpenChange={(open) => {
+                            setActiveDocumentScanner((current) => (open ? key : current === key ? null : current));
+                          }}
+                          onChange={(file) => {
+                            if (file) {
+                              handleDocumentCapture(key, file);
+                              return;
+                            }
+                            setDocuments((current) => ({ ...current, [key]: file }));
+                          }}
                           onCapturedViaChange={(tag) => setDocumentSources((current) => ({ ...current, [key]: tag }))}
                         />
                         {key === "photo_id" ? (

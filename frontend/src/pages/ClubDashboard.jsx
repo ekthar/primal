@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Inbox, AlertTriangle, FileEdit, Plus, Search, Send, Download, Printer, Pencil, Save } from "lucide-react";
+import { Inbox, AlertTriangle, FileEdit, Plus, Search, Send, Download, Printer, Pencil, Save, Eye, FileText, Camera, ScanLine, Upload, CheckCircle2, History } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,18 +15,31 @@ import {
   pickEditableFormData,
   serializeFormDataForPatch,
 } from "@/components/application/ApplicationEditFields";
-import { ApplicationFormEditor } from "@/components/application/ApplicationFormEditor";
-import api from "@/lib/api";
+import {
+  ApplicationFormEditor,
+  pickEditableProfile,
+} from "@/components/application/ApplicationFormEditor";
+import { ApplicationWorkspace, WorkspacePanel } from "@/components/application/ApplicationWorkspace";
+import DocumentInputField from "@/components/scanner/DocumentInputField";
+import LiveDocumentScanner from "@/components/scanner/LiveDocumentScanner";
+import api, { resolveBackendUrl } from "@/lib/api";
 import { toast } from "sonner";
 
 const DISCIPLINE_OPTIONS = DISCIPLINE_DEFINITIONS.map((discipline) => ({
   id: discipline.id,
   label: discipline.label,
 }));
+const REQUIRED_DOCUMENTS = [
+  { kind: "medical", label: "Medical certificate", description: "Doctor-approved medical certificate or clear PDF copy.", icon: FileText, accept: "image/*,application/pdf" },
+  { kind: "photo_id", label: "Photo ID", description: "Government ID with all edges visible.", icon: Camera, accept: "image/*" },
+  { kind: "consent", label: "Signed consent", description: "Signed consent or waiver sheet.", icon: FileText, accept: "image/*,application/pdf" },
+];
 
 export default function ClubDashboard() {
   const [clubs, setClubs] = useState([]);
   const [applications, setApplications] = useState([]);
+  const [applicationsLoaded, setApplicationsLoaded] = useState(false);
+  const [loadingApplications, setLoadingApplications] = useState(false);
   const [participants, setParticipants] = useState([]);
   const [tournaments, setTournaments] = useState([]);
   const [loadingParticipants, setLoadingParticipants] = useState(false);
@@ -35,6 +48,7 @@ export default function ClubDashboard() {
   const [pincodeHint, setPincodeHint] = useState("");
   const [pincodeResolved, setPincodeResolved] = useState(null);
   const [query, setQuery] = useState("");
+  const [activeTab, setActiveTab] = useState("inbox");
   const [activeApplication, setActiveApplication] = useState(null);
   const [appealReasonById, setAppealReasonById] = useState({});
   const [cancelReasonById, setCancelReasonById] = useState({});
@@ -42,6 +56,8 @@ export default function ClubDashboard() {
   const [createdCredentialsByProfile, setCreatedCredentialsByProfile] = useState({});
   const [generatedResetByProfile, setGeneratedResetByProfile] = useState({});
   const [activeApplicationEdits, setActiveApplicationEdits] = useState(null);
+  const [activeProfileEdits, setActiveProfileEdits] = useState(null);
+  const [activeDocumentUploads, setActiveDocumentUploads] = useState({});
   const [savingActiveApplication, setSavingActiveApplication] = useState(false);
   const [participantForm, setParticipantForm] = useState({
     fullName: "",
@@ -64,9 +80,8 @@ export default function ClubDashboard() {
   const clubId = clubs[0]?.id || "";
 
   useEffect(() => {
-    Promise.all([api.listClubs(), api.listApplications(), api.publicTournaments()]).then(([clubsRes, appRes, tRes]) => {
+    Promise.all([api.listClubs(), api.publicTournaments()]).then(([clubsRes, tRes]) => {
       if (!clubsRes.error) setClubs(clubsRes.data.clubs || []);
-      if (!appRes.error) setApplications(appRes.data.items || []);
       if (!tRes.error) {
         const available = tRes.data.tournaments || [];
         setTournaments(available);
@@ -76,6 +91,12 @@ export default function ClubDashboard() {
       }
     });
   }, []);
+
+  useEffect(() => {
+    if (!["inbox", "roster"].includes(activeTab)) return;
+    if (applicationsLoaded || loadingApplications) return;
+    reloadApplications();
+  }, [activeTab, applicationsLoaded, loadingApplications]);
 
   useEffect(() => {
     if (!clubId) {
@@ -189,8 +210,11 @@ export default function ClubDashboard() {
   };
 
   const reloadApplications = async () => {
+    setLoadingApplications(true);
     const refreshed = await api.listApplications();
     if (!refreshed.error) setApplications(refreshed.data.items || []);
+    setApplicationsLoaded(true);
+    setLoadingApplications(false);
   };
 
   const toggleDiscipline = (disciplineId) => {
@@ -355,7 +379,9 @@ export default function ClubDashboard() {
       toast.error(error.message || "Resubmit failed");
       return;
     }
+    toast.success("Correction resubmitted");
     await reloadApplications();
+    if (activeApplication?.id === id) await openApplication(id);
   };
 
   const submitDraft = async (id) => {
@@ -366,6 +392,7 @@ export default function ClubDashboard() {
     }
     toast.success("Application submitted");
     await reloadApplications();
+    if (activeApplication?.id === id) await openApplication(id);
   };
 
   const fileAppeal = async (applicationId) => {
@@ -407,22 +434,95 @@ export default function ClubDashboard() {
     }
     setActiveApplication(data.application);
     setActiveApplicationEdits(pickEditableFormData(data.application));
+    setActiveProfileEdits(pickEditableProfile(data.application));
+    setActiveDocumentUploads({});
   };
 
   const saveApplicationEdits = async () => {
-    if (!activeApplication || !activeApplicationEdits) return;
+    if (!activeApplication || !activeApplicationEdits || !activeProfileEdits) return false;
     setSavingActiveApplication(true);
+    const selectedDisciplines = activeApplicationEdits.selectedDisciplines || activeApplication.metadata?.selectedDisciplines || [];
+    const profileRes = await api.updateClubParticipant(clubId, activeApplication.profile_id, {
+      fullName: activeProfileEdits.fullName,
+      phone: activeProfileEdits.phone || null,
+      dateOfBirth: activeProfileEdits.dob || null,
+      gender: activeProfileEdits.gender || null,
+      discipline: selectedDisciplines[0] || activeApplication.discipline || null,
+      selectedDisciplines,
+      weightKg: activeProfileEdits.weight ? Number(activeProfileEdits.weight) : null,
+      bio: activeApplication.bio || null,
+      address: {
+        country: "India",
+        state: activeProfileEdits.state,
+        district: activeProfileEdits.district,
+        line1: activeProfileEdits.addressLine1,
+        line2: activeProfileEdits.addressLine2 || null,
+        postalCode: activeProfileEdits.postalCode,
+      },
+    });
+    if (profileRes.error) {
+      setSavingActiveApplication(false);
+      toast.error(profileRes.error.message || "Unable to save participant profile");
+      return false;
+    }
     const { error } = await api.updateApplication(activeApplication.id, {
       formData: serializeFormDataForPatch(activeApplicationEdits),
     });
     setSavingActiveApplication(false);
     if (error) {
       toast.error(error.message || "Unable to save application edits");
-      return;
+      return false;
     }
     toast.success("Application form updated");
     await reloadApplications();
     await openApplication(activeApplication.id);
+    return true;
+  };
+
+  const saveAndSubmitActiveApplication = async () => {
+    if (!activeApplication) return;
+    const applicationId = activeApplication.id;
+    const saved = await saveApplicationEdits();
+    if (!saved) return;
+    await submitDraft(applicationId);
+  };
+
+  const saveAndResubmitActiveApplication = async () => {
+    if (!activeApplication) return;
+    const applicationId = activeApplication.id;
+    const saved = await saveApplicationEdits();
+    if (!saved) return;
+    await resubmit(applicationId);
+  };
+
+  const uploadActiveDocument = async (kind, file) => {
+    if (!activeApplication || !file) return;
+    if (!canEditApplication(activeApplication)) {
+      toast.error("Documents can only be replaced while draft or correction editing is open");
+      return;
+    }
+    setActiveDocumentUploads((current) => ({ ...current, [kind]: file }));
+    const capturedVia = typeof file?.name === "string" && file.name.startsWith("scan-") ? "scan" : "upload";
+    const { error } = await api.uploadApplicationDocument(activeApplication.id, {
+      file,
+      kind,
+      label: file.name,
+      capturedVia,
+    });
+    if (error) {
+      toast.error(error.message || `Failed to upload ${kind}`);
+      return;
+    }
+    toast.success("Document uploaded");
+    await reloadApplications();
+    await openApplication(activeApplication.id);
+  };
+
+  const closeActiveApplication = () => {
+    setActiveApplication(null);
+    setActiveApplicationEdits(null);
+    setActiveProfileEdits(null);
+    setActiveDocumentUploads({});
   };
 
   const printParticipants = () => {
@@ -568,15 +668,19 @@ export default function ClubDashboard() {
               </SelectContent>
             </Select>
           </Field>
-          <Field label="Medical certificate (optional)">
-            <Input type="file" className="h-10 bg-background" onChange={(e) => setParticipantField("docs", { ...participantForm.docs, medical: e.target.files?.[0] || null })} />
-          </Field>
-          <Field label="Photo ID (optional)">
-            <Input type="file" className="h-10 bg-background" onChange={(e) => setParticipantField("docs", { ...participantForm.docs, photo_id: e.target.files?.[0] || null })} />
-          </Field>
-          <Field label="Consent form (optional)">
-            <Input type="file" className="h-10 bg-background" onChange={(e) => setParticipantField("docs", { ...participantForm.docs, consent: e.target.files?.[0] || null })} />
-          </Field>
+          {REQUIRED_DOCUMENTS.map((documentItem) => (
+            <Field key={documentItem.kind} label={`${documentItem.label} (optional)`}>
+              <DocumentInputField
+                value={participantForm.docs[documentItem.kind]}
+                onChange={(file) => setParticipantField("docs", { ...participantForm.docs, [documentItem.kind]: file })}
+                accept={documentItem.accept}
+                label={documentItem.label}
+                scanTitle={`Scan ${documentItem.label.toLowerCase()}`}
+                scanHint={documentItem.description}
+                inputId={`club-new-participant-${documentItem.kind}`}
+              />
+            </Field>
+          ))}
         </div>
 
         <div className="mt-4 rounded-xl border border-border bg-background p-3">
@@ -622,7 +726,7 @@ export default function ClubDashboard() {
         ) : null}
       </section>
 
-      <Tabs defaultValue="inbox" className="mt-8">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-8">
         <TabsList className="bg-surface-muted p-1 rounded-xl h-auto flex w-full justify-start overflow-x-auto">
           <TabsTrigger value="inbox" className="data-[state=active]:bg-surface data-[state=active]:shadow-soft rounded-lg px-4 py-2">
             Correction inbox
@@ -639,7 +743,15 @@ export default function ClubDashboard() {
         </TabsList>
 
         <TabsContent value="inbox" className="mt-5">
-          {correctionItems.length === 0 ? (
+          {loadingApplications || !applicationsLoaded ? (
+            <SectionLoader
+              title="Loading correction inbox"
+              description="Fetching club applications only for this workflow tab."
+              cards={2}
+              rows={3}
+              compact
+            />
+          ) : correctionItems.length === 0 ? (
             <EmptyState icon={Inbox} title="Inbox zero." description="No correction requests are open for this club." />
           ) : (
             <div className="space-y-3">
@@ -671,6 +783,16 @@ export default function ClubDashboard() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-tertiary" />
             <Input placeholder="Search applications..." value={query} onChange={(event) => setQuery(event.target.value)} className="pl-9 h-9 bg-surface" />
           </div>
+          {loadingApplications || !applicationsLoaded ? (
+            <SectionLoader
+              title="Loading applications"
+              description="Loading full application summaries for the selected applications tab."
+              cards={2}
+              rows={4}
+              compact
+            />
+          ) : (
+          <>
           <div className="space-y-2 md:hidden">
             {filtered.map((application) => (
               <article key={application.id} className="rounded-2xl border border-border bg-surface p-4">
@@ -730,79 +852,31 @@ export default function ClubDashboard() {
               </tbody>
             </table>
           </div>
+          </>
+          )}
 
           {activeApplication ? (
-            <div className="mt-4 rounded-2xl border border-border bg-surface p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="font-display text-lg font-semibold tracking-tight">{activeApplication.first_name} {activeApplication.last_name}</div>
-                  <div className="text-xs text-tertiary font-mono">{activeApplication.id}</div>
-                  <div className="text-xs text-tertiary mt-1">
-                    {canEditApplication(activeApplication)
-                      ? "Editing window is live"
-                      : activeApplication.status === "draft"
-                        ? "View only: registration is closed for this tournament"
-                        : "View only: correction window is closed"}
-                  </div>
-                </div>
-                <Button variant="ghost" onClick={() => setActiveApplication(null)}>Close</Button>
-              </div>
-              {activeApplication.status === "needs_correction" && (Array.isArray(activeApplication.correction_fields) && activeApplication.correction_fields.length || activeApplication.correction_reason) ? (
-                <div className="mt-3 rounded-lg border border-amber-300/60 bg-amber-50/40 p-3 text-xs">
-                  {Array.isArray(activeApplication.correction_fields) && activeApplication.correction_fields.length ? (
-                    <div className="text-amber-900">
-                      <span className="font-medium">Flagged fields:</span>{" "}
-                      {activeApplication.correction_fields.map((f) => (
-                        <span key={f} className="inline-block mr-1.5 rounded-full bg-amber-100/80 px-2 py-0.5 capitalize">{String(f).replace(/_/g, " ")}</span>
-                      ))}
-                    </div>
-                  ) : null}
-                  {activeApplication.correction_reason ? (
-                    <div className="mt-1 text-secondary"><strong>Reviewer note:</strong> {activeApplication.correction_reason}</div>
-                  ) : null}
-                </div>
-              ) : null}
-              <div className="mt-3">
-                <ApplicationFormEditor
-                  mode="club"
-                  formDataValue={activeApplicationEdits || pickEditableFormData(activeApplication)}
-                  onFormDataChange={setActiveApplicationEdits}
-                  flaggedFields={activeApplication.correction_fields}
-                  disabled={!canEditApplication(activeApplication)}
-                  idPrefix={`club-application-${activeApplication.id}`}
-                />
-              </div>
-
-              {canEditApplication(activeApplication) ? (
-                <div className="mt-2 flex justify-end">
-                  <Button onClick={saveApplicationEdits} disabled={savingActiveApplication} className="bg-foreground text-background hover:bg-foreground/90">
-                    <Save className="size-4 mr-1" /> {savingActiveApplication ? "Saving..." : "Save edits"}
-                  </Button>
-                </div>
-              ) : null}
-
-              <div className="mt-4 grid md:grid-cols-2 gap-3">
-                {activeApplication.status === "draft" && isRegistrationLive(activeApplication.tournament_id) ? (
-                  <Button onClick={() => submitDraft(activeApplication.id)} className="bg-foreground text-background hover:bg-foreground/90">Submit application</Button>
-                ) : null}
-
-                {activeApplication.status === "rejected" || isCorrectionWindowLive(activeApplication) ? (
-                  <div className="rounded-xl border border-border bg-background p-3">
-                    <Label className="text-[11px] uppercase tracking-wider font-semibold text-secondary-muted">Appeal reason</Label>
-                    <Input className="mt-2 h-9 bg-surface" value={appealReasonById[activeApplication.id] || ""} onChange={(e) => setAppealReasonById((current) => ({ ...current, [activeApplication.id]: e.target.value }))} />
-                    <Button className="mt-2" onClick={() => fileAppeal(activeApplication.id)}>File appeal</Button>
-                  </div>
-                ) : null}
-
-                {canEditApplication(activeApplication) && activeApplication.status !== "approved" && activeApplication.status !== "rejected" ? (
-                  <div className="rounded-xl border border-border bg-background p-3">
-                    <Label className="text-[11px] uppercase tracking-wider font-semibold text-secondary-muted">Cancellation reason</Label>
-                    <Input className="mt-2 h-9 bg-surface" value={cancelReasonById[activeApplication.id] || ""} onChange={(e) => setCancelReasonById((current) => ({ ...current, [activeApplication.id]: e.target.value }))} />
-                    <Button variant="outline" className="mt-2" onClick={() => requestCancel(activeApplication.id)}>Request cancel</Button>
-                  </div>
-                ) : null}
-              </div>
-            </div>
+            <ClubApplicationWorkspace
+              application={activeApplication}
+              formEdits={activeApplicationEdits || pickEditableFormData(activeApplication)}
+              profileEdits={activeProfileEdits || pickEditableProfile(activeApplication)}
+              canEdit={canEditApplication(activeApplication)}
+              saving={savingActiveApplication}
+              appealReason={appealReasonById[activeApplication.id] || ""}
+              cancelReason={cancelReasonById[activeApplication.id] || ""}
+              documentUploads={activeDocumentUploads}
+              onFormChange={setActiveApplicationEdits}
+              onProfileChange={setActiveProfileEdits}
+              onClose={closeActiveApplication}
+              onSave={saveApplicationEdits}
+              onSubmit={saveAndSubmitActiveApplication}
+              onResubmit={saveAndResubmitActiveApplication}
+              onAppealReasonChange={(value) => setAppealReasonById((current) => ({ ...current, [activeApplication.id]: value }))}
+              onCancelReasonChange={(value) => setCancelReasonById((current) => ({ ...current, [activeApplication.id]: value }))}
+              onFileAppeal={() => fileAppeal(activeApplication.id)}
+              onCancelRequest={() => requestCancel(activeApplication.id)}
+              onUploadDocument={uploadActiveDocument}
+            />
           ) : null}
         </TabsContent>
 
@@ -848,9 +922,14 @@ export default function ClubDashboard() {
                         {selectedDisciplines.length ? selectedDisciplines.join(", ") : (participant.discipline || "—")}
                       </div>
                       {latestApp ? (
-                        <Button variant="outline" size="sm" className="mt-3 w-full" onClick={() => api.downloadApplicationPdf(latestApp.id)}>
-                          <Printer className="size-3.5 mr-1" /> Print form
-                        </Button>
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                          <Button variant="outline" size="sm" onClick={() => openApplication(latestApp.id)}>
+                            <Eye className="size-3.5 mr-1" /> Open
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => api.downloadApplicationPdf(latestApp.id)}>
+                            <Printer className="size-3.5 mr-1" /> Print
+                          </Button>
+                        </div>
                       ) : (
                         <div className="mt-3 text-xs text-tertiary">No application</div>
                       )}
@@ -887,9 +966,14 @@ export default function ClubDashboard() {
                             <td className="px-5 py-3 text-sm">{selectedDisciplines.length ? selectedDisciplines.join(", ") : (participant.discipline || "-")}</td>
                             <td className="px-5 py-3 text-right">
                               {latestApp ? (
-                                <Button variant="ghost" className="h-8" onClick={() => api.downloadApplicationPdf(latestApp.id)}>
-                                  <Printer className="size-3.5 mr-1" /> Print form
-                                </Button>
+                                <div className="flex justify-end gap-1">
+                                  <Button variant="ghost" className="h-8" onClick={() => openApplication(latestApp.id)}>
+                                    <Eye className="size-3.5 mr-1" /> Open
+                                  </Button>
+                                  <Button variant="ghost" className="h-8" onClick={() => api.downloadApplicationPdf(latestApp.id)}>
+                                    <Printer className="size-3.5 mr-1" /> Print
+                                  </Button>
+                                </div>
                               ) : (
                                 <span className="text-xs text-tertiary">No application</span>
                               )}
@@ -974,4 +1058,296 @@ function StatCard({ label, value, icon: Icon, highlight }) {
       <div className="mt-3 font-display text-3xl font-semibold tracking-tight tabular-nums">{value}</div>
     </div>
   );
+}
+
+function ClubApplicationWorkspace({
+  application,
+  formEdits,
+  profileEdits,
+  canEdit,
+  saving,
+  appealReason,
+  cancelReason,
+  documentUploads,
+  onFormChange,
+  onProfileChange,
+  onClose,
+  onSave,
+  onSubmit,
+  onResubmit,
+  onAppealReasonChange,
+  onCancelReasonChange,
+  onFileAppeal,
+  onCancelRequest,
+  onUploadDocument,
+}) {
+  const documents = application.documents || [];
+  const missingKinds = REQUIRED_DOCUMENTS
+    .filter((item) => !getLatestDocumentByKind(documents, item.kind))
+    .map((item) => item.label);
+  const selectedDisciplines = formEdits?.selectedDisciplines || application.form_data?.selectedDisciplines || [];
+  const categoryEntries = application.form_data?.categoryEntries || [];
+  const invalidCategories = categoryEntries.filter((entry) => entry && entry.valid === false);
+  const canSubmitDraft = application.status === "draft" && canEdit;
+  const canResubmitCorrection = application.status === "needs_correction" && canEdit;
+  const canCancel = canEdit && !["approved", "rejected"].includes(application.status);
+  const showAppeal = application.status === "rejected" || application.status === "needs_correction";
+  const editableLabel = canEdit
+    ? "Editing window is live"
+    : application.status === "draft"
+      ? "View only: registration is closed for this tournament"
+      : application.status === "needs_correction"
+        ? "View only: correction window is closed"
+        : "View only: application is already in admin/reviewer workflow";
+  const [workspaceSection, setWorkspaceSection] = useState(canEdit ? "edit" : "documents");
+  const correctionBanner = application.status === "needs_correction" && (application.correction_reason || application.correction_fields?.length) ? (
+    <div className="rounded-2xl border border-amber-300/60 bg-amber-50/50 p-4 text-sm">
+      <div className="font-medium text-amber-900">Reviewer correction request</div>
+      {application.correction_reason ? <div className="mt-1 text-secondary">{application.correction_reason}</div> : null}
+      {application.correction_fields?.length ? (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {application.correction_fields.map((field) => (
+            <span key={field} className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] text-amber-900">
+              {String(field).replace(/_/g, " ")}
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  ) : null;
+  const sections = [
+    {
+      id: "edit",
+      label: "Edit",
+      icon: FileEdit,
+      content: (
+        <WorkspacePanel title="Participant and application form" helper="Club can update managed fighter details while draft or correction editing is open.">
+          <ApplicationFormEditor
+            mode="club"
+            profile={application}
+            profileValue={profileEdits}
+            onProfileChange={onProfileChange}
+            formDataValue={formEdits}
+            onFormDataChange={onFormChange}
+            flaggedFields={application.correction_fields}
+            disabled={!canEdit}
+            idPrefix={`club-application-${application.id}`}
+          />
+          {canEdit ? (
+            <div className="mt-4 flex justify-end">
+              <Button onClick={onSave} disabled={saving} className="bg-foreground text-background hover:bg-foreground/90">
+                <Save className="size-4 mr-1" /> {saving ? "Saving..." : "Save profile and application"}
+              </Button>
+            </div>
+          ) : null}
+        </WorkspacePanel>
+      ),
+    },
+    {
+      id: "documents",
+      label: "Documents",
+      icon: FileText,
+      complete: missingKinds.length === 0,
+      content: (
+        <WorkspacePanel title="Documents" helper="Scan or upload replacement documents before submission or correction resubmission.">
+          <div className="grid gap-3 lg:grid-cols-3">
+            {REQUIRED_DOCUMENTS.map((item) => (
+              <ClubDocumentSlot
+                key={item.kind}
+                item={item}
+                documentRow={getLatestDocumentByKind(documents, item.kind)}
+                pendingFile={documentUploads[item.kind]}
+                disabled={!canEdit}
+                onUpload={(file) => onUploadDocument(item.kind, file)}
+              />
+            ))}
+          </div>
+        </WorkspacePanel>
+      ),
+    },
+    {
+      id: "history",
+      label: "History",
+      icon: History,
+      content: (
+        <WorkspacePanel title="Status timeline" helper="The same audit-facing workflow seen by reviewer/admin.">
+          <div className="space-y-2">
+            {(application.statusEvents || []).map((event) => (
+              <div key={event.id} className="rounded-xl border border-border bg-surface px-3 py-3 text-sm">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="font-medium">{formatToken(event.from_status || "-")} to {formatToken(event.to_status || "-")}</div>
+                  <div className="text-xs text-tertiary">{event.created_at ? new Date(event.created_at).toLocaleString() : "-"}</div>
+                </div>
+                <div className="mt-1 text-secondary-muted">{event.reason || "No reason recorded"}</div>
+              </div>
+            ))}
+            {!application.statusEvents?.length ? (
+              <div className="text-sm text-secondary-muted">No timeline events recorded yet.</div>
+            ) : null}
+          </div>
+        </WorkspacePanel>
+      ),
+    },
+    {
+      id: "actions",
+      label: "Actions",
+      icon: Send,
+      content: (
+        <div className="grid gap-4 xl:grid-cols-[1fr_1fr]">
+          <WorkspacePanel title="Readiness analysis" helper="Rule-based checks before admin/reviewer handoff.">
+            <div className="space-y-2">
+              <ReadinessRow ok={missingKinds.length === 0} label={missingKinds.length ? `Missing: ${missingKinds.join(", ")}` : "Required documents uploaded"} />
+              <ReadinessRow ok={selectedDisciplines.length > 0} label={selectedDisciplines.length ? "Discipline selection present" : "Select at least one discipline"} />
+              <ReadinessRow ok={invalidCategories.length === 0} label={invalidCategories.length ? "Category preview has invalid entries" : "Category preview has no invalid entries"} />
+              <ReadinessRow ok={application.status !== "needs_correction"} label={application.status === "needs_correction" ? "Correction response is still open" : "No open correction request"} />
+              <ReadinessRow ok={canEdit || !["draft", "needs_correction"].includes(application.status)} label={canEdit ? "Edit window open" : "Edit window closed or not required"} />
+            </div>
+          </WorkspacePanel>
+
+          <div className="space-y-4">
+            <WorkspacePanel title="Workflow actions" helper="Club can submit, resubmit, appeal, or request cancellation. Review decisions stay admin/reviewer only.">
+              <div className="grid gap-2">
+                {canSubmitDraft ? (
+                  <Button onClick={onSubmit} disabled={missingKinds.length > 0} className="bg-foreground text-background hover:bg-foreground/90">
+                    Submit to admin review
+                  </Button>
+                ) : null}
+                {canResubmitCorrection ? (
+                  <Button onClick={onResubmit} className="bg-foreground text-background hover:bg-foreground/90">
+                    Resubmit correction
+                  </Button>
+                ) : null}
+                {!canSubmitDraft && !canResubmitCorrection ? (
+                  <div className="rounded-xl border border-border bg-surface p-3 text-sm text-secondary-muted">
+                    No club submit action is available for status {formatToken(application.status)}.
+                  </div>
+                ) : null}
+              </div>
+            </WorkspacePanel>
+
+            {showAppeal ? (
+              <WorkspacePanel title="Appeal" helper="Appeals go to admin; this does not approve the application.">
+                <Input className="h-9 bg-surface" value={appealReason} onChange={(event) => onAppealReasonChange(event.target.value)} placeholder="Reason, minimum 10 characters" />
+                <Button className="mt-2" onClick={onFileAppeal}>File appeal</Button>
+              </WorkspacePanel>
+            ) : null}
+
+            {canCancel ? (
+              <WorkspacePanel title="Cancel request" helper="Requests reviewer/admin cancellation without deleting data.">
+                <Input className="h-9 bg-surface" value={cancelReason} onChange={(event) => onCancelReasonChange(event.target.value)} placeholder="Reason, minimum 10 characters" />
+                <Button variant="outline" className="mt-2" onClick={onCancelRequest}>Request cancel</Button>
+              </WorkspacePanel>
+            ) : null}
+          </div>
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <div className="mt-4">
+      <ApplicationWorkspace
+        title={`${application.first_name} ${application.last_name}`}
+        subtitle={`${application.tournament_name || "Tournament pending"} / ${editableLabel}`}
+        status={<StatusPill status={application.status} />}
+        meta={[
+          { label: "Application", value: application.id },
+          { label: "Discipline", value: application.discipline || "-" },
+          { label: "Weight class", value: application.weight_class || "-" },
+        ]}
+        banner={correctionBanner}
+        sections={sections}
+        activeSection={workspaceSection}
+        onSectionChange={setWorkspaceSection}
+        onClose={onClose}
+        actions={(
+          <Button variant="outline" onClick={() => api.downloadApplicationPdf(application.id)}>
+            <Download className="size-4" /> PDF
+          </Button>
+        )}
+      />
+    </div>
+  );
+}
+
+function ReadinessRow({ ok, label }) {
+  return (
+    <div className="flex items-center gap-2 rounded-xl border border-border bg-surface px-3 py-2 text-sm">
+      {ok ? <CheckCircle2 className="size-4 text-emerald-600" /> : <AlertTriangle className="size-4 text-amber-600" />}
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function ClubDocumentSlot({ item, documentRow, pendingFile, disabled, onUpload }) {
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const documentUrl = resolveBackendUrl(documentRow?.url || "");
+  const Icon = item.icon;
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-4">
+      <div className="flex items-start gap-3">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl border border-border bg-background text-primary">
+          <Icon className="size-4" />
+        </div>
+        <div className="min-w-0">
+          <div className="text-sm font-medium">{item.label}</div>
+          <p className="mt-1 text-xs text-secondary-muted">{item.description}</p>
+        </div>
+      </div>
+      <div className="mt-4 rounded-xl border border-border bg-background/70 p-3 text-xs">
+        {documentRow ? (
+          <>
+            <div className="font-medium break-all">{documentRow.label || documentRow.original_filename || "Uploaded file"}</div>
+            <div className="mt-1 text-secondary-muted">{formatBytes(documentRow.size_bytes)} / {documentRow.verified_at ? "Verified" : "Uploaded"}</div>
+            {documentRow.verify_reason ? <div className="mt-1 text-amber-700">{documentRow.verify_reason}</div> : null}
+          </>
+        ) : (
+          <div className="text-secondary-muted">Missing</div>
+        )}
+        {pendingFile ? <div className="mt-2 text-secondary-muted">Latest upload: {pendingFile.name}</div> : null}
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => setScannerOpen(true)}>
+          <ScanLine className="size-3.5" /> Scan
+        </Button>
+        <label className={`inline-flex h-9 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-border bg-background px-3 text-sm ${disabled ? "pointer-events-none opacity-50" : "hover:bg-surface-muted"}`}>
+          <Upload className="size-3.5" /> Upload
+          <input type="file" accept={item.accept} className="hidden" disabled={disabled} onChange={(event) => {
+            const file = event.target.files?.[0] || null;
+            event.target.value = "";
+            if (file) onUpload(file);
+          }} />
+        </label>
+      </div>
+      {documentUrl ? (
+        <Button asChild variant="ghost" size="sm" className="mt-2 w-full">
+          <a href={documentUrl} target="_blank" rel="noreferrer">
+            <Eye className="size-3.5" /> Open document
+          </a>
+        </Button>
+      ) : null}
+      <LiveDocumentScanner
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onCapture={(file) => onUpload(file)}
+        title={`Scan ${item.label.toLowerCase()}`}
+        hint={item.description}
+      />
+    </div>
+  );
+}
+
+function getLatestDocumentByKind(documents, kind) {
+  return (documents || []).find((documentRow) => documentRow.kind === kind) || null;
+}
+
+function formatToken(value) {
+  return String(value || "-").replace(/_/g, " ");
+}
+
+function formatBytes(value) {
+  const size = Number(value || 0);
+  if (!size) return "-";
+  if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }

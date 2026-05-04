@@ -7,8 +7,56 @@ const { issuePasswordResetForUser, publicUser } = require('./auth.service');
 const { randomBytes } = require('crypto');
 const { customAlphabet } = require('nanoid');
 const { splitPersonName } = require('./identity.service');
+const { deriveOfficialWeightClass } = require('../domain/categoryRules');
+const { dispatchDeferred: notify } = require('../notifications');
 
 const createCode = customAlphabet('ABCDEFGHJKLMNPQRSTUVWXYZ23456789', 10);
+const MOBILE_FALLBACK_CHANNELS = ['whatsapp', 'email', 'sms'];
+
+function clubCode(club) {
+  return club?.metadata?.clubCode || null;
+}
+
+function clubRecipient(user) {
+  return { email: user.email, phone: user.phone, whatsapp: user.phone };
+}
+
+function participantRecipient(user, phone) {
+  const targetPhone = phone || user.phone || null;
+  return { email: user.email, phone: targetPhone, whatsapp: targetPhone };
+}
+
+async function notifyClubManager({ user, club, template, payload }) {
+  await notify({
+    userId: user.id,
+    channels: MOBILE_FALLBACK_CHANNELS,
+    to: clubRecipient(user),
+    template,
+    payload: {
+      recipientName: user.name,
+      clubName: club.name,
+      clubCode: clubCode(club),
+      city: club.city,
+      status: club.status,
+      email: user.email,
+      ...payload,
+    },
+  });
+}
+
+async function notifyParticipant({ user, phone, template, payload }) {
+  await notify({
+    userId: user.id,
+    channels: MOBILE_FALLBACK_CHANNELS,
+    to: participantRecipient(user, phone),
+    template,
+    payload: {
+      recipientName: user.name,
+      email: user.email,
+      ...payload,
+    },
+  });
+}
 
 async function assertClubAccess(user, clubId) {
   const club = await clubsRepo.findById(clubId);
@@ -34,6 +82,7 @@ async function createClub(user, data, ctx = {}) {
   await clubsRepo.addMember(club.id, user.id, 'manager');
   await auditWrite({ actorUserId: user.id, actorRole: user.role, action: 'club.create',
     entityType: 'club', entityId: club.id, payload: payload, requestIp: ctx.ip });
+  await notifyClubManager({ user, club, template: 'club.created', payload: {} });
   return club;
 }
 
@@ -60,6 +109,15 @@ async function updateClub(user, id, patch, ctx = {}) {
   const updated = await clubsRepo.update(id, patch);
   await auditWrite({ actorUserId: user.id, actorRole: user.role, action: 'club.update',
     entityType: 'club', entityId: id, payload: patch, requestIp: ctx.ip });
+  const manager = updated.primary_user_id ? await usersRepo.findById(updated.primary_user_id) : null;
+  if (manager) {
+    await notifyClubManager({
+      user: manager,
+      club: updated,
+      template: 'club.updated',
+      payload: { updatedFields: Object.keys(patch).join(', ') },
+    });
+  }
   return updated;
 }
 
@@ -68,6 +126,10 @@ async function approveClub(user, id, ctx = {}) {
   const updated = await clubsRepo.update(id, { status: 'active' });
   await auditWrite({ actorUserId: user.id, actorRole: 'admin', action: 'club.approve',
     entityType: 'club', entityId: id, payload: {}, requestIp: ctx.ip });
+  const manager = updated.primary_user_id ? await usersRepo.findById(updated.primary_user_id) : null;
+  if (manager) {
+    await notifyClubManager({ user: manager, club: updated, template: 'club.approved', payload: {} });
+  }
   return updated;
 }
 
@@ -83,6 +145,10 @@ async function softDeleteClub(user, id, ctx = {}) {
   await clubsRepo.softDelete(id);
   await auditWrite({ actorUserId: user.id, actorRole: user.role, action: 'club.soft_delete',
     entityType: 'club', entityId: id, payload: {}, requestIp: ctx.ip });
+  const manager = club.primary_user_id ? await usersRepo.findById(club.primary_user_id) : null;
+  if (manager) {
+    await notifyClubManager({ user: manager, club, template: 'club.deactivated', payload: {} });
+  }
   return { ok: true };
 }
 
@@ -92,6 +158,10 @@ async function restoreClub(user, id, ctx = {}) {
   if (!restored) throw ApiError.notFound();
   await auditWrite({ actorUserId: user.id, actorRole: user.role, action: 'club.restore',
     entityType: 'club', entityId: id, payload: {}, requestIp: ctx.ip });
+  const manager = restored.primary_user_id ? await usersRepo.findById(restored.primary_user_id) : null;
+  if (manager) {
+    await notifyClubManager({ user: manager, club: restored, template: 'club.restored', payload: {} });
+  }
   return restored;
 }
 
@@ -135,6 +205,13 @@ async function createParticipant(user, clubId, payload, ctx = {}) {
   if (existingProfile && existingProfile.club_id && existingProfile.club_id !== club.id) {
     throw ApiError.conflict('Participant already belongs to another club', { field: 'email' });
   }
+  const selectedDisciplines = Array.isArray(payload.selectedDisciplines) ? payload.selectedDisciplines : [];
+  const weightClass = deriveOfficialWeightClass({
+    disciplineId: selectedDisciplines[0] || payload.discipline,
+    gender: payload.gender,
+    dateOfBirth: payload.dateOfBirth,
+    weightKg: payload.weightKg,
+  });
 
   const profile = await profilesRepo.upsertForUser(participantUser.id, {
     firstName,
@@ -144,7 +221,7 @@ async function createParticipant(user, clubId, payload, ctx = {}) {
     nationality: 'India',
     discipline: payload.discipline || null,
     weightKg: payload.weightKg || null,
-    weightClass: payload.weightClass || null,
+    weightClass: payload.weightClass || weightClass || null,
     recordWins: existingProfile?.record_wins || 0,
     recordLosses: existingProfile?.record_losses || 0,
     recordDraws: existingProfile?.record_draws || 0,
@@ -156,7 +233,7 @@ async function createParticipant(user, clubId, payload, ctx = {}) {
       address: addressValidation.normalized,
       managedByClub: true,
       fighterCode: existingProfile?.metadata?.fighterCode || `FIG-${createCode()}`,
-      selectedDisciplines: Array.isArray(payload.selectedDisciplines) ? payload.selectedDisciplines : [],
+      selectedDisciplines,
     },
   });
 
@@ -177,7 +254,104 @@ async function createParticipant(user, clubId, payload, ctx = {}) {
   };
   if (temporaryPassword) out.temporaryPassword = temporaryPassword;
   if (resetUrl && user.role !== 'admin') out.resetUrl = resetUrl;
+  await notifyParticipant({
+    user: participantUser,
+    phone: payload.phone || null,
+    template: 'club.participant_created',
+    payload: {
+      participantName: fullName,
+      clubName: club.name,
+      fighterCode: profile?.metadata?.fighterCode || null,
+      resetUrl,
+    },
+  });
   return out;
+}
+
+async function updateParticipant(user, clubId, profileId, payload, ctx) {
+  const club = await assertClubAccess(user, clubId);
+  const existingProfile = await profilesRepo.findById(profileId);
+  if (!existingProfile || existingProfile.club_id !== club.id) {
+    throw ApiError.notFound('Club participant not found');
+  }
+
+  const fullName = String(payload.fullName || '').trim();
+  const { firstName, lastName } = splitPersonName(fullName);
+  const addressValidation = validateIndiaAddress(payload.address);
+  if (!addressValidation.valid) {
+    throw ApiError.badRequest('Invalid India address', {
+      field: addressValidation.field,
+      reason: addressValidation.reason,
+    });
+  }
+
+  const participantUser = await usersRepo.findById(existingProfile.user_id);
+  if (!participantUser) throw ApiError.notFound('Participant user not found');
+  const selectedDisciplines = Array.isArray(payload.selectedDisciplines) ? payload.selectedDisciplines : [];
+  const nextPhone = payload.phone ? payload.phone : null;
+  const weightClass = deriveOfficialWeightClass({
+    disciplineId: selectedDisciplines[0] || payload.discipline,
+    gender: payload.gender,
+    dateOfBirth: payload.dateOfBirth,
+    weightKg: payload.weightKg,
+  });
+
+  const updated = await profilesRepo.upsertForUser(participantUser.id, {
+    firstName,
+    lastName,
+    dateOfBirth: payload.dateOfBirth || null,
+    gender: payload.gender || null,
+    nationality: 'India',
+    discipline: payload.discipline || selectedDisciplines[0] || null,
+    weightKg: payload.weightKg || null,
+    weightClass: payload.weightClass || weightClass || null,
+    recordWins: existingProfile.record_wins || 0,
+    recordLosses: existingProfile.record_losses || 0,
+    recordDraws: existingProfile.record_draws || 0,
+    bio: payload.bio || null,
+    clubId: club.id,
+    metadata: {
+      ...(existingProfile.metadata || {}),
+      phone: nextPhone,
+      address: addressValidation.normalized,
+      managedByClub: true,
+      fighterCode: existingProfile?.metadata?.fighterCode || `FIG-${createCode()}`,
+      selectedDisciplines,
+    },
+  });
+
+  if (payload.phone !== undefined) {
+    await usersRepo.updatePhone(participantUser.id, nextPhone);
+  }
+
+  await auditWrite({
+    actorUserId: user.id,
+    actorRole: user.role,
+    action: 'club.participant.update',
+    entityType: 'profile',
+    entityId: updated.id,
+    payload: { clubId: club.id, userId: participantUser.id },
+    requestIp: ctx.ip,
+  });
+  await notifyParticipant({
+    user: participantUser,
+    phone: nextPhone,
+    template: 'club.participant_updated',
+    payload: {
+      participantName: fullName,
+      clubName: club.name,
+      fighterCode: updated?.metadata?.fighterCode || null,
+    },
+  });
+
+  return {
+    profile: {
+      ...updated,
+      email: participantUser.email,
+      phone: nextPhone,
+      role: participantUser.role,
+    },
+  };
 }
 
 async function issueParticipantResetLink(user, clubId, profileId, ctx = {}) {
@@ -199,6 +373,16 @@ async function issueParticipantResetLink(user, clubId, profileId, ctx = {}) {
     payload: { clubId: club.id, userId: participantUser.id },
     requestIp: ctx.ip,
   });
+  await notifyParticipant({
+    user: participantUser,
+    phone: participantUser.phone || profile?.metadata?.phone || null,
+    template: 'club.participant_reset_link',
+    payload: {
+      participantName: [profile.first_name, profile.last_name].filter(Boolean).join(' '),
+      fighterCode: profile?.metadata?.fighterCode || null,
+      resetUrl: issued.resetUrl,
+    },
+  });
 
   return {
     profileId: profile.id,
@@ -219,5 +403,6 @@ module.exports = {
   restoreClub,
   listParticipants,
   createParticipant,
+  updateParticipant,
   issueParticipantResetLink,
 };

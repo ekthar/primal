@@ -1,6 +1,40 @@
 const { verifyToken } = require('./security');
 const { ApiError } = require('./apiError');
 const { logger } = require('./logger');
+const { randomUUID } = require('crypto');
+
+function requestTiming(req, res, next) {
+  const start = process.hrtime.bigint();
+  const requestId = String(req.headers['x-request-id'] || '').trim() || randomUUID();
+  req.requestId = requestId;
+  res.setHeader('X-Request-Id', requestId);
+
+  const originalWriteHead = res.writeHead;
+  let timingHeaderSet = false;
+  res.writeHead = function writeHeadWithTiming(...args) {
+    if (!timingHeaderSet) {
+      timingHeaderSet = true;
+      const durationMs = Number(process.hrtime.bigint() - start) / 1e6;
+      res.setHeader('Server-Timing', `app;dur=${durationMs.toFixed(1)}`);
+    }
+    return originalWriteHead.apply(this, args);
+  };
+
+  res.on('finish', () => {
+    const durationMs = Number(process.hrtime.bigint() - start) / 1e6;
+    logger.info({
+      requestId,
+      method: req.method,
+      path: req.originalUrl || req.url,
+      statusCode: res.statusCode,
+      durationMs: Number(durationMs.toFixed(1)),
+      userId: req.user?.id || null,
+      userRole: req.user?.role || null,
+    }, 'HTTP request completed');
+  });
+
+  next();
+}
 
 /** Extract + verify JWT from Authorization header. Populates req.user. */
 function requireAuth(req, _res, next) {
@@ -81,4 +115,4 @@ function errorHandler(err, req, res, next) {
 /** Async handler wrapper so route handlers can throw. */
 const ah = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
-module.exports = { requireAuth, optionalAuth, requireRole, validate, notFound, errorHandler, ah };
+module.exports = { requestTiming, requireAuth, optionalAuth, requireRole, validate, notFound, errorHandler, ah };

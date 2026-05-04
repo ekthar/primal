@@ -21,12 +21,18 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let ignore = false;
     async function bootstrap() {
+      let hasCachedUser = false;
       try {
         const stored = window.localStorage.getItem(STORAGE_KEY);
-        if (stored) setUser(JSON.parse(stored));
+        if (stored) {
+          hasCachedUser = true;
+          setUser(JSON.parse(stored));
+          setReady(true);
+        }
         const token = getAccessToken();
         if (!token) {
           if (!ignore) setUser(null);
+          if (!ignore) setReady(true);
           return;
         }
         const { data, error } = await api.me();
@@ -41,7 +47,7 @@ export function AuthProvider({ children }) {
       } catch {
         if (!ignore) setUser(null);
       } finally {
-        if (!ignore) setReady(true);
+        if (!ignore && !hasCachedUser) setReady(true);
       }
     }
     bootstrap();

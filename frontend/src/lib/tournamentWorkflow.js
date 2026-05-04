@@ -1,3 +1,12 @@
+import {
+  DISCIPLINE_DEFINITIONS,
+  GENDER_OPTIONS,
+  buildOfficialCategory,
+  getDisciplineById,
+} from "@/lib/categoryRules";
+
+export { AGE_GROUPS, DISCIPLINE_DEFINITIONS, GENDER_OPTIONS } from "@/lib/categoryRules";
+
 const TOURNAMENT_DATE = "2026-09-12";
 
 export const ENTRY_STATUS = {
@@ -45,53 +54,6 @@ export const EXPERIENCE_LEVELS = [
   { id: "intermediate", label: "Intermediate", rank: 2 },
   { id: "advanced", label: "Advanced", rank: 3 },
 ];
-
-export const GENDER_OPTIONS = [
-  { id: "male", label: "Male" },
-  { id: "female", label: "Female" },
-];
-
-export const DISCIPLINE_DEFINITIONS = [
-  { id: "kickboxing", label: "Kickboxing", shortLabel: "KB", minAge: 14, ruleset: "Striking" },
-  { id: "full-contact", label: "Full Contact", shortLabel: "FC", minAge: 14, ruleset: "Full Contact" },
-  { id: "mma", label: "MMA", shortLabel: "MMA", minAge: 18, ruleset: "Mixed Martial Arts" },
-  { id: "boxing", label: "Boxing", shortLabel: "BOX", minAge: 14, ruleset: "Boxing" },
-  { id: "low-kick", label: "Low Kick", shortLabel: "LK", minAge: 14, ruleset: "Low Kick" },
-  { id: "light-contact", label: "Light Contact", shortLabel: "LC", minAge: 12, ruleset: "Light Contact" },
-  { id: "k1", label: "K1", shortLabel: "K1", minAge: 16, ruleset: "K1" },
-];
-
-export const AGE_GROUPS = [
-  { id: "cadet", label: "Cadet", min: 12, max: 15 },
-  { id: "junior", label: "Junior", min: 16, max: 17 },
-  { id: "adult", label: "Adult", min: 18, max: 34 },
-  { id: "master", label: "Master", min: 35, max: 45 },
-];
-
-const WEIGHT_CLASS_TABLE = {
-  male: [
-    { id: "m-54", label: "-54 kg", max: 54 },
-    { id: "m-57", label: "-57 kg", max: 57 },
-    { id: "m-60", label: "-60 kg", max: 60 },
-    { id: "m-63-5", label: "-63.5 kg", max: 63.5 },
-    { id: "m-67", label: "-67 kg", max: 67 },
-    { id: "m-71", label: "-71 kg", max: 71 },
-    { id: "m-75", label: "-75 kg", max: 75 },
-    { id: "m-81", label: "-81 kg", max: 81 },
-    { id: "m-86", label: "-86 kg", max: 86 },
-    { id: "m-91", label: "-91 kg", max: 91 },
-    { id: "m-91-plus", label: "+91 kg", max: 200 },
-  ],
-  female: [
-    { id: "f-48", label: "-48 kg", max: 48 },
-    { id: "f-52", label: "-52 kg", max: 52 },
-    { id: "f-56", label: "-56 kg", max: 56 },
-    { id: "f-60", label: "-60 kg", max: 60 },
-    { id: "f-65", label: "-65 kg", max: 65 },
-    { id: "f-70", label: "-70 kg", max: 70 },
-    { id: "f-70-plus", label: "+70 kg", max: 200 },
-  ],
-};
 
 const PARTICIPANT_SEEDS = [
   {
@@ -411,21 +373,8 @@ function calculateAge(dob, onDate = TOURNAMENT_DATE) {
   return age;
 }
 
-function getAgeGroup(age) {
-  return AGE_GROUPS.find((group) => age >= group.min && age <= group.max) || AGE_GROUPS[AGE_GROUPS.length - 1];
-}
-
-function getDisciplineById(disciplineId) {
-  return DISCIPLINE_DEFINITIONS.find((discipline) => discipline.id === disciplineId);
-}
-
 function getExperienceLabel(levelId) {
   return EXPERIENCE_LEVELS.find((level) => level.id === levelId)?.label || levelId;
-}
-
-function getWeightClass(gender, weight) {
-  const classes = WEIGHT_CLASS_TABLE[gender] || WEIGHT_CLASS_TABLE.male;
-  return classes.find((weightClass) => weight <= weightClass.max) || classes[classes.length - 1];
 }
 
 function titleCase(value) {
@@ -437,6 +386,10 @@ function titleCase(value) {
 
 function getEntryIssues(participant, discipline, age) {
   const issues = [];
+  if (!discipline) {
+    issues.push("Unknown discipline.");
+    return issues;
+  }
   if (age < discipline.minAge) {
     issues.push(`${discipline.label} requires fighters to be at least ${discipline.minAge}.`);
   }
@@ -446,52 +399,36 @@ function getEntryIssues(participant, discipline, age) {
   return issues;
 }
 
-function buildCategoryId({ disciplineId, ageGroupId, gender, weightClassId, experienceLevel }) {
-  return `${disciplineId}:${ageGroupId}:${gender}:${weightClassId}:${experienceLevel}`;
-}
-
 export function createPreviewEntries(form) {
-  const age = form.dob ? calculateAge(form.dob) : null;
   return (form.selectedDisciplines || []).map((disciplineId) => {
-    const discipline = getDisciplineById(disciplineId);
-    const ageGroup = age !== null ? getAgeGroup(age) : null;
-    const weightClass = form.weight ? getWeightClass(form.gender || "male", Number(form.weight)) : null;
-    const issues = [];
-
-    if (!discipline) issues.push("Unknown discipline.");
-    if (!form.fullName) issues.push("Full name required.");
-    if (!form.gender) issues.push("Gender required.");
-    if (!form.dob) issues.push("Date of birth required.");
-    if (!form.weight) issues.push("Weight required.");
-    if (!form.experienceLevel) issues.push("Experience level required.");
-    if (discipline && age !== null && age < discipline.minAge) {
-      issues.push(`${discipline.label} opens from age ${discipline.minAge}.`);
-    }
-
-    const categoryId =
-      discipline && ageGroup && weightClass && form.experienceLevel && issues.length === 0
-        ? buildCategoryId({
-            disciplineId,
-            ageGroupId: ageGroup.id,
-            gender: form.gender,
-            weightClassId: weightClass.id,
-            experienceLevel: form.experienceLevel,
-          })
-        : null;
+    const category = buildOfficialCategory({
+      disciplineId,
+      gender: form.gender,
+      dateOfBirth: form.dob,
+      weightKg: form.weight,
+      onDate: TOURNAMENT_DATE,
+    });
+    const age = form.dob ? calculateAge(form.dob) : null;
+    const issues = [
+      ...category.issues,
+      ...(!form.fullName ? ["Full name required."] : []),
+    ];
+    const valid = issues.length === 0;
+    const categoryId = valid ? category.categoryId : null;
 
     return {
       disciplineId,
-      disciplineLabel: discipline?.label || disciplineId,
-      valid: issues.length === 0,
+      disciplineLabel: category.discipline?.label || disciplineId,
+      valid,
       issues,
-      ageGroupLabel: ageGroup?.label || "Pending",
-      weightClassLabel: weightClass?.label || "Pending",
+      ageGroupId: category.division?.id || null,
+      ageGroupLabel: category.division?.label || "Pending",
+      weightClassId: category.weightClass?.id || null,
+      weightClassLabel: category.weightClass?.label || "Grouped by height, weight & size",
       experienceLabel: getExperienceLabel(form.experienceLevel),
-      categoryId,
-      categoryLabel:
-        categoryId && discipline
-          ? `${discipline.label} · ${ageGroup.label} · ${titleCase(form.gender)} · ${weightClass.label} · ${getExperienceLabel(form.experienceLevel)}`
-          : "Complete the required fields to assign a category.",
+      categoryId: valid ? category.categoryId : null,
+      categoryLabel: valid ? category.categoryLabel : "Complete the required fields to assign a category.",
+      age,
     };
   });
 }
@@ -499,53 +436,47 @@ export function createPreviewEntries(form) {
 function buildTournamentEntries(participants) {
   return participants.flatMap((participant) => {
     const age = calculateAge(participant.dob);
-    const ageGroup = getAgeGroup(age);
-    const weightClass = getWeightClass(participant.gender, participant.weight);
 
     return participant.selectedDisciplines.map((disciplineId, index) => {
-      const discipline = getDisciplineById(disciplineId);
+      const category = buildOfficialCategory({
+        disciplineId,
+        gender: participant.gender,
+        dateOfBirth: participant.dob,
+        weightKg: participant.weight,
+        onDate: TOURNAMENT_DATE,
+      });
+      const discipline = category.discipline || getDisciplineById(disciplineId);
       const issues = getEntryIssues(participant, discipline, age);
       const reviewStatus = participant.disciplineStatuses?.[disciplineId] || ENTRY_STATUS.PENDING;
-      const categoryId =
-        issues.length === 0
-          ? buildCategoryId({
-              disciplineId,
-              ageGroupId: ageGroup.id,
-              gender: participant.gender,
-              weightClassId: weightClass.id,
-              experienceLevel: participant.experienceLevel,
-            })
-          : null;
+      const categoryIssues = [...category.issues, ...issues];
+      const categoryId = categoryIssues.length === 0 ? category.categoryId : null;
 
       return {
         id: `${participant.id}-${disciplineId}`,
         participantId: participant.id,
         disciplineId,
-        disciplineLabel: discipline.label,
-        rulesetLabel: discipline.ruleset,
+        disciplineLabel: discipline?.label || disciplineId,
+        rulesetLabel: discipline?.ruleset || "Ruleset",
         participantName: participant.fullName,
         club: participant.club,
         nationality: participant.nationality,
         gender: participant.gender,
         age,
-        ageGroupId: ageGroup.id,
-        ageGroupLabel: ageGroup.label,
+        ageGroupId: category.division?.id || "unassigned",
+        ageGroupLabel: category.division?.label || "Unassigned",
         weight: participant.weight,
-        weightClassId: weightClass.id,
-        weightClassLabel: weightClass.label,
+        weightClassId: category.weightClass?.id || "manual",
+        weightClassLabel: category.weightClass?.label || "Grouped by height, weight & size",
         experienceLevel: participant.experienceLevel,
         experienceLabel: getExperienceLabel(participant.experienceLevel),
         documentsStatus: participant.documentsStatus,
         waiverStatus: participant.waiverStatus,
         paymentStatus: participant.paymentStatus,
         reviewStatus,
-        issues,
-        invalid: issues.length > 0,
+        issues: categoryIssues,
+        invalid: categoryIssues.length > 0,
         categoryId,
-        categoryLabel:
-          categoryId && discipline
-            ? `${discipline.label} · ${ageGroup.label} · ${titleCase(participant.gender)} · ${weightClass.label} · ${getExperienceLabel(participant.experienceLevel)}`
-            : "Needs admin review",
+        categoryLabel: categoryId ? category.categoryLabel : "Needs admin review",
         submittedAt: `2026-04-${String(4 + index).padStart(2, "0")}T09:30:00Z`,
         updatedAt: `2026-04-${String(12 + index).padStart(2, "0")}T12:00:00Z`,
         seedScore: participant.seedScore - index,

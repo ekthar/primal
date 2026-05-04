@@ -1,0 +1,3 @@
+name = "primal"
+pages_build_output_dir = "frontend/out"
+compatibility_date = "2026-04-29"

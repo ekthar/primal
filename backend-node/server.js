@@ -4,10 +4,11 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
+const compression = require('compression');
 const path = require('path');
 const { config, validateProductionConfig } = require('./src/config');
 const { logger } = require('./src/logger');
-const { errorHandler, notFound } = require('./src/middleware');
+const { requestTiming, errorHandler, notFound } = require('./src/middleware');
 
 // Route modules
 const authRoutes = require('./src/routes/auth.routes');
@@ -57,6 +58,7 @@ const corsDelegate = (req, callback) => {
 };
 
 app.set('trust proxy', 1);
+app.use(requestTiming);
 // Allow the configured frontend origins to embed responses from this API in an
 // <iframe> (e.g. document/PDF preview in Reviewer Workbench). frame-ancestors
 // in CSP supersedes X-Frame-Options in modern browsers, so we keep frameguard
@@ -76,6 +78,7 @@ app.use(helmet({
 }));
 app.use(cors(corsDelegate));
 app.options('*', cors(corsDelegate));
+app.use(compression());
 app.use(express.json({ limit: `${config.maxUploadMb}mb` }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan(config.env === 'production' ? 'combined' : 'dev'));

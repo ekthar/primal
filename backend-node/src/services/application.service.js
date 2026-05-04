@@ -6,12 +6,13 @@ const { STATUS, assertTransition } = require('../statusMachine');
 const { ApiError } = require('../apiError');
 const { config } = require('../config');
 const { write: auditWrite } = require('../audit');
-const { dispatch: notify } = require('../notifications');
+const { dispatchDeferred: notify } = require('../notifications');
 const { createHash } = require('crypto');
 const tournamentService = require('./tournament.service');
 const documentStorage = require('./documentStorage.service');
 const { resolveAvatarUrl } = require('./avatar.service');
 const { formatPersonName, applicationDisplayId, reviewerDisplayId } = require('./identity.service');
+const { buildOfficialCategory } = require('../domain/categoryRules');
 
 const HOUR = 60 * 60 * 1000;
 const REQUIRED_DOCUMENT_KINDS = ['medical', 'photo_id', 'consent'];
@@ -43,6 +44,40 @@ function assertRegistrationWindowOpen(tournament, message = 'Registration window
   if (!tournamentService.getRegistrationState(tournament).registrationOpen) {
     throw ApiError.forbidden(message);
   }
+}
+
+function buildCategoryValidation(profile, formData) {
+  const selectedDisciplines = Array.isArray(formData?.selectedDisciplines)
+    ? formData.selectedDisciplines
+    : [];
+  const disciplines = selectedDisciplines.length ? selectedDisciplines : [profile.discipline].filter(Boolean);
+  return disciplines.map((disciplineId) => buildOfficialCategory({
+    disciplineId,
+    gender: profile.gender,
+    dateOfBirth: profile.date_of_birth,
+    weightKg: formData?.weightKg || profile.weight_kg,
+    onDate: new Date().toISOString(),
+  }));
+}
+
+function assertOfficialCategories(profile, formData) {
+  const categories = buildCategoryValidation(profile, formData);
+  if (!categories.length) {
+    throw ApiError.unprocessable('Select at least one official category discipline', {
+      field: 'selectedDisciplines',
+    });
+  }
+  const invalid = categories.filter((category) => !category.valid);
+  if (invalid.length) {
+    throw ApiError.unprocessable('Invalid official category selection', {
+      categories: invalid.map((category) => ({
+        discipline: category.discipline?.label || null,
+        division: category.division?.label || null,
+        issues: category.issues,
+      })),
+    });
+  }
+  return categories;
 }
 
 function isSeasonClosedSource(app, tournament) {
@@ -120,12 +155,13 @@ async function create(user, { tournamentId, profileId, formData }, ctx = {}) {
       applicationId: existingApplication.id,
     });
   }
+  const categories = assertOfficialCategories(profile, formData || {});
   const app = await appsRepo.create({
     profileId: profile.id,
     tournamentId,
     clubId: profile.club_id || null,
     submittedBy: user.id,
-    formData,
+    formData: { ...(formData || {}), categoryEntries: categories },
   });
   await seRepo.add({ applicationId: app.id, fromStatus: null, toStatus: STATUS.DRAFT,
     actorUserId: user.id, actorRole: user.role, reason: 'Draft created' });
@@ -138,7 +174,11 @@ async function updateDraft(user, id, { formData }, ctx = {}) {
   const app = await appsRepo.findById(id);
   if (!app) throw ApiError.notFound();
   await assertCanEdit(user, app);
+  const profile = await profilesRepo.findById(app.profile_id);
+  if (!profile) throw ApiError.notFound('Profile not found');
   const merged = { ...(app.form_data || {}), ...(formData || {}) };
+  const categories = assertOfficialCategories(profile, merged);
+  merged.categoryEntries = categories;
   const updated = await appsRepo.updateForm(id, merged);
   await auditWrite({ actorUserId: user.id, actorRole: user.role, action: 'application.update',
     entityType: 'application', entityId: id, payload: { keys: Object.keys(formData || {}) }, requestIp: ctx.ip });
@@ -160,6 +200,10 @@ async function submit(user, id, ctx = {}) {
   if (missing.length) {
     throw ApiError.unprocessable('Required documents missing', { missing });
   }
+  const profile = await profilesRepo.findById(app.profile_id);
+  if (!profile) throw ApiError.notFound('Profile not found');
+  const categories = assertOfficialCategories(profile, app.form_data || {});
+  if (categories.length) await appsRepo.updateForm(id, { ...(app.form_data || {}), categoryEntries: categories });
 
   // Reject submission if any required document expires before the tournament starts.
   const tournamentForExpiry = await tournamentsRepo.findById(app.tournament_id);
@@ -196,7 +240,10 @@ async function submit(user, id, ctx = {}) {
   await auditWrite({ actorUserId: user.id, actorRole: user.role, action: 'application.submit',
     entityType: 'application', entityId: id, payload: { reviewerId: updated.reviewer_id }, requestIp: ctx.ip });
 
-  await notifySubmission(updated);
+  await notifySubmission(
+    updated,
+    app.status === STATUS.NEEDS_CORRECTION ? 'application.resubmitted' : 'application.submitted'
+  );
   return updated;
 }
 
@@ -356,7 +403,7 @@ async function listForMe(user, query = {}) {
   // applicant
   const profile = await profilesRepo.findByUserId(user.id);
   if (!profile) return [];
-  return appsRepo.query({ ...query }).then((list) => list.filter((a) => a.profile_id === profile.id).map(withDisplayFields));
+  return appsRepo.query({ ...query, profileId: profile.id }).then((list) => list.map(withDisplayFields));
 }
 
 async function requestCancel(user, id, { reason }, ctx = {}) {
@@ -402,7 +449,7 @@ async function requestCancel(user, id, { reason }, ctx = {}) {
 }
 
 // ---- Notifications -----------------------------------------------------------
-async function notifySubmission(app) {
+async function notifySubmission(app, template) {
   const full = await appsRepo.findFullById(app.id);
   if (!full) return;
   const user = full.submitted_by;
@@ -410,11 +457,11 @@ async function notifySubmission(app) {
   const { users: usersRepo } = require('../repositories');
   const u = await usersRepo.findById(user);
   if (!u) return;
-  await notify({
+  notify({
     userId: u.id, applicationId: app.id,
-    channels: ['email', 'push', 'whatsapp', 'sms'],
+    channels: ['whatsapp', 'email', 'sms'],
     to: { email: u.email, phone: u.phone, whatsapp: u.phone },
-    template: 'application.submitted',
+    template,
     payload: {
       applicantName: formatPersonName(full.first_name, full.last_name),
       applicationDisplayId: applicationDisplayId(app.id),

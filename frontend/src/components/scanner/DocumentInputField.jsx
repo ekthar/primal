@@ -13,6 +13,8 @@ export default function DocumentInputField({
   onChange,               // (file: File | null) => void
   capturedVia,            // string | null
   onCapturedViaChange,    // (tag: "scan" | "upload") => void
+  scannerOpen,
+  onScannerOpenChange,
   accept = "image/*,application/pdf",
   label = "Document",
   scanTitle,
@@ -26,8 +28,17 @@ export default function DocumentInputField({
     { id: "upload", label: locale?.t("documentInput.upload", "Upload from device") ?? "Upload from device", icon: Upload },
   ];
   const [tab, setTab] = useState(capturedVia === "scan" ? "scan" : "upload");
-  const [scannerOpen, setScannerOpen] = useState(false);
+  const [internalScannerOpen, setInternalScannerOpen] = useState(false);
   const fileInputRef = useRef(null);
+  const liveScannerOpen = scannerOpen ?? internalScannerOpen;
+
+  const setScannerOpenState = (open) => {
+    if (onScannerOpenChange) {
+      onScannerOpenChange(open);
+      return;
+    }
+    setInternalScannerOpen(open);
+  };
 
   const handleScannerCapture = (file) => {
     onChange?.(file);
@@ -72,7 +83,7 @@ export default function DocumentInputField({
           <button
             type="button"
             disabled={disabled}
-            onClick={() => setScannerOpen(true)}
+            onClick={() => setScannerOpenState(true)}
             className="inline-flex items-center justify-center gap-2 rounded-lg bg-foreground px-4 py-2 text-sm text-background hover:bg-foreground/90 disabled:opacity-50"
           >
             <Camera className="size-4" /> {locale?.t("documentInput.openScanner", "Open scanner") ?? "Open scanner"}
@@ -103,8 +114,8 @@ export default function DocumentInputField({
       )}
 
       <LiveDocumentScanner
-        open={scannerOpen}
-        onClose={() => setScannerOpen(false)}
+        open={liveScannerOpen}
+        onClose={() => setScannerOpenState(false)}
         onCapture={handleScannerCapture}
         title={scanTitle || `${locale?.t("documentInput.scanPrefix", "Scan") ?? "Scan"} ${label.toLowerCase()}`}
         hint={scanHint}

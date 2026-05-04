@@ -14,17 +14,64 @@ const { formatPersonName, applicationDisplayId } = require('../services/identity
 
 const router = Router();
 
+const PUBLIC_CACHE_HEADER = 'public, max-age=60, s-maxage=300, stale-while-revalidate=86400';
+const PUBLIC_HOME_CACHE_TTL_MS = 60 * 1000;
+let publicHomeCache = null;
+
+function setPublicCache(res) {
+  res.set('Cache-Control', PUBLIC_CACHE_HEADER);
+}
+
+function sendPublicJson(res, payload) {
+  setPublicCache(res);
+  res.json(payload);
+}
+
+function isFreshCache(entry, now) {
+  return Boolean(entry && now < entry.expiresAt);
+}
+
+async function buildPublicHomePayload() {
+  const [tournamentList, recentPhotos, circularList] = await Promise.all([
+    tournamentService.listPublic(),
+    albumService.listRecentPublicPhotos({ limit: 14 }),
+    circularsService.listPublic({ limit: 8 }),
+  ]);
+
+  return {
+    tournaments: tournamentList,
+    currentTournament: tournamentService.chooseCurrentSeason(tournamentList, Date.now()),
+    recentPhotos,
+    circulars: circularList,
+  };
+}
+
 /** Public: list approved participants (optionally by tournament). */
 router.get('/participants', ah(async (req, res) => {
   const participants = await applications.publicApproved({
     limit: parseInt(req.query.limit || '100', 10),
     tournamentSlug: req.query.tournament || null,
   });
-  res.json({ participants });
+  sendPublicJson(res, { participants });
+}));
+
+router.get('/home', ah(async (_req, res) => {
+  const now = Date.now();
+  if (isFreshCache(publicHomeCache, now)) {
+    sendPublicJson(res, publicHomeCache.payload);
+    return;
+  }
+
+  const payload = await buildPublicHomePayload();
+  publicHomeCache = {
+    payload,
+    expiresAt: now + PUBLIC_HOME_CACHE_TTL_MS,
+  };
+  sendPublicJson(res, payload);
 }));
 
 router.get('/tournaments', ah(async (_req, res) => {
-  res.json({ tournaments: await tournamentService.listPublic() });
+  sendPublicJson(res, { tournaments: await tournamentService.listPublic() });
 }));
 
 /* Current season — the single tournament that client-side UIs treat as the
@@ -34,7 +81,7 @@ router.get('/tournaments', ah(async (_req, res) => {
    "no active season" state instead of erroring.
    MUST be registered before the /:slug parameterized route below. */
 router.get('/tournaments/current', ah(async (_req, res) => {
-  res.json({ tournament: await tournamentService.currentPublicSeason() });
+  sendPublicJson(res, { tournament: await tournamentService.currentPublicSeason() });
 }));
 
 router.get('/tournaments/:slug', ah(async (req, res) => {
@@ -45,43 +92,43 @@ router.get('/tournaments/:slug', ah(async (req, res) => {
     applications.publicApproved({ limit: 500, tournamentSlug: req.params.slug }),
     albumService.listAlbums({ publicOnly: true, tournamentSlug: req.params.slug }),
   ]);
-  res.json({ tournament: enriched, participants, albums: tournamentAlbums });
+  sendPublicJson(res, { tournament: enriched, participants, albums: tournamentAlbums });
 }));
 
 router.get('/athletes/:id', ah(async (req, res) => {
   const athlete = await applications.publicAthlete(req.params.id);
   if (!athlete) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'athlete not found' } });
-  res.json({ athlete });
+  sendPublicJson(res, { athlete });
 }));
 
 router.get('/clubs', ah(async (req, res) => {
-  res.json({ clubs: await clubsService.listPublicClubs({ q: req.query.q }) });
+  sendPublicJson(res, { clubs: await clubsService.listPublicClubs({ q: req.query.q }) });
 }));
 
 // Public: photo albums
 router.get('/albums', ah(async (req, res) => {
-  res.json({ albums: await albumService.listAlbums({ publicOnly: true, tournamentSlug: req.query.tournament || null }) });
+  sendPublicJson(res, { albums: await albumService.listAlbums({ publicOnly: true, tournamentSlug: req.query.tournament || null }) });
 }));
 
 router.get('/albums/recent-photos', ah(async (req, res) => {
   const limit = Math.max(1, Math.min(40, parseInt(req.query.limit || '12', 10) || 12));
-  res.json({ photos: await albumService.listRecentPublicPhotos({ limit }) });
+  sendPublicJson(res, { photos: await albumService.listRecentPublicPhotos({ limit }) });
 }));
 
 router.get('/albums/:id', ah(async (req, res) => {
   const album = await albumService.getAlbum(req.params.id, { publicOnly: true });
   if (!album) return res.status(404).json({ error: 'not_found' });
-  res.json({ album });
+  sendPublicJson(res, { album });
 }));
 
 // Public: circulars / announcements
 router.get('/circulars', validate(schemas.circulars.listPublic, 'query'), ah(async (req, res) => {
   const circulars = await circularsService.listPublic({ kind: req.query.kind, limit: req.query.limit });
-  res.json({ circulars });
+  sendPublicJson(res, { circulars });
 }));
 
 router.get('/india/states', ah(async (_req, res) => {
-  res.json({ country: 'India', states: getIndiaStates() });
+  sendPublicJson(res, { country: 'India', states: getIndiaStates() });
 }));
 
 router.get('/india/districts', ah(async (req, res) => {
@@ -97,7 +144,7 @@ router.get('/india/districts', ah(async (req, res) => {
     return;
   }
 
-  res.json({
+  sendPublicJson(res, {
     country: 'India',
     state,
     districts: getDistrictsByState(state),
@@ -110,7 +157,7 @@ router.get('/india/pincode/:pincode', ah(async (req, res) => {
     res.status(404).json({ error: { code: 'NOT_FOUND', message: 'PIN code not found in India directory' } });
     return;
   }
-  res.json({ location });
+  sendPublicJson(res, { location });
 }));
 
 router.get('/verify/application-signature', ah(async (req, res) => {

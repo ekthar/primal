@@ -334,7 +334,7 @@ const applications = {
              'seasonClosure',
              jsonb_build_object(
                'closedAt', NOW(),
-               'closedBy', $3,
+                'closedBy', $3::uuid,
                'reason', 'Season rollover'
              )
            )
@@ -346,11 +346,12 @@ const applications = {
     return rows;
   },
   query: async (filters = {}) => {
-    const { status, tournamentId, clubId, reviewerId, stateCode, overdue, dueSoon, q, limit = 50, offset = 0 } = filters;
+    const { status, tournamentId, clubId, profileId, reviewerId, stateCode, overdue, dueSoon, q, limit = 50, offset = 0 } = filters;
     const where = [`a.${ACTIVE}`]; const args = [];
     if (status && status !== 'all') { args.push(status); where.push(`a.status = $${args.length}`); }
     if (tournamentId) { args.push(tournamentId); where.push(`a.tournament_id = $${args.length}`); }
     if (clubId) { args.push(clubId); where.push(`a.club_id = $${args.length}`); }
+    if (profileId) { args.push(profileId); where.push(`a.profile_id = $${args.length}`); }
     if (reviewerId) { args.push(reviewerId); where.push(`a.reviewer_id = $${args.length}`); }
     applyStateFilter(where, args, stateCode, 'p');
     if (overdue === true) where.push(`a.review_due_at < NOW() AND a.status IN ('submitted','under_review')`);

@@ -61,7 +61,7 @@ export default function Reports() {
 
   async function loadSummary() {
     setLoading(true);
-    const { data, error } = await api.reportSummary();
+    const { data, error } = await api.reportSummary({ includeDiagnostics: true });
     setLoading(false);
     if (error) {
       toast.error(error.message || "Failed to load reports summary");
