@@ -238,9 +238,9 @@ function Hero({ registrationOpen, nextTournamentLabel, heroConsole }) {
         style={{ y: !allowCinematicMotion || reduced ? 0 : imgY, scale: !allowCinematicMotion || reduced ? 1 : imgScale, backgroundImage: `url(${HERO_IMAGE})` }}
         className="absolute inset-0 z-0 bg-cover bg-center opacity-[0.9] dark:opacity-[0.82]"
       />
-      {/* z-[1]: ambient mesh gradient drifting behind everything */}
-      <MeshGradient className="z-[1]" />
-      {/* z-[2]: cage energy canvas */}
+      {/* -z-40: ambient mesh gradient drifting behind everything (sits behind CageEnergyCanvas's internal -z-30) */}
+      <MeshGradient className="-z-40" />
+      {/* CageEnergyCanvas internally renders at -z-30 */}
       <CageEnergyCanvas />
       <div
         className="absolute inset-0 z-[2] opacity-[0.08] dark:opacity-[0.12] pointer-events-none"
