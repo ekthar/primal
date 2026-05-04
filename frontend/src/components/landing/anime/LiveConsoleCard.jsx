@@ -45,6 +45,7 @@ export default function LiveConsoleCard({
       onMouseLeave={() => setPaused(false)}
       onTouchStart={() => setPaused(true)}
       onTouchEnd={() => setPaused(false)}
+      onTouchCancel={() => setPaused(false)}
     >
       <div
         className="pointer-events-none absolute inset-0 opacity-60"
