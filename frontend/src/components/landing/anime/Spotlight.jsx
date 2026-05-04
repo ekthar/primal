@@ -47,10 +47,14 @@ export default function Spotlight({
       return () => cancelAnimationFrame(raf);
     }
 
-    let targetX = 0;
-    let targetY = 0;
-    let curX = 0;
-    let curY = 0;
+    // Start centered on the host so the first frame doesn't snap the
+    // spotlight to (0, 0). The first real pointermove flips `initialized`
+    // and snaps cur to target so the spotlight follows the cursor instantly.
+    const hostRect = host.getBoundingClientRect();
+    let targetX = hostRect.width / 2;
+    let targetY = hostRect.height / 2;
+    let curX = targetX;
+    let curY = targetY;
     let initialized = false;
 
     const onMove = (event) => {
