@@ -40,6 +40,27 @@ const configuredCorsOrigins = Array.from(new Set([
   config.webBaseUrl,
 ])).filter(Boolean);
 
+// Compile each configured origin into either an exact string match or a
+// regex if it contains a '*' wildcard. This lets operators allowlist patterns
+// like `https://*.pages.dev` or `https://*.workers.dev` so Cloudflare Pages /
+// Workers preview URLs (which generate a unique subdomain per deploy) keep
+// working without an env edit on every deploy.
+const corsOriginMatchers = configuredCorsOrigins.map((entry) => {
+  if (!entry.includes('*')) {
+    return { type: 'exact', value: entry };
+  }
+  const escaped = entry.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*');
+  return { type: 'regex', value: new RegExp(`^${escaped}$`) };
+});
+
+function isOriginAllowed(requestOrigin) {
+  for (const matcher of corsOriginMatchers) {
+    if (matcher.type === 'exact' && matcher.value === requestOrigin) return true;
+    if (matcher.type === 'regex' && matcher.value.test(requestOrigin)) return true;
+  }
+  return false;
+}
+
 const corsDelegate = (req, callback) => {
   const requestOrigin = req.header('Origin');
   if (!requestOrigin) {
@@ -50,7 +71,7 @@ const corsDelegate = (req, callback) => {
     callback(null, { origin: true, credentials: true });
     return;
   }
-  const allowed = configuredCorsOrigins.includes(requestOrigin);
+  const allowed = isOriginAllowed(requestOrigin);
   callback(null, {
     origin: allowed,
     credentials: true,
