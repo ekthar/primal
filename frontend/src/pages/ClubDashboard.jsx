@@ -1150,7 +1150,7 @@ function ClubApplicationWorkspace({
       complete: missingKinds.length === 0,
       content: (
         <WorkspacePanel title="Documents" helper="Scan or upload replacement documents before submission or correction resubmission.">
-          <div className="grid gap-3 lg:grid-cols-3">
+          <div className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(240px,1fr))]">
             {REQUIRED_DOCUMENTS.map((item) => (
               <ClubDocumentSlot
                 key={item.kind}

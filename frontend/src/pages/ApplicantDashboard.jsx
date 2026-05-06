@@ -20,7 +20,7 @@ import {
   pickEditableProfile,
   serializeProfileForPatch,
 } from "@/components/application/ApplicationFormEditor";
-import { ApplicationWorkspace, WorkspacePanel } from "@/components/application/ApplicationWorkspace";
+import { ApplicationWorkspace, WorkspacePanel, WorkspaceSection } from "@/components/application/ApplicationWorkspace";
 import { useLocale } from "@/context/LocaleContext";
 
 function getAccessMessage(application) {
@@ -1058,9 +1058,8 @@ function ApplicationDetailsView({ application, profile, showDocuments = true, sh
 
   return (
     <div className="mt-5 space-y-5">
-      <section className="rounded-2xl border border-border bg-background/60 p-4">
-        <SectionTitle title="Participant profile" />
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 text-sm">
+      <WorkspaceSection title="Participant profile">
+        <div className="grid gap-3 sm:grid-cols-2 text-sm">
           <DetailCard label="Full name" value={application.applicant_display_name || formatPersonName(application.first_name, application.last_name)} />
           <DetailCard label="Application ID" value={application.application_display_id || application.id} />
           <DetailCard label="Status" value={formatToken(application.status || "")} />
@@ -1073,11 +1072,10 @@ function ApplicationDetailsView({ application, profile, showDocuments = true, sh
           <DetailCard label="Nationality" value={application.nationality || profile?.nationality || "-"} />
           <DetailCard label="Address" value={[address.line1, address.line2, address.district, address.state, address.postalCode].filter(Boolean).join(", ") || "-"} wide />
         </div>
-      </section>
+      </WorkspaceSection>
 
-      <section className="rounded-2xl border border-border bg-background/60 p-4">
-        <SectionTitle title="Competition entry" />
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 text-sm">
+      <WorkspaceSection title="Competition entry">
+        <div className="grid gap-3 sm:grid-cols-2 text-sm">
           <DetailCard label="Selected disciplines" value={formatDisplayValue(formData.selectedDisciplines || application.discipline)} />
           <DetailCard label="Experience level" value={formatDisplayValue(formData.experienceLevel)} />
           <DetailCard label="Years training" value={formatDisplayValue(formData.yearsTraining)} />
@@ -1087,7 +1085,7 @@ function ApplicationDetailsView({ application, profile, showDocuments = true, sh
           <DetailCard label="Reviewer notes" value={formData.notes || "-"} wide />
         </div>
         {categoryEntries.length ? (
-          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
             {categoryEntries.map((entry, index) => (
               <div key={`${entry.disciplineId || "entry"}-${index}`} className="rounded-xl border border-border bg-surface px-3 py-3 text-sm">
                 <div className="font-medium">{formatDisplayValue(entry.disciplineLabel || entry.disciplineId)}</div>
@@ -1096,11 +1094,10 @@ function ApplicationDetailsView({ application, profile, showDocuments = true, sh
             ))}
           </div>
         ) : null}
-      </section>
+      </WorkspaceSection>
 
-      <section className="rounded-2xl border border-border bg-background/60 p-4">
-        <SectionTitle title="Corner and emergency contact" />
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 text-sm">
+      <WorkspaceSection title="Corner and emergency contact">
+        <div className="grid gap-3 sm:grid-cols-2 text-sm">
           <DetailCard label="Coach name" value={formData.cornerCoachName || "-"} />
           <DetailCard label="Coach phone" value={formData.cornerCoachPhone || "-"} />
           <DetailCard label="Emergency contact" value={formData.emergencyContactName || "-"} />
@@ -1108,7 +1105,7 @@ function ApplicationDetailsView({ application, profile, showDocuments = true, sh
           <DetailCard label="Emergency phone" value={formData.emergencyContactPhone || "-"} />
           <DetailCard label="Medical notes" value={formData.medicalNotes || "-"} wide />
         </div>
-      </section>
+      </WorkspaceSection>
 
       {showDocuments ? <DocumentsView documents={application.documents || []} /> : null}
       {showHistory ? <StatusTimelineView events={application.statusEvents || []} /> : null}
@@ -1135,9 +1132,8 @@ function DetailCard({ label, value, wide }) {
 
 function DocumentsView({ documents }) {
   return (
-    <section className="rounded-2xl border border-border bg-background/60 p-4">
-      <SectionTitle title="Documents" />
-      <div className="mt-4 grid gap-3">
+    <WorkspaceSection title="Documents">
+      <div className="grid gap-3">
         {REQUIRED_UPLOADS.map((item) => {
           const documentRow = getLatestDocumentByKind(documents, item.kind);
           return (
@@ -1145,7 +1141,7 @@ function DocumentsView({ documents }) {
           );
         })}
       </div>
-    </section>
+    </WorkspaceSection>
   );
 }
 
@@ -1290,9 +1286,8 @@ function SelectedFilePreview({ file, label }) {
 
   if (!file) {
     return (
-      <div className="flex min-h-40 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-background/70 px-4 py-6 text-center">
-        <div className="text-sm font-medium">{label} preview</div>
-        <div className="mt-1 text-sm text-secondary-muted">Nothing selected yet.</div>
+      <div className="flex h-24 flex-col items-center justify-center rounded-xl border border-dashed border-border/70 bg-background/40 px-3 text-center">
+        <div className="text-xs text-secondary-muted">Nothing selected yet</div>
       </div>
     );
   }
