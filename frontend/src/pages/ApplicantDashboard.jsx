@@ -512,7 +512,7 @@ export default function ApplicantDashboard() {
             title={application.status === "draft" ? "Required documents" : "Replace documents"}
             helper={application.status === "draft" ? "Scan or upload every required document before submitting." : "Replace only the documents requested by the reviewer, if needed."}
           >
-            <div className="grid gap-3 xl:grid-cols-3">
+            <div className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(240px,1fr))]">
               {REQUIRED_UPLOADS.map((item) => (
                 <DraftUploadCard
                   key={item.kind}
@@ -1243,7 +1243,7 @@ function DraftUploadCard({ applicationId, item, file, onFileChange }) {
 
       <div className="mt-4 flex flex-1 flex-col gap-3">
         <SelectedFilePreview file={file} label={item.label} />
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-1">
+        <div className="grid grid-cols-1 gap-2">
           <Button type="button" variant="outline" className="w-full justify-center" onClick={() => setScannerOpen(true)}>
             <ScanLine className="size-4" /> Scan with camera
           </Button>
