@@ -1,5 +1,16 @@
+import { createContext, useContext } from "react";
 import { Activity, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+
+// When provided with `flat: true`, descendant `<WorkspacePanel>` and
+// `<WorkspaceSection>` components drop their card chrome (border / bg /
+// padding) so the surrounding `<ApplicationWorkspace>` is the only bordered
+// surface. This avoids the nested-box look users complained about.
+const WorkspaceChromeContext = createContext({ flat: false });
+
+export function useWorkspaceChrome() {
+  return useContext(WorkspaceChromeContext);
+}
 
 export function ApplicationWorkspace({
   title,
@@ -68,7 +79,9 @@ export function ApplicationWorkspace({
           </div>
         </nav>
         <div className="min-w-0 p-4 sm:p-5">
-          {selectedSection?.content}
+          <WorkspaceChromeContext.Provider value={{ flat: true }}>
+            {selectedSection?.content}
+          </WorkspaceChromeContext.Provider>
         </div>
       </div>
     </section>
@@ -76,6 +89,20 @@ export function ApplicationWorkspace({
 }
 
 export function WorkspacePanel({ title, helper, children, tone = "default" }) {
+  const { flat } = useWorkspaceChrome();
+
+  if (flat) {
+    return (
+      <section>
+        <header>
+          <h3 className="font-display text-lg font-semibold tracking-tight">{title}</h3>
+          {helper ? <p className="mt-1 text-sm text-secondary-muted">{helper}</p> : null}
+        </header>
+        <div className="mt-3">{children}</div>
+      </section>
+    );
+  }
+
   const toneClass = tone === "warning"
     ? "border-amber-300/60 bg-amber-50/60"
     : tone === "success"
@@ -88,6 +115,27 @@ export function WorkspacePanel({ title, helper, children, tone = "default" }) {
         <h3 className="font-display text-lg font-semibold tracking-tight">{title}</h3>
         {helper ? <p className="mt-1 text-sm text-secondary-muted">{helper}</p> : null}
       </div>
+      <div className="mt-4">{children}</div>
+    </section>
+  );
+}
+
+// Small flat section used inside <ApplicationWorkspace> for read-only data
+// groupings. When rendered outside a workspace it still has chrome so it
+// can be reused on standalone screens.
+export function WorkspaceSection({ title, children, className = "" }) {
+  const { flat } = useWorkspaceChrome();
+  if (flat) {
+    return (
+      <section className={className}>
+        <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">{title}</div>
+        <div className="mt-3">{children}</div>
+      </section>
+    );
+  }
+  return (
+    <section className={`rounded-2xl border border-border bg-background/60 p-4 ${className}`}>
+      <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">{title}</div>
       <div className="mt-4">{children}</div>
     </section>
   );
