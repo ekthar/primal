@@ -3,10 +3,11 @@
  * Wraps a file input + LiveDocumentScanner. Emits the selected File via onChange,
  * along with a `capturedVia` telemetry tag ("scan" | "upload") on the file object.
  */
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import LiveDocumentScanner from "./LiveDocumentScanner";
 import { Camera, Upload, FileCheck } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
+import { useHasCamera } from "./useHasCamera";
 
 export default function DocumentInputField({
   value,                  // File | null
@@ -23,14 +24,33 @@ export default function DocumentInputField({
   disabled,
 }) {
   const locale = useLocale();
-  const TABS = [
-    { id: "scan", label: locale?.t("documentInput.scan", "Scan with camera") ?? "Scan with camera", icon: Camera },
-    { id: "upload", label: locale?.t("documentInput.upload", "Upload from device") ?? "Upload from device", icon: Upload },
-  ];
+  const cameraStatus = useHasCamera();
+  const cameraAvailable = cameraStatus !== "missing";
+  const TABS = cameraAvailable
+    ? [
+        { id: "scan", label: locale?.t("documentInput.scan", "Scan with camera") ?? "Scan with camera", icon: Camera },
+        { id: "upload", label: locale?.t("documentInput.upload", "Upload from device") ?? "Upload from device", icon: Upload },
+      ]
+    : [
+        { id: "upload", label: locale?.t("documentInput.upload", "Upload from device") ?? "Upload from device", icon: Upload },
+      ];
   const [tab, setTab] = useState(capturedVia === "scan" ? "scan" : "upload");
   const [internalScannerOpen, setInternalScannerOpen] = useState(false);
   const fileInputRef = useRef(null);
   const liveScannerOpen = scannerOpen ?? internalScannerOpen;
+
+  // If we discover the device has no camera after mount (e.g. desktop), fall
+  // back to the upload tab so the user isn't stuck on a Scan tab they can't
+  // use. Also force-close the scanner if it happens to be open.
+  useEffect(() => {
+    if (cameraStatus === "missing") {
+      if (tab === "scan") setTab("upload");
+      if (liveScannerOpen) {
+        if (onScannerOpenChange) onScannerOpenChange(false);
+        else setInternalScannerOpen(false);
+      }
+    }
+  }, [cameraStatus, tab, liveScannerOpen, onScannerOpenChange]);
 
   const setScannerOpenState = (open) => {
     if (onScannerOpenChange) {
