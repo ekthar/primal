@@ -342,7 +342,11 @@ export default function ApplicantDashboard() {
       toast.error(resubmit ? "Wait for document uploads to finish before resubmitting" : "Wait for document uploads to finish before saving");
       return;
     }
-    if (Object.values(pending).some((entry) => entry?.status === "error")) {
+    const correctionDocs = activeApplicationDetails?.documents || application.documents || [];
+    const blockingErrorKinds = Object.entries(pending)
+      .filter(([kind, entry]) => entry?.status === "error" && !getLatestDocumentByKind(correctionDocs, kind))
+      .map(([kind]) => kind);
+    if (blockingErrorKinds.length) {
       toast.error(resubmit ? "Some document uploads failed. Retry them before resubmitting" : "Some document uploads failed. Retry them before saving");
       return;
     }
@@ -405,7 +409,10 @@ export default function ApplicantDashboard() {
       toast.error("Wait for document uploads to finish before submitting");
       return;
     }
-    if (Object.values(pending).some((entry) => entry?.status === "error")) {
+    const blockingErrorKinds = Object.entries(pending)
+      .filter(([kind, entry]) => entry?.status === "error" && !getLatestDocumentByKind(documents, kind))
+      .map(([kind]) => kind);
+    if (blockingErrorKinds.length) {
       toast.error("Some document uploads failed. Retry them before submitting");
       return;
     }
@@ -537,6 +544,7 @@ export default function ApplicantDashboard() {
                   documentRow={getLatestDocumentByKind(documents, item.kind)}
                   pending={draftUploads[application.id]?.[item.kind] || null}
                   onUpload={(file) => uploadDraftDocument(application, item.kind, file)}
+                  onDismissError={() => setUploadStatus(application.id, item.kind, null)}
                 />
               ))}
             </div>
@@ -1222,7 +1230,7 @@ function StatusTimelineView({ events }) {
   );
 }
 
-function DraftUploadCard({ item, documentRow, pending, onUpload }) {
+function DraftUploadCard({ item, documentRow, pending, onUpload, onDismissError }) {
   const libraryInputRef = useRef(null);
   const Icon = item.icon;
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -1280,6 +1288,7 @@ function DraftUploadCard({ item, documentRow, pending, onUpload }) {
           pendingFileName={pending?.fileName}
           errorMessage={errorMessage}
           label={item.label}
+          onDismissError={onDismissError}
         />
         <div className="grid grid-cols-1 gap-2">
           {cameraAvailable ? (
@@ -1311,7 +1320,7 @@ function DraftUploadCard({ item, documentRow, pending, onUpload }) {
   );
 }
 
-function DocumentStatusPanel({ documentRow, documentUrl, isUploading, pendingFileName, errorMessage, label }) {
+function DocumentStatusPanel({ documentRow, documentUrl, isUploading, pendingFileName, errorMessage, label, onDismissError }) {
   if (isUploading) {
     return (
       <div className="flex h-24 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-primary/40 bg-primary/5 px-3 text-center">
@@ -1322,10 +1331,20 @@ function DocumentStatusPanel({ documentRow, documentUrl, isUploading, pendingFil
   }
 
   if (errorMessage) {
+    const dismissLabel = documentRow ? "Dismiss and keep current file" : "Dismiss";
     return (
-      <div className="flex h-24 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-rose-300 bg-rose-50 px-3 text-center">
+      <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-rose-300 bg-rose-50 px-3 py-3 text-center">
         <div className="text-xs font-medium text-rose-700">Upload failed</div>
         <div className="text-[11px] text-rose-600 break-all">{errorMessage}</div>
+        {onDismissError ? (
+          <button
+            type="button"
+            onClick={onDismissError}
+            className="inline-flex items-center gap-1 rounded-md border border-rose-300 bg-white px-2 py-1 text-[11px] font-medium text-rose-700 hover:bg-rose-100"
+          >
+            <XCircle className="size-3" /> {dismissLabel}
+          </button>
+        ) : null}
       </div>
     );
   }
