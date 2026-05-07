@@ -22,6 +22,7 @@ import {
 import { ApplicationWorkspace, WorkspacePanel } from "@/components/application/ApplicationWorkspace";
 import DocumentInputField from "@/components/scanner/DocumentInputField";
 import LiveDocumentScanner from "@/components/scanner/LiveDocumentScanner";
+import { useHasCamera } from "@/components/scanner/useHasCamera";
 import api, { resolveBackendUrl } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -1283,6 +1284,8 @@ function ClubDocumentSlot({ item, documentRow, pendingFile, disabled, onUpload }
   const [scannerOpen, setScannerOpen] = useState(false);
   const documentUrl = resolveBackendUrl(documentRow?.url || "");
   const Icon = item.icon;
+  const cameraStatus = useHasCamera();
+  const cameraAvailable = cameraStatus !== "missing";
   return (
     <div className="rounded-2xl border border-border bg-surface p-4">
       <div className="flex items-start gap-3">
@@ -1306,10 +1309,12 @@ function ClubDocumentSlot({ item, documentRow, pendingFile, disabled, onUpload }
         )}
         {pendingFile ? <div className="mt-2 text-secondary-muted">Latest upload: {pendingFile.name}</div> : null}
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => setScannerOpen(true)}>
-          <ScanLine className="size-3.5" /> Scan
-        </Button>
+      <div className={`mt-3 grid gap-2 ${cameraAvailable ? "grid-cols-2" : "grid-cols-1"}`}>
+        {cameraAvailable ? (
+          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => setScannerOpen(true)}>
+            <ScanLine className="size-3.5" /> Scan
+          </Button>
+        ) : null}
         <label className={`inline-flex h-9 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-border bg-background px-3 text-sm ${disabled ? "pointer-events-none opacity-50" : "hover:bg-surface-muted"}`}>
           <Upload className="size-3.5" /> Upload
           <input type="file" accept={item.accept} className="hidden" disabled={disabled} onChange={(event) => {

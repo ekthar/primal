@@ -11,6 +11,7 @@ import api, { resolveBackendUrl } from "@/lib/api";
 import { formatPersonName } from "@/lib/person";
 import { toast } from "sonner";
 import LiveDocumentScanner from "@/components/scanner/LiveDocumentScanner";
+import { useHasCamera } from "@/components/scanner/useHasCamera";
 import {
   pickEditableFormData,
   serializeFormDataForPatch,
@@ -1209,6 +1210,8 @@ function DraftUploadCard({ applicationId, item, file, onFileChange }) {
   const libraryInputRef = useRef(null);
   const Icon = item.icon;
   const [scannerOpen, setScannerOpen] = useState(false);
+  const cameraStatus = useHasCamera();
+  const cameraAvailable = cameraStatus !== "missing";
 
   function openLibraryPicker() {
     if (libraryInputRef.current) {
@@ -1240,10 +1243,12 @@ function DraftUploadCard({ applicationId, item, file, onFileChange }) {
       <div className="mt-4 flex flex-1 flex-col gap-3">
         <SelectedFilePreview file={file} label={item.label} />
         <div className="grid grid-cols-1 gap-2">
-          <Button type="button" variant="outline" className="w-full justify-center" onClick={() => setScannerOpen(true)}>
-            <ScanLine className="size-4" /> Scan with camera
-          </Button>
-          <Button type="button" variant="outline" className="w-full justify-center" onClick={openLibraryPicker}>
+          {cameraAvailable ? (
+            <Button type="button" variant="outline" className="w-full justify-center" onClick={() => setScannerOpen(true)}>
+              <ScanLine className="size-4" /> Scan with camera
+            </Button>
+          ) : null}
+          <Button type="button" variant={cameraAvailable ? "outline" : "default"} className="w-full justify-center" onClick={openLibraryPicker}>
             <Upload className="size-4" /> Upload from device
           </Button>
         </div>
