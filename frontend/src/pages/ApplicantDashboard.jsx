@@ -342,6 +342,10 @@ export default function ApplicantDashboard() {
       toast.error(resubmit ? "Wait for document uploads to finish before resubmitting" : "Wait for document uploads to finish before saving");
       return;
     }
+    if (Object.values(pending).some((entry) => entry?.status === "error")) {
+      toast.error(resubmit ? "Some document uploads failed. Retry them before resubmitting" : "Some document uploads failed. Retry them before saving");
+      return;
+    }
     setSubmittingCorrectionId(application.id);
     if (profile && correctionProfileEdits[application.id]) {
       const profilePayload = serializeProfileForPatch(profileEdits, profile);
@@ -399,6 +403,10 @@ export default function ApplicantDashboard() {
     const pending = draftUploads[application.id] || {};
     if (Object.values(pending).some((entry) => entry?.status === "uploading")) {
       toast.error("Wait for document uploads to finish before submitting");
+      return;
+    }
+    if (Object.values(pending).some((entry) => entry?.status === "error")) {
+      toast.error("Some document uploads failed. Retry them before submitting");
       return;
     }
 
