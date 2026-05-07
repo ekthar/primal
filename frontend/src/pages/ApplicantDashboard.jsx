@@ -337,6 +337,11 @@ export default function ApplicantDashboard() {
   async function saveCorrections(application, { resubmit = false } = {}) {
     const edits = getCorrectionEdits(application);
     const profileEdits = getCorrectionProfileEdits(application);
+    const pending = draftUploads[application.id] || {};
+    if (Object.values(pending).some((entry) => entry?.status === "uploading")) {
+      toast.error(resubmit ? "Wait for document uploads to finish before resubmitting" : "Wait for document uploads to finish before saving");
+      return;
+    }
     setSubmittingCorrectionId(application.id);
     if (profile && correctionProfileEdits[application.id]) {
       const profilePayload = serializeProfileForPatch(profileEdits, profile);
