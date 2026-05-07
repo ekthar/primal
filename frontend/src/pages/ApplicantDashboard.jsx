@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, Camera, Download, Eye, FileCheck2, FileEdit, FileText, History, Mail as MailIcon, Save, ScanLine, Send, ShieldAlert, Upload, XCircle } from "lucide-react";
+import { AlertCircle, Camera, CheckCircle2, Download, Eye, FileCheck2, FileEdit, FileText, History, Mail as MailIcon, RefreshCw, Save, ScanLine, Send, ShieldAlert, Upload, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
@@ -72,10 +72,6 @@ function formatFileSize(file) {
   if (!file?.size) return "-";
   if (file.size < 1024 * 1024) return `${Math.max(1, Math.round(file.size / 1024))} KB`;
   return `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function isImageFile(file) {
-  return Boolean(file?.type?.startsWith("image/"));
 }
 
 export default function ApplicantDashboard() {
@@ -228,14 +224,42 @@ export default function ApplicantDashboard() {
     if (!appRes.error) setApplications(appRes.data.items || []);
   }
 
-  function setDraftFile(applicationId, kind, file) {
-    setDraftUploads((current) => ({
-      ...current,
-      [applicationId]: {
-        ...(current[applicationId] || {}),
-        [kind]: file || null,
-      },
-    }));
+  function setUploadStatus(applicationId, kind, value) {
+    setDraftUploads((current) => {
+      const next = { ...current };
+      const perApp = { ...(next[applicationId] || {}) };
+      if (value === null) {
+        delete perApp[kind];
+      } else {
+        perApp[kind] = value;
+      }
+      next[applicationId] = perApp;
+      return next;
+    });
+  }
+
+  async function uploadDraftDocument(application, kind, file) {
+    if (!file) return;
+    const capturedVia = typeof file?.name === "string" && file.name.startsWith("scan-") ? "scan" : "upload";
+    setUploadStatus(application.id, kind, { status: "uploading", fileName: file.name });
+    const { error } = await api.uploadApplicationDocument(application.id, {
+      file,
+      kind,
+      label: file.name,
+      capturedVia,
+    });
+    if (error) {
+      setUploadStatus(application.id, kind, { status: "error", error: error.message || "Upload failed", fileName: file.name });
+      toast.error(error.message || `Failed to upload ${kind}`);
+      return;
+    }
+    const refreshed = await api.getApplication(application.id);
+    if (!refreshed.error && refreshed.data?.application) {
+      const next = refreshed.data.application;
+      setActiveApplicationDetails((current) => (current?.id === application.id ? next : current));
+    }
+    setUploadStatus(application.id, kind, null);
+    toast.success(`${file.name} uploaded`);
   }
 
   function getDraftEdits(application) {
@@ -314,18 +338,6 @@ export default function ApplicantDashboard() {
     const edits = getCorrectionEdits(application);
     const profileEdits = getCorrectionProfileEdits(application);
     setSubmittingCorrectionId(application.id);
-    const filesByKind = draftUploads[application.id] || {};
-    for (const kind of Object.keys(filesByKind)) {
-      const file = filesByKind[kind];
-      if (!file) continue;
-      const capturedVia = typeof file?.name === "string" && file.name.startsWith("scan-") ? "scan" : "upload";
-      const { error: uploadError } = await api.uploadApplicationDocument(application.id, { file, kind, label: file.name, capturedVia });
-      if (uploadError) {
-        setSubmittingCorrectionId(null);
-        toast.error(uploadError.message || `Failed to replace ${kind}`);
-        return;
-      }
-    }
     if (profile && correctionProfileEdits[application.id]) {
       const profilePayload = serializeProfileForPatch(profileEdits, profile);
       const { data: profileRes, error: profileError } = await api.upsertMyProfile(profilePayload);
@@ -366,35 +378,26 @@ export default function ApplicantDashboard() {
     toast.success(resubmit ? "Corrections sent for re-review" : "Corrections saved");
   }
 
-  async function uploadAndSubmitDraft(application) {
+  async function submitDraft(application) {
     const saved = await saveDraftApplication(application);
     if (!saved) return;
 
-    const files = draftUploads[application.id] || {};
+    const documents = activeApplicationDetails?.documents || application.documents || [];
     const requiredKinds = REQUIRED_UPLOADS.map((item) => item.kind);
-    const missing = requiredKinds.filter((kind) => !files[kind]);
+    const missing = requiredKinds.filter((kind) => !getLatestDocumentByKind(documents, kind));
     if (missing.length) {
-      toast.error("Upload medical certificate, photo ID, and signed consent before submitting");
+      const labels = REQUIRED_UPLOADS.filter((item) => missing.includes(item.kind)).map((item) => item.label).join(", ");
+      toast.error(`Upload required documents before submitting: ${labels}`);
+      return;
+    }
+
+    const pending = draftUploads[application.id] || {};
+    if (Object.values(pending).some((entry) => entry?.status === "uploading")) {
+      toast.error("Wait for document uploads to finish before submitting");
       return;
     }
 
     setSubmittingDraftId(application.id);
-    for (const kind of requiredKinds) {
-      const file = files[kind];
-      const capturedVia = typeof file?.name === "string" && file.name.startsWith("scan-") ? "scan" : "upload";
-      const { error } = await api.uploadApplicationDocument(application.id, {
-        file,
-        kind,
-        label: file.name,
-        capturedVia,
-      });
-      if (error) {
-        setSubmittingDraftId(null);
-        toast.error(error.message || `Failed to upload ${kind}`);
-        return;
-      }
-    }
-
     const { data, error } = await api.submitApplication(application.id);
     setSubmittingDraftId(null);
     if (error) {
@@ -517,10 +520,10 @@ export default function ApplicantDashboard() {
               {REQUIRED_UPLOADS.map((item) => (
                 <DraftUploadCard
                   key={item.kind}
-                  applicationId={application.id}
                   item={item}
-                  file={draftUploads[application.id]?.[item.kind] || null}
-                  onFileChange={setDraftFile}
+                  documentRow={getLatestDocumentByKind(documents, item.kind)}
+                  pending={draftUploads[application.id]?.[item.kind] || null}
+                  onUpload={(file) => uploadDraftDocument(application, item.kind, file)}
                 />
               ))}
             </div>
@@ -538,7 +541,7 @@ export default function ApplicantDashboard() {
         <WorkspacePanel title="Workflow actions" helper={getAccessMessage(application)}>
           <div className="grid gap-2">
             {application.status === "draft" ? (
-              <Button onClick={() => uploadAndSubmitDraft(application)} disabled={submittingDraftId === application.id}>
+              <Button onClick={() => submitDraft(application)} disabled={submittingDraftId === application.id}>
                 <InlineLoadingLabel loading={submittingDraftId === application.id} loadingText="Submitting...">
                   Submit this season application
                 </InlineLoadingLabel>
@@ -1206,26 +1209,35 @@ function StatusTimelineView({ events }) {
   );
 }
 
-function DraftUploadCard({ applicationId, item, file, onFileChange }) {
+function DraftUploadCard({ item, documentRow, pending, onUpload }) {
   const libraryInputRef = useRef(null);
   const Icon = item.icon;
   const [scannerOpen, setScannerOpen] = useState(false);
   const cameraStatus = useHasCamera();
   const cameraAvailable = cameraStatus !== "missing";
 
+  const isUploading = pending?.status === "uploading";
+  const errorMessage = pending?.status === "error" ? pending.error : null;
+  const uploaded = Boolean(documentRow);
+  const documentUrl = resolveBackendUrl(documentRow?.url || "");
+  const primaryActionLabel = uploaded ? "Replace file" : "Upload from device";
+  const scanActionLabel = uploaded ? "Replace via scan" : "Scan with camera";
+
   function openLibraryPicker() {
+    if (isUploading) return;
     if (libraryInputRef.current) {
       libraryInputRef.current.click();
     }
   }
 
   function handleFileSelection(event) {
-    onFileChange(applicationId, item.kind, event.target.files?.[0] || null);
+    const file = event.target.files?.[0] || null;
     event.target.value = "";
+    if (file) onUpload(file);
   }
 
   function handleScannerCapture(captured) {
-    onFileChange(applicationId, item.kind, captured);
+    if (captured) onUpload(captured);
   }
 
   return (
@@ -1234,22 +1246,36 @@ function DraftUploadCard({ applicationId, item, file, onFileChange }) {
         <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl border border-border bg-background text-primary">
           <Icon className="size-4" />
         </div>
-        <div className="min-w-0">
-          <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">{item.label}</div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">{item.label}</div>
+            {uploaded ? (
+              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                <CheckCircle2 className="size-3" /> Uploaded
+              </span>
+            ) : null}
+          </div>
           <p className="mt-1 text-sm text-secondary-muted">{item.description}</p>
         </div>
       </div>
 
       <div className="mt-4 flex flex-1 flex-col gap-3">
-        <SelectedFilePreview file={file} label={item.label} />
+        <DocumentStatusPanel
+          documentRow={documentRow}
+          documentUrl={documentUrl}
+          isUploading={isUploading}
+          pendingFileName={pending?.fileName}
+          errorMessage={errorMessage}
+          label={item.label}
+        />
         <div className="grid grid-cols-1 gap-2">
           {cameraAvailable ? (
-            <Button type="button" variant="outline" className="w-full justify-center" onClick={() => setScannerOpen(true)}>
-              <ScanLine className="size-4" /> Scan with camera
+            <Button type="button" variant="outline" className="w-full justify-center" onClick={() => setScannerOpen(true)} disabled={isUploading}>
+              <ScanLine className="size-4" /> {scanActionLabel}
             </Button>
           ) : null}
-          <Button type="button" variant={cameraAvailable ? "outline" : "default"} className="w-full justify-center" onClick={openLibraryPicker}>
-            <Upload className="size-4" /> Upload from device
+          <Button type="button" variant={uploaded || cameraAvailable ? "outline" : "default"} className="w-full justify-center" onClick={openLibraryPicker} disabled={isUploading}>
+            {uploaded ? <RefreshCw className="size-4" /> : <Upload className="size-4" />} {primaryActionLabel}
           </Button>
         </div>
       </div>
@@ -1272,46 +1298,55 @@ function DraftUploadCard({ applicationId, item, file, onFileChange }) {
   );
 }
 
-function SelectedFilePreview({ file, label }) {
-  const [previewUrl, setPreviewUrl] = useState(null);
-
-  useEffect(() => {
-    if (!file || !isImageFile(file)) {
-      setPreviewUrl(null);
-      return undefined;
-    }
-
-    const nextPreviewUrl = URL.createObjectURL(file);
-    setPreviewUrl(nextPreviewUrl);
-
-    return () => {
-      URL.revokeObjectURL(nextPreviewUrl);
-    };
-  }, [file]);
-
-  if (!file) {
+function DocumentStatusPanel({ documentRow, documentUrl, isUploading, pendingFileName, errorMessage, label }) {
+  if (isUploading) {
     return (
-      <div className="flex h-24 flex-col items-center justify-center rounded-xl border border-dashed border-border/70 bg-background/40 px-3 text-center">
-        <div className="text-xs text-secondary-muted">Nothing selected yet</div>
+      <div className="flex h-24 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-primary/40 bg-primary/5 px-3 text-center">
+        <div className="text-xs font-medium text-primary">Uploading{pendingFileName ? ` ${pendingFileName}` : "..."}</div>
+        <div className="text-[11px] text-secondary-muted">Don&apos;t close this tab.</div>
+      </div>
+    );
+  }
+
+  if (errorMessage) {
+    return (
+      <div className="flex h-24 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-rose-300 bg-rose-50 px-3 text-center">
+        <div className="text-xs font-medium text-rose-700">Upload failed</div>
+        <div className="text-[11px] text-rose-600 break-all">{errorMessage}</div>
+      </div>
+    );
+  }
+
+  if (documentRow) {
+    return (
+      <div className="overflow-hidden rounded-2xl border border-emerald-200 bg-emerald-50/60">
+        <div className="flex h-32 items-center justify-center bg-white">
+          {documentUrl && /\.(png|jpe?g|webp|gif)$/i.test(documentRow.url || "") ? (
+            <img src={documentUrl} alt={`${label} preview`} className="h-32 w-full object-cover" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-xs text-secondary-muted">
+              {documentRow.original_filename || "Uploaded file"}
+            </div>
+          )}
+        </div>
+        <div className="space-y-1 border-t border-emerald-200 px-3 py-2">
+          <div className="text-xs font-medium break-all">{documentRow.label || documentRow.original_filename || "Uploaded file"}</div>
+          <div className="text-[11px] text-secondary-muted">
+            {formatFileSize({ size: documentRow.size_bytes })} {documentRow.verified_at ? "/ Verified" : "/ Awaiting review"}
+          </div>
+          {documentUrl ? (
+            <a href={documentUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
+              <Eye className="size-3" /> View uploaded file
+            </a>
+          ) : null}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-background/70">
-      {previewUrl ? (
-        <img src={previewUrl} alt={`${label} preview`} className="h-40 w-full object-cover" />
-      ) : (
-        <div className="flex h-40 items-center justify-center bg-surface-muted px-4 text-center text-sm text-secondary-muted">
-          Preview unavailable for this file type.
-        </div>
-      )}
-      <div className="space-y-1 border-t border-border px-4 py-3">
-        <div className="text-sm font-medium break-all">{file.name}</div>
-        <div className="text-xs text-secondary-muted">
-          {file.type || "Unknown file type"} / {formatFileSize(file)}
-        </div>
-      </div>
+    <div className="flex h-24 flex-col items-center justify-center rounded-xl border border-dashed border-border/70 bg-background/40 px-3 text-center">
+      <div className="text-xs text-secondary-muted">Nothing uploaded yet</div>
     </div>
   );
 }
