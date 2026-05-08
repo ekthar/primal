@@ -542,10 +542,13 @@ function drawBracketSlot(doc, ctx) {
     return;
   }
 
-  // Compact slot (≤ 28pt tall): single-line — seed · name on one row.
-  // Generous slot (> 28pt): two-row — seed/corner micro-label above,
+  // Compact slot (< 34pt): single-line — seed · name · club chip on the
+  // right, all on one row. 34pt is the smallest height at which the
+  // generous two-row layout (name + club under it) fits without the club
+  // text overflowing into the next slot (see text-layout math below).
+  // Generous slot (≥ 34pt): two-row — seed/corner micro-label above,
   // name + club stacked.
-  const compact = height <= 28;
+  const compact = height < 34;
   const seedText = side.seedScore || side.seed ? `#${side.seedScore || side.seed}` : '';
   const cornerText = (side.corner || '').toUpperCase();
 
@@ -617,7 +620,7 @@ function drawBracketSlot(doc, ctx) {
     ellipsis: true,
   });
   doc.restore();
-  if (height >= 30) {
+  if (height >= 34) {
     doc.save();
     doc.fillColor(palette.textMuted).font(fonts.body).fontSize(TYPE_SCALE.micro.size);
     lockedText(doc, side.club || 'Independent', contentX, y + 13 + TYPE_SCALE.body.size + 3, {
