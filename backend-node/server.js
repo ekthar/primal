@@ -79,6 +79,24 @@ const corsDelegate = (req, callback) => {
 };
 
 app.set('trust proxy', 1);
+
+// Bulletproof CORS: explicitly set Access-Control-Allow-Origin + Vary on
+// every incoming request whose Origin we recognise, BEFORE any other
+// middleware can error out. This ensures that even if multer rejects a
+// large upload, the rate-limiter 429s, the auth middleware 401s, or a
+// downstream handler throws before finishing, the browser still sees a
+// valid CORS header on the response and surfaces the real HTTP status
+// instead of a generic "blocked by CORS policy" message.
+app.use((req, res, next) => {
+  const requestOrigin = req.header('Origin');
+  if (requestOrigin && (!configuredCorsOrigins.length || isOriginAllowed(requestOrigin))) {
+    res.setHeader('Access-Control-Allow-Origin', requestOrigin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Vary', 'Origin');
+  }
+  next();
+});
+
 app.use(requestTiming);
 // Allow the configured frontend origins to embed responses from this API in an
 // <iframe> (e.g. document/PDF preview in Reviewer Workbench). frame-ancestors
