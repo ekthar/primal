@@ -359,6 +359,106 @@ async function listMatchesForDivision(divisionId) {
   }));
 }
 
+async function getMatchById(actor, matchId) {
+  assertAdmin(actor);
+  if (!matchId) throw ApiError.notFound('Match not found');
+
+  const { rows } = await query(
+    `
+      SELECT
+        m.*,
+        d.tournament_id AS division_tournament_id,
+        d.label AS division_label,
+        d.weight_class AS division_weight_class,
+        d.sex AS division_sex,
+        d.age_band AS division_age_band,
+        t.name AS tournament_name,
+        t.slug AS tournament_slug,
+        e1.participant_name AS entry1_name,
+        e1.club_name AS entry1_club_name,
+        e1.application_id AS entry1_application_id,
+        e1.profile_id AS entry1_profile_id,
+        e1.seed AS entry1_seed,
+        e1.derived_seed_score AS entry1_derived_seed_score,
+        p1.nationality AS entry1_nationality,
+        p1.weight_kg AS entry1_weight_kg,
+        e2.participant_name AS entry2_name,
+        e2.club_name AS entry2_club_name,
+        e2.application_id AS entry2_application_id,
+        e2.profile_id AS entry2_profile_id,
+        e2.seed AS entry2_seed,
+        e2.derived_seed_score AS entry2_derived_seed_score,
+        p2.nationality AS entry2_nationality,
+        p2.weight_kg AS entry2_weight_kg
+      FROM matches m
+      JOIN divisions d ON d.id = m.division_id
+      LEFT JOIN tournaments t ON t.id = d.tournament_id
+      LEFT JOIN division_entries e1 ON e1.id = m.entry1_id
+      LEFT JOIN profiles p1 ON p1.id = e1.profile_id
+      LEFT JOIN division_entries e2 ON e2.id = m.entry2_id
+      LEFT JOIN profiles p2 ON p2.id = e2.profile_id
+      WHERE m.id = $1
+        AND m.deleted_at IS NULL
+      LIMIT 1
+    `,
+    [matchId]
+  );
+
+  const row = rows[0];
+  if (!row) throw ApiError.notFound('Match not found');
+
+  return {
+    id: row.id,
+    divisionId: row.division_id,
+    tournamentId: row.division_tournament_id,
+    division: {
+      id: row.division_id,
+      label: row.division_label,
+      weightClass: row.division_weight_class,
+      sex: row.division_sex,
+      ageBand: row.division_age_band,
+    },
+    tournament: row.tournament_name
+      ? { name: row.tournament_name, slug: row.tournament_slug }
+      : null,
+    roundNumber: Number(row.round_number),
+    matchNumber: Number(row.match_number),
+    status: row.status,
+    winnerEntryId: row.winner_entry_id,
+    resultMethod: row.result_method,
+    resultRound: row.result_round === null ? null : Number(row.result_round),
+    resultTime: row.result_time,
+    nextMatchId: row.next_match_id,
+    nextMatchSlot: row.next_match_slot === null ? null : Number(row.next_match_slot),
+    entry1: row.entry1_id
+      ? {
+          id: row.entry1_id,
+          participantName: row.entry1_name,
+          clubName: row.entry1_club_name,
+          applicationId: row.entry1_application_id,
+          profileId: row.entry1_profile_id,
+          seed: row.entry1_seed === null ? null : Number(row.entry1_seed),
+          nationality: row.entry1_nationality || null,
+          weightKg: row.entry1_weight_kg === null ? null : Number(row.entry1_weight_kg),
+        }
+      : null,
+    entry2: row.entry2_id
+      ? {
+          id: row.entry2_id,
+          participantName: row.entry2_name,
+          clubName: row.entry2_club_name,
+          applicationId: row.entry2_application_id,
+          profileId: row.entry2_profile_id,
+          seed: row.entry2_seed === null ? null : Number(row.entry2_seed),
+          nationality: row.entry2_nationality || null,
+          weightKg: row.entry2_weight_kg === null ? null : Number(row.entry2_weight_kg),
+        }
+      : null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 function createInitialMatchBlueprints(entries) {
   const fighterCount = entries.length;
   if (!fighterCount) return { bracketSize: 0, rounds: [], diagnostics: { score: 0, sameClubCollisions: 0 } };
@@ -818,5 +918,6 @@ module.exports = {
   setManualSeeds,
   listActiveEntriesForDivision,
   listMatchesForDivision,
+  getMatchById,
   getLatestPublicMatchResult,
 };
