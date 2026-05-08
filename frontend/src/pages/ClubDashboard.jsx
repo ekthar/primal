@@ -447,7 +447,15 @@ export default function ClubDashboard() {
     setActiveApplication(data.application);
     setActiveApplicationEdits(pickEditableFormData(data.application));
     setActiveProfileEdits(pickEditableProfile(data.application));
-    setActiveDocumentUploads({});
+    // Preserve any in-flight uploads so a parallel upload's completion refresh
+    // doesn't wipe the "uploading" state of another kind still in progress.
+    setActiveDocumentUploads((current) => {
+      const preserved = {};
+      for (const [kind, entry] of Object.entries(current)) {
+        if (entry?.status === "uploading") preserved[kind] = entry;
+      }
+      return preserved;
+    });
   };
 
   const saveApplicationEdits = async () => {
