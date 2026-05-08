@@ -5,6 +5,7 @@ const clubsService = require('../services/club.service');
 const circularsService = require('../services/circular.service');
 const tournamentService = require('../services/tournament.service');
 const albumService = require('../services/album.service');
+const matchService = require('../services/match.service');
 const { schemas } = require('../validators');
 const { verifySignatureForApplication } = require('../pdfSignature');
 const { config } = require('../config');
@@ -32,10 +33,11 @@ function isFreshCache(entry, now) {
 }
 
 async function buildPublicHomePayload() {
-  const [tournamentList, recentPhotos, circularList] = await Promise.all([
+  const [tournamentList, recentPhotos, circularList, latestResult] = await Promise.all([
     tournamentService.listPublic(),
     albumService.listRecentPublicPhotos({ limit: 14 }),
     circularsService.listPublic({ limit: 8 }),
+    matchService.getLatestPublicMatchResult().catch(() => null),
   ]);
 
   return {
@@ -43,6 +45,7 @@ async function buildPublicHomePayload() {
     currentTournament: tournamentService.chooseCurrentSeason(tournamentList, Date.now()),
     recentPhotos,
     circulars: circularList,
+    latestResult,
   };
 }
 

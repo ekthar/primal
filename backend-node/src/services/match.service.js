@@ -752,6 +752,61 @@ async function getDivisionBracketExport(actor, divisionId) {
   return getDivisionBracket(actor, divisionId);
 }
 
+/** Latest completed match across all public tournaments (for hero console). */
+async function getLatestPublicMatchResult() {
+  const { rows } = await query(
+    `
+      SELECT
+        m.id                AS match_id,
+        m.round_number      AS round_number,
+        m.result_method     AS method,
+        m.result_round      AS round,
+        m.result_time       AS result_time,
+        m.updated_at        AS completed_at,
+        we.participant_name AS winner_name,
+        we.club_name        AS winner_club_name,
+        le.participant_name AS loser_name,
+        le.club_name        AS loser_club_name,
+        t.name              AS tournament_name,
+        t.slug              AS tournament_slug,
+        d.label             AS division_label
+      FROM matches m
+      JOIN divisions d ON d.id = m.division_id AND d.deleted_at IS NULL
+      JOIN tournaments t ON t.id = d.tournament_id AND t.deleted_at IS NULL
+      JOIN division_entries we ON we.id = m.winner_entry_id
+      LEFT JOIN division_entries le
+        ON le.id = CASE
+          WHEN m.entry1_id = m.winner_entry_id THEN m.entry2_id
+          WHEN m.entry2_id = m.winner_entry_id THEN m.entry1_id
+          ELSE NULL
+        END
+      WHERE m.status = 'completed'
+        AND m.winner_entry_id IS NOT NULL
+        AND m.deleted_at IS NULL
+        AND t.is_public = TRUE
+      ORDER BY m.updated_at DESC
+      LIMIT 1
+    `
+  );
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    winner: {
+      name: row.winner_name,
+      clubName: row.winner_club_name,
+    },
+    opponent: row.loser_name
+      ? { name: row.loser_name, clubName: row.loser_club_name }
+      : null,
+    method: row.method,
+    round: row.round === null || row.round === undefined ? null : Number(row.round),
+    resultTime: row.result_time,
+    completedAt: row.completed_at,
+    tournament: { name: row.tournament_name, slug: row.tournament_slug },
+    divisionLabel: row.division_label,
+  };
+}
+
 module.exports = {
   DIVISION_MATCH_STATUSES,
   syncTournamentDivisions,
@@ -763,4 +818,5 @@ module.exports = {
   setManualSeeds,
   listActiveEntriesForDivision,
   listMatchesForDivision,
+  getLatestPublicMatchResult,
 };

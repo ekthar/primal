@@ -1140,6 +1140,7 @@ export default function Landing() {
     tournaments: [],
     circulars: [],
     recentPhotos: [],
+    latestResult: null,
   });
   const [homeStatus, setHomeStatus] = useState("loading");
 
@@ -1151,6 +1152,7 @@ export default function Landing() {
         tournaments: cached.tournaments || [],
         circulars: cached.circulars || [],
         recentPhotos: cached.recentPhotos || [],
+        latestResult: cached.latestResult || null,
       });
       setHomeStatus("live");
     }
@@ -1165,6 +1167,7 @@ export default function Landing() {
         tournaments: data.tournaments || [],
         circulars: data.circulars || [],
         recentPhotos: data.recentPhotos || [],
+        latestResult: data.latestResult || null,
       };
       setHomeData(nextHomeData);
       setHomeStatus("live");
@@ -1205,17 +1208,24 @@ export default function Landing() {
       const end = fmt(open.ends_on);
       registrationDates = (start && end) ? `${start} → ${end}` : (start || end || registrationDates);
     }
+    const apiResult = homeData.latestResult;
+    const mappedResult = apiResult && apiResult.winner
+      ? {
+          winner: apiResult.winner.name,
+          winnerClub: apiResult.winner.clubName || null,
+          opponent: apiResult.opponent?.name || "—",
+          opponentClub: apiResult.opponent?.clubName || null,
+          method: apiResult.method || "DEC",
+          round: apiResult.round ?? "—",
+          tournament: apiResult.tournament?.name || null,
+        }
+      : null;
     return {
       registrationDates,
       liveCount: tournaments.filter((t) => t.live || t.bracket_published).length || tournaments.length || 4,
-      latestResult: {
-        winner: "K. Rao",
-        opponent: "S. Iyer",
-        method: "TKO",
-        round: 2,
-      },
+      latestResult: mappedResult,
     };
-  }, [tournaments]);
+  }, [tournaments, homeData.latestResult]);
 
   return (
     <div className="min-h-screen bg-background text-foreground">

@@ -199,37 +199,61 @@ function BracketCard({ liveCount }) {
 }
 
 function ResultCard({ latestResult }) {
-  const winner = latestResult?.winner || "TBA";
-  const opponent = latestResult?.opponent || "TBA";
-  const method = latestResult?.method || "DEC";
-  const round = latestResult?.round ?? "—";
+  if (!latestResult) {
+    return (
+      <div className="flex h-full flex-col text-white">
+        <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-white/70">
+          <Trophy className="size-3.5" /> Latest result
+        </div>
+        <div className="mt-6 flex flex-1 items-center justify-center text-center text-sm text-white/50">
+          No confirmed scorecards yet.
+          <br />
+          Check back when the cage lights up.
+        </div>
+      </div>
+    );
+  }
+  const winner = latestResult.winner || "TBA";
+  const winnerClub = latestResult.winnerClub || "Independent";
+  const opponent = latestResult.opponent || "TBA";
+  const opponentClub = latestResult.opponentClub || "Independent";
+  const method = latestResult.method || "DEC";
+  const round = latestResult.round ?? "—";
+  const tournamentName = latestResult.tournament;
   return (
     <div className="flex h-full flex-col text-white">
       <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-white/70">
         <Trophy className="size-3.5" /> Latest result
       </div>
-      <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-        <div className="text-right">
+      <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-start gap-3">
+        <div className="min-w-0 text-right">
           <div className="text-[11px] uppercase tracking-wider text-emerald-300">Winner</div>
-          <div className="mt-0.5 font-display text-xl sm:text-2xl font-semibold leading-tight">
+          <div className="mt-0.5 font-display text-xl sm:text-2xl font-semibold leading-tight break-words">
             {winner}
           </div>
+          <div className="mt-0.5 text-[11px] text-white/55 break-words">{winnerClub}</div>
         </div>
-        <div className="font-display text-2xl text-white/40">vs</div>
-        <div className="text-left">
+        <div className="mt-6 font-display text-2xl text-white/40">vs</div>
+        <div className="min-w-0 text-left">
           <div className="text-[11px] uppercase tracking-wider text-white/50">Opponent</div>
-          <div className="mt-0.5 font-display text-xl sm:text-2xl font-semibold leading-tight text-white/80">
+          <div className="mt-0.5 font-display text-xl sm:text-2xl font-semibold leading-tight text-white/80 break-words">
             {opponent}
           </div>
+          <div className="mt-0.5 text-[11px] text-white/45 break-words">{opponentClub}</div>
         </div>
       </div>
-      <div className="mt-6 flex flex-wrap items-center gap-2">
+      <div className="mt-5 flex flex-wrap items-center gap-2">
         <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] uppercase tracking-wider">
           {method}
         </span>
         <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] uppercase tracking-wider">
           R{round}
         </span>
+        {tournamentName ? (
+          <span className="truncate rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] uppercase tracking-wider text-white/60">
+            {tournamentName}
+          </span>
+        ) : null}
       </div>
       <div className="mt-auto text-[11px] uppercase tracking-wider text-white/60">
         Result confirmed · scorecard archived
