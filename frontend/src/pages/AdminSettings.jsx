@@ -341,7 +341,9 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
     }
 
     setSavingProfileId(profileId);
-    const { data, error } = await api.adminReweigh(profileId, { weightKg: Number(raw) });
+    const { data, error } = await api.adminReweigh(profileId, {
+      weightKg: Math.round(Number(raw) * 100) / 100,
+    });
     setSavingProfileId(null);
     if (error) {
       toast.error(error.message || "Failed to update weigh-in weight");

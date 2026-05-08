@@ -355,7 +355,9 @@ export function serializeFormDataForPatch(value) {
   }
   if (next.weightKg != null && next.weightKg !== "") {
     const parsed = Number(next.weightKg);
-    next.weightKg = Number.isFinite(parsed) ? parsed : null;
+    // Snap to two decimals so the value the user typed (e.g. 65) survives
+    // the JSON/NUMERIC(5,2) round-trip without floating-point drift.
+    next.weightKg = Number.isFinite(parsed) ? Math.round(parsed * 100) / 100 : null;
   }
   return next;
 }

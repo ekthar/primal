@@ -408,7 +408,7 @@ export default function Register() {
       gender: form.gender,
       nationality: "India",
       discipline: form.selectedDisciplines[0] || null,
-      weightKg: Number(form.weight),
+      weightKg: Math.round(Number(form.weight) * 100) / 100,
       weightClass: validEntries[0]?.weightClassLabel || null,
       recordWins: 0,
       recordLosses: 0,
