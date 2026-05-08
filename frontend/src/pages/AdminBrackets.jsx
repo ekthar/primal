@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/router";
 import { AlertTriangle, Download, RefreshCw, Save, Shield, Shuffle, Swords, Trophy, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -15,6 +16,7 @@ import { useLocale } from "@/context/LocaleContext";
 
 export default function AdminBrackets() {
   const locale = useLocale();
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -399,7 +401,11 @@ export default function AdminBrackets() {
 
                 <TabsContent value="warroom" className="space-y-5">
                   {bracket ? (
-                    <BracketView bracket={bracket} onAdvanceWinner={advancing ? undefined : handleAdvanceWinner} />
+                    <BracketView
+                      bracket={bracket}
+                      onAdvanceWinner={advancing ? undefined : handleAdvanceWinner}
+                      onOpenScoreboard={(matchId) => router.push(`/admin/cage?match=${matchId}`)}
+                    />
                   ) : (
                     <div className="rounded-3xl border border-dashed border-border bg-surface p-8 text-sm text-secondary-muted">
                       No persisted bracket exists for this division yet. Generate one once your entry list looks correct.
