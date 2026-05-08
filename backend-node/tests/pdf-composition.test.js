@@ -187,15 +187,16 @@ describe('pdfComposition', () => {
     expect(matchHeight).toBe(36);
   });
 
-  it('autoSlotHeight stays within the readable clamp [14, 24]', () => {
-    // Massive vertical room, few matches — clamped at 24 so cards don't get giant.
-    expect(autoSlotHeight({ contentHeight: 800, firstRoundMatches: 2 })).toBe(24);
+  it('autoSlotHeight stays within the readable clamp [14, 36]', () => {
+    // Massive vertical room, few matches — clamped at 36 so small divisions
+    // get a generous two-line layout (name + club) without going crazy.
+    expect(autoSlotHeight({ contentHeight: 800, firstRoundMatches: 2 })).toBe(36);
     // Tight 64-fighter bracket — clamped at 14 so it still fits.
     expect(autoSlotHeight({ contentHeight: 400, firstRoundMatches: 32 })).toBe(14);
     // Typical 16-fighter bracket — lands somewhere in the middle.
     const mid = autoSlotHeight({ contentHeight: 400, firstRoundMatches: 8 });
     expect(mid).toBeGreaterThanOrEqual(14);
-    expect(mid).toBeLessThanOrEqual(24);
+    expect(mid).toBeLessThanOrEqual(36);
   });
 
   it('drawBracketHeader renders without throwing', async () => {

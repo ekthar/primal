@@ -564,6 +564,18 @@ function drawBracketSlot(doc, ctx) {
       nameX = contentX + 30;
       nameW = contentW - 30;
     }
+    // Club on right in tiny type so the compact slot still conveys affiliation.
+    const clubLabel = side.club || 'Independent';
+    const clubW = 64;
+    doc.save();
+    doc.fillColor(palette.textMuted).font(fonts.body).fontSize(TYPE_SCALE.micro.size);
+    lockedText(doc, clubLabel, x + width - padX - clubW, y + (height - TYPE_SCALE.body.size) / 2 + 2, {
+      width: clubW,
+      align: 'right',
+      ellipsis: true,
+    });
+    doc.restore();
+    nameW = Math.max(30, nameW - clubW - 6);
     doc.save();
     doc.fillColor(palette.ink)
       .font(isWinner ? (fonts.headingBold || fonts.bodyBold) : (fonts.bodyBold || fonts.body))
@@ -605,7 +617,7 @@ function drawBracketSlot(doc, ctx) {
     ellipsis: true,
   });
   doc.restore();
-  if (height >= 34) {
+  if (height >= 30) {
     doc.save();
     doc.fillColor(palette.textMuted).font(fonts.body).fontSize(TYPE_SCALE.micro.size);
     lockedText(doc, side.club || 'Independent', contentX, y + 13 + TYPE_SCALE.body.size + 3, {
@@ -659,13 +671,14 @@ function drawBracketConnector(doc, ctx) {
  * Auto-fit slot height: given vertical room for N match-boxes, pick a slot
  * height that leaves ~30% of each pitch as visible gap between match boxes
  * (so pairs read as discrete matches, not as a continuous list). Clamps
- * between a readable minimum (14pt) and a cap (24pt).
+ * between a readable minimum (14pt) and a cap (36pt) — the upper bound is
+ * sized so small divisions get a generous two-line layout (name + club).
  */
 function autoSlotHeight({ contentHeight, firstRoundMatches, innerGap = 0 }) {
   const pitch = contentHeight / Math.max(1, firstRoundMatches);
   const usable = pitch * 0.72 - innerGap; // reserve 28% as between-pair gap
   const raw = usable / 2;
-  return Math.max(14, Math.min(24, raw));
+  return Math.max(14, Math.min(36, raw));
 }
 
 /**
