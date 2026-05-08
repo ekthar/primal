@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Inbox, AlertTriangle, FileEdit, Plus, Search, Send, Download, Printer, Pencil, Save, Eye, FileText, Camera, ScanLine, Upload, CheckCircle2, History } from "lucide-react";
+import { Inbox, AlertTriangle, FileEdit, Plus, Search, Send, Download, Printer, Pencil, Save, Eye, FileText, Camera, ScanLine, Upload, CheckCircle2, History, Loader2, XCircle } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -299,8 +299,11 @@ export default function ClubDashboard() {
         toast.error(draftRes.error.message || "Participant created but draft application failed");
       } else {
         const applicationId = draftRes.data?.application?.id;
-        const hasAllRequiredDocs = ["medical", "photo_id", "consent"].every((kind) => participantForm.docs?.[kind]);
+        const requiredKinds = ["medical", "photo_id", "consent"];
+        const providedRequiredKinds = requiredKinds.filter((kind) => participantForm.docs?.[kind]);
         if (applicationId) {
+          const uploadedKinds = new Set();
+          const failedKinds = [];
           for (const [kind, file] of Object.entries(participantForm.docs || {})) {
             if (!file) continue;
             const uploadRes = await api.uploadApplicationDocument(applicationId, {
@@ -309,18 +312,26 @@ export default function ClubDashboard() {
               label: file.name,
             });
             if (uploadRes.error) {
+              failedKinds.push(kind);
               toast.error(uploadRes.error.message || `Failed to upload ${kind}`);
+            } else {
+              uploadedKinds.add(kind);
             }
           }
 
-          if (hasAllRequiredDocs) {
+          const allRequiredUploaded = requiredKinds.every((kind) => uploadedKinds.has(kind));
+          if (allRequiredUploaded && !failedKinds.length) {
             const submitRes = await api.submitApplication(applicationId);
             if (submitRes.error) {
               toast.error(submitRes.error.message || "Draft created but submit failed");
             } else {
               toast.success("Application submitted and moved to admin review queue");
             }
-          } else {
+          } else if (failedKinds.length) {
+            toast.message(
+              `Draft created. ${failedKinds.length} document upload(s) failed — open the application from Inbox to retry and submit.`,
+            );
+          } else if (providedRequiredKinds.length < requiredKinds.length) {
             toast.message("Draft created. Upload all required docs to submit for admin approval.");
           }
         }
@@ -480,8 +491,25 @@ export default function ClubDashboard() {
     return true;
   };
 
+  const checkBlockingDocumentUploads = (action) => {
+    const uploading = Object.entries(activeDocumentUploads).filter(([, entry]) => entry?.status === "uploading");
+    if (uploading.length) {
+      toast.error("Wait for uploads to finish before " + action);
+      return true;
+    }
+    const documents = activeApplication?.documents || [];
+    const blockingErrors = Object.entries(activeDocumentUploads)
+      .filter(([kind, entry]) => entry?.status === "error" && !getLatestDocumentByKind(documents, kind));
+    if (blockingErrors.length) {
+      toast.error("Some document uploads failed. Retry them before " + action);
+      return true;
+    }
+    return false;
+  };
+
   const saveAndSubmitActiveApplication = async () => {
     if (!activeApplication) return;
+    if (checkBlockingDocumentUploads("submitting")) return;
     const applicationId = activeApplication.id;
     const saved = await saveApplicationEdits();
     if (!saved) return;
@@ -490,6 +518,7 @@ export default function ClubDashboard() {
 
   const saveAndResubmitActiveApplication = async () => {
     if (!activeApplication) return;
+    if (checkBlockingDocumentUploads("resubmitting")) return;
     const applicationId = activeApplication.id;
     const saved = await saveApplicationEdits();
     if (!saved) return;
@@ -502,7 +531,10 @@ export default function ClubDashboard() {
       toast.error("Documents can only be replaced while draft or correction editing is open");
       return;
     }
-    setActiveDocumentUploads((current) => ({ ...current, [kind]: file }));
+    setActiveDocumentUploads((current) => ({
+      ...current,
+      [kind]: { status: "uploading", fileName: file.name },
+    }));
     const capturedVia = typeof file?.name === "string" && file.name.startsWith("scan-") ? "scan" : "upload";
     const { error } = await api.uploadApplicationDocument(activeApplication.id, {
       file,
@@ -511,12 +543,29 @@ export default function ClubDashboard() {
       capturedVia,
     });
     if (error) {
+      setActiveDocumentUploads((current) => ({
+        ...current,
+        [kind]: { status: "error", fileName: file.name, error: error.message || "Upload failed" },
+      }));
       toast.error(error.message || `Failed to upload ${kind}`);
       return;
     }
-    toast.success("Document uploaded");
+    toast.success(`${file.name} uploaded`);
+    setActiveDocumentUploads((current) => {
+      const next = { ...current };
+      delete next[kind];
+      return next;
+    });
     await reloadApplications();
     await openApplication(activeApplication.id);
+  };
+
+  const dismissDocumentUploadError = (kind) => {
+    setActiveDocumentUploads((current) => {
+      const next = { ...current };
+      delete next[kind];
+      return next;
+    });
   };
 
   const closeActiveApplication = () => {
@@ -877,6 +926,7 @@ export default function ClubDashboard() {
               onFileAppeal={() => fileAppeal(activeApplication.id)}
               onCancelRequest={() => requestCancel(activeApplication.id)}
               onUploadDocument={uploadActiveDocument}
+              onDismissDocumentUploadError={dismissDocumentUploadError}
             />
           ) : null}
         </TabsContent>
@@ -1081,6 +1131,7 @@ function ClubApplicationWorkspace({
   onFileAppeal,
   onCancelRequest,
   onUploadDocument,
+  onDismissDocumentUploadError,
 }) {
   const documents = application.documents || [];
   const missingKinds = REQUIRED_DOCUMENTS
@@ -1157,9 +1208,10 @@ function ClubApplicationWorkspace({
                 key={item.kind}
                 item={item}
                 documentRow={getLatestDocumentByKind(documents, item.kind)}
-                pendingFile={documentUploads[item.kind]}
+                uploadStatus={documentUploads[item.kind]}
                 disabled={!canEdit}
                 onUpload={(file) => onUploadDocument(item.kind, file)}
+                onDismissError={onDismissDocumentUploadError ? () => onDismissDocumentUploadError(item.kind) : null}
               />
             ))}
           </div>
@@ -1280,12 +1332,15 @@ function ReadinessRow({ ok, label }) {
   );
 }
 
-function ClubDocumentSlot({ item, documentRow, pendingFile, disabled, onUpload }) {
+function ClubDocumentSlot({ item, documentRow, uploadStatus, disabled, onUpload, onDismissError }) {
   const [scannerOpen, setScannerOpen] = useState(false);
   const documentUrl = resolveBackendUrl(documentRow?.url || "");
   const Icon = item.icon;
   const cameraStatus = useHasCamera();
   const cameraAvailable = cameraStatus !== "missing";
+  const isUploading = uploadStatus?.status === "uploading";
+  const errorMessage = uploadStatus?.status === "error" ? uploadStatus.error : null;
+  const actionsDisabled = disabled || isUploading;
   return (
     <div className="rounded-2xl border border-border bg-surface p-4">
       <div className="flex items-start gap-3">
@@ -1299,25 +1354,48 @@ function ClubDocumentSlot({ item, documentRow, pendingFile, disabled, onUpload }
       </div>
       <div className="mt-4 rounded-xl border border-border bg-background/70 p-3 text-xs">
         {documentRow ? (
-          <>
-            <div className="font-medium break-all">{documentRow.label || documentRow.original_filename || "Uploaded file"}</div>
-            <div className="mt-1 text-secondary-muted">{formatBytes(documentRow.size_bytes)} / {documentRow.verified_at ? "Verified" : "Uploaded"}</div>
-            {documentRow.verify_reason ? <div className="mt-1 text-amber-700">{documentRow.verify_reason}</div> : null}
-          </>
+          <div className="flex items-start gap-2">
+            <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-emerald-600" />
+            <div className="min-w-0">
+              <div className="font-medium break-all">{documentRow.label || documentRow.original_filename || "Uploaded file"}</div>
+              <div className="mt-0.5 text-secondary-muted">{formatBytes(documentRow.size_bytes)} / {documentRow.verified_at ? "Verified" : "Uploaded"}</div>
+              {documentRow.verify_reason ? <div className="mt-1 text-amber-700">{documentRow.verify_reason}</div> : null}
+            </div>
+          </div>
         ) : (
-          <div className="text-secondary-muted">Missing</div>
+          <div className="flex items-center gap-2 text-secondary-muted">
+            <AlertTriangle className="size-3.5 text-amber-600" /> Missing
+          </div>
         )}
-        {pendingFile ? <div className="mt-2 text-secondary-muted">Latest upload: {pendingFile.name}</div> : null}
       </div>
+      {isUploading ? (
+        <div className="mt-3 flex items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-background/70 px-3 py-3 text-xs text-secondary-muted">
+          <Loader2 className="size-3.5 animate-spin" /> Uploading {uploadStatus.fileName}...
+        </div>
+      ) : errorMessage ? (
+        <div className="mt-3 flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-rose-300 bg-rose-50 px-3 py-3 text-center">
+          <div className="text-xs font-medium text-rose-700">Upload failed</div>
+          <div className="text-[11px] text-rose-600 break-all">{errorMessage}</div>
+          {onDismissError ? (
+            <button
+              type="button"
+              onClick={onDismissError}
+              className="inline-flex items-center gap-1 rounded-md border border-rose-300 bg-white px-2 py-1 text-[11px] font-medium text-rose-700 hover:bg-rose-100"
+            >
+              <XCircle className="size-3" /> {documentRow ? "Dismiss and keep current file" : "Dismiss"}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       <div className={`mt-3 grid gap-2 ${cameraAvailable ? "grid-cols-2" : "grid-cols-1"}`}>
         {cameraAvailable ? (
-          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => setScannerOpen(true)}>
-            <ScanLine className="size-3.5" /> Scan
+          <Button type="button" variant="outline" size="sm" disabled={actionsDisabled} onClick={() => setScannerOpen(true)}>
+            <ScanLine className="size-3.5" /> {documentRow ? "Replace via scan" : "Scan"}
           </Button>
         ) : null}
-        <label className={`inline-flex h-9 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-border bg-background px-3 text-sm ${disabled ? "pointer-events-none opacity-50" : "hover:bg-surface-muted"}`}>
-          <Upload className="size-3.5" /> Upload
-          <input type="file" accept={item.accept} className="hidden" disabled={disabled} onChange={(event) => {
+        <label className={`inline-flex h-9 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-border bg-background px-3 text-sm ${actionsDisabled ? "pointer-events-none opacity-50" : "hover:bg-surface-muted"}`}>
+          <Upload className="size-3.5" /> {documentRow ? "Replace file" : "Upload"}
+          <input type="file" accept={item.accept} className="hidden" disabled={actionsDisabled} onChange={(event) => {
             const file = event.target.files?.[0] || null;
             event.target.value = "";
             if (file) onUpload(file);
