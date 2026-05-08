@@ -267,7 +267,7 @@ export default function ClubDashboard() {
       dateOfBirth: participantForm.dateOfBirth || null,
       discipline: participantForm.discipline || null,
       selectedDisciplines: participantForm.selectedDisciplines,
-      weightKg: participantForm.weightKg ? Number(participantForm.weightKg) : null,
+      weightKg: participantForm.weightKg ? Math.round(Number(participantForm.weightKg) * 100) / 100 : null,
       address: {
         country: "India",
         state: participantForm.state,
@@ -469,7 +469,7 @@ export default function ClubDashboard() {
       gender: activeProfileEdits.gender || null,
       discipline: selectedDisciplines[0] || activeApplication.discipline || null,
       selectedDisciplines,
-      weightKg: activeProfileEdits.weight ? Number(activeProfileEdits.weight) : null,
+      weightKg: activeProfileEdits.weight ? Math.round(Number(activeProfileEdits.weight) * 100) / 100 : null,
       bio: activeApplication.bio || null,
       address: {
         country: "India",
