@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# primal-backup — pg_dump the local database to a timestamped, gzipped file
+# under /var/backups/primal, then prune anything older than RETENTION_DAYS.
+#
+# Designed to be invoked by the systemd timer `primal-backup.timer`
+# (see ops/systemd/primal-backup.service / .timer).
+#
+# Optional: set PRIMAL_BACKUP_S3_BUCKET in /etc/primal/api.env to also upload
+# the dump to s3://$PRIMAL_BACKUP_S3_BUCKET/<host>/<filename>. AWS creds must
+# be available to root via /root/.aws/credentials or env vars.
+set -euo pipefail
+
+ENV_FILE="${PRIMAL_ENV_FILE:-/etc/primal/api.env}"
+BACKUP_DIR="${PRIMAL_BACKUP_DIR:-/var/backups/primal}"
+RETENTION_DAYS="${PRIMAL_BACKUP_RETENTION_DAYS:-14}"
+
+err() { echo "primal-backup: $*" >&2; exit 1; }
+
+[[ -f "$ENV_FILE" ]] || err "Env file not found at $ENV_FILE"
+
+set -a
+# shellcheck disable=SC1090
+. "$ENV_FILE"
+set +a
+
+[[ -n "${DATABASE_URL:-}" ]] || err "DATABASE_URL is not set in $ENV_FILE"
+
+mkdir -p "$BACKUP_DIR"
+chmod 700 "$BACKUP_DIR"
+
+ts=$(date -u +%Y%m%dT%H%M%SZ)
+host=$(hostname -s)
+out="$BACKUP_DIR/primal-${host}-${ts}.sql.gz"
+
+echo "==> dumping to $out"
+pg_dump --format=plain --no-owner --no-privileges "$DATABASE_URL" | gzip -9 > "$out"
+chmod 600 "$out"
+
+bytes=$(stat -c%s "$out")
+echo "  size: $((bytes / 1024 / 1024)) MiB"
+
+if [[ -n "${PRIMAL_BACKUP_S3_BUCKET:-}" ]]; then
+  echo "==> uploading to s3://${PRIMAL_BACKUP_S3_BUCKET}/${host}/$(basename "$out")"
+  aws s3 cp "$out" "s3://${PRIMAL_BACKUP_S3_BUCKET}/${host}/$(basename "$out")" --only-show-errors
+fi
+
+echo "==> pruning backups older than $RETENTION_DAYS days"
+find "$BACKUP_DIR" -maxdepth 1 -type f -name 'primal-*.sql.gz' -mtime +"$RETENTION_DAYS" -print -delete
+
+echo "==> done"
