@@ -459,6 +459,12 @@ export const api = {
 
   // Notifications
   notificationsHealth: () => request("GET", "/api/notifications/health"),
+  notificationsRecent: (query) => request("GET", "/api/notifications/recent", { query }),
+
+  // Audit log
+  auditList: (query) => request("GET", "/api/audit", { query }),
+  auditSummary: () => request("GET", "/api/audit/summary"),
+  auditVerify: () => request("GET", "/api/audit/verify"),
   resendNotification: async (applicationId, body) => {
     const primary = await request("POST", `/api/notifications/resend/${applicationId}`, { body });
     if (!primary.error) return primary;

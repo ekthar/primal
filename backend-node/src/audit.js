@@ -55,4 +55,45 @@ async function listForEntity(entityType, entityId, limit = 200) {
   return rows;
 }
 
-module.exports = { write, verifyChain, listForEntity };
+async function listRecent({ limit = 50, beforeId = null, action = null, entityType = null, actorUserId = null, since = null, until = null } = {}) {
+  const lim = Math.min(Math.max(Number(limit) || 50, 1), 500);
+  const where = [];
+  const params = [];
+  if (beforeId) { params.push(Number(beforeId)); where.push(`id < $${params.length}`); }
+  if (action) { params.push(String(action)); where.push(`action = $${params.length}`); }
+  if (entityType) { params.push(String(entityType)); where.push(`entity_type = $${params.length}`); }
+  if (actorUserId && UUID_RE.test(actorUserId)) { params.push(actorUserId); where.push(`actor_user_id = $${params.length}`); }
+  if (since) { params.push(since); where.push(`occurred_at >= $${params.length}`); }
+  if (until) { params.push(until); where.push(`occurred_at < $${params.length}`); }
+  const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  params.push(lim);
+  const { rows } = await query(
+    `SELECT a.id, a.occurred_at, a.actor_user_id, a.actor_role, a.action, a.entity_type, a.entity_id,
+            a.payload, a.request_ip, u.email AS actor_email, u.name AS actor_name
+     FROM audit_log a
+     LEFT JOIN users u ON u.id = a.actor_user_id
+     ${whereClause}
+     ORDER BY a.id DESC
+     LIMIT $${params.length}`,
+    params
+  );
+  return rows;
+}
+
+async function summary() {
+  const { rows: actionRows } = await query(
+    `SELECT action, COUNT(*)::int AS count
+     FROM audit_log
+     WHERE occurred_at > NOW() - INTERVAL '7 days'
+     GROUP BY action ORDER BY count DESC LIMIT 20`
+  );
+  const { rows: totalRows } = await query(`SELECT COUNT(*)::bigint AS total FROM audit_log`);
+  const { rows: latestRows } = await query(`SELECT occurred_at FROM audit_log ORDER BY id DESC LIMIT 1`);
+  return {
+    total: Number(totalRows[0]?.total || 0),
+    latestAt: latestRows[0]?.occurred_at || null,
+    last7Days: actionRows,
+  };
+}
+
+module.exports = { write, verifyChain, listForEntity, listRecent, summary };

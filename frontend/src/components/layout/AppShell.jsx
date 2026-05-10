@@ -21,6 +21,7 @@ import {
   Webhook,
   Tablet,
   MonitorSpeaker,
+  ShieldCheck,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useLocale } from "@/context/LocaleContext";
@@ -67,6 +68,7 @@ const NAV = {
     { to: "/admin/circulars", icon: Newspaper, label: "Circulars", labelKey: "nav.circulars", shortLabel: "Circulars", testid: "nav-circulars" },
     { to: "/admin/albums", icon: ImageIcon, label: "Albums", labelKey: "nav.albums", shortLabel: "Albums", testid: "nav-albums" },
     { to: "/admin/webhooks", icon: Webhook, label: "Webhooks", labelKey: "nav.webhooks", shortLabel: "Hooks", testid: "nav-webhooks" },
+    { to: "/admin/audit", icon: ShieldCheck, label: "Audit log", labelKey: "nav.audit", shortLabel: "Audit", testid: "nav-audit" },
     { to: "/admin/weighin-tablet", icon: Tablet, label: "Weigh-in tablet", labelKey: "nav.weighinTablet", shortLabel: "Tablet", testid: "nav-weighin-tablet" },
     { to: "/admin/cage", icon: MonitorSpeaker, label: "Cage scoreboard", labelKey: "nav.cage", shortLabel: "Cage", testid: "nav-cage" },
   ],

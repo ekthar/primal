@@ -841,6 +841,9 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
 
         <TabsContent value="notifications">
           <NotificationsHealthPanel />
+          <div className="mt-6">
+            <RecentNotificationsPanel />
+          </div>
         </TabsContent>
 
         <TabsContent value="backlog">
@@ -1020,6 +1023,130 @@ function NotificationsHealthPanel() {
                 </div>
               ) : null}
             </div>
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+const STATUS_BADGE = {
+  sent: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  failed: "border-red-200 bg-red-50 text-red-800",
+  queued: "border-amber-200 bg-amber-50 text-amber-800",
+  skipped: "border-border bg-surface-muted text-secondary",
+};
+
+function RecentNotificationsPanel() {
+  const [entries, setEntries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [channel, setChannel] = useState("all");
+  const [status, setStatus] = useState("all");
+
+  async function refresh() {
+    setLoading(true);
+    try {
+      const q = {};
+      if (channel !== "all") q.channel = channel;
+      if (status !== "all") q.status = status;
+      q.limit = 100;
+      const data = await api.notificationsRecent(q);
+      setEntries(data?.entries || []);
+    } catch (err) {
+      toast.error(err?.message || "Failed to load recent notifications");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { refresh(); }, [channel, status]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <section className="rounded-3xl border border-border bg-surface elev-card p-6 space-y-4">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="font-display text-2xl font-semibold tracking-tight">Recent notifications</h2>
+          <p className="text-sm text-secondary-muted mt-1">
+            Last 100 send attempts. Use this to debug Resend / Twilio failures — the provider error appears in the Error column.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select value={channel} onValueChange={setChannel}>
+            <SelectTrigger className="w-[140px]"><SelectValue placeholder="Channel" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All channels</SelectItem>
+              <SelectItem value="email">Email</SelectItem>
+              <SelectItem value="sms">SMS</SelectItem>
+              <SelectItem value="whatsapp">WhatsApp</SelectItem>
+              <SelectItem value="push">Push</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={status} onValueChange={setStatus}>
+            <SelectTrigger className="w-[140px]"><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="sent">Sent</SelectItem>
+              <SelectItem value="failed">Failed</SelectItem>
+              <SelectItem value="queued">Queued</SelectItem>
+              <SelectItem value="skipped">Skipped</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button variant="outline" onClick={refresh} disabled={loading}>
+            <RefreshCcw className="size-4" /> Refresh
+          </Button>
+        </div>
+      </div>
+
+      {loading && !entries.length ? <SectionLoader /> : null}
+
+      {!loading && !entries.length ? (
+        <div className="rounded-2xl border border-dashed border-border bg-background/50 p-6 text-center text-sm text-secondary-muted">
+          No notifications yet matching these filters.
+        </div>
+      ) : null}
+
+      {entries.length ? (
+        <div className="rounded-2xl border border-border overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-surface-muted text-[11px] uppercase tracking-wider text-secondary-muted">
+                <tr>
+                  <th className="text-left px-3 py-2 font-semibold">When</th>
+                  <th className="text-left px-3 py-2 font-semibold">Channel</th>
+                  <th className="text-left px-3 py-2 font-semibold">Template</th>
+                  <th className="text-left px-3 py-2 font-semibold">Recipient</th>
+                  <th className="text-left px-3 py-2 font-semibold">Status</th>
+                  <th className="text-left px-3 py-2 font-semibold">Error</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {entries.map((row) => (
+                  <tr key={row.id} className="hover:bg-surface-muted/40">
+                    <td className="px-3 py-2 align-top whitespace-nowrap text-xs text-secondary">
+                      {new Date(row.created_at).toLocaleString()}
+                    </td>
+                    <td className="px-3 py-2 align-top">
+                      <span className="font-mono text-xs px-1.5 py-0.5 rounded bg-surface-muted">{row.channel}</span>
+                    </td>
+                    <td className="px-3 py-2 align-top font-mono text-xs">{row.template}</td>
+                    <td className="px-3 py-2 align-top">
+                      <div className="text-xs text-foreground">{row.user_name || "—"}</div>
+                      <div className="text-[11px] text-secondary-muted truncate max-w-[220px]" title={row.user_email}>
+                        {row.channel === "email" ? row.user_email : row.user_phone || row.user_email || "—"}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 align-top">
+                      <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] ${STATUS_BADGE[row.status] || STATUS_BADGE.skipped}`}>
+                        {row.status}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 align-top text-xs text-red-700 break-words max-w-[320px]">
+                      {row.error || ""}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       ) : null}

@@ -48,6 +48,39 @@ function buildWhatsappTemplatePreviews() {
     }));
 }
 
+// Recent notifications — last N rows with optional filters. Admin-only.
+router.get('/recent', requireAuth, requireRole('admin'), ah(async (req, res) => {
+  const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 500);
+  const filters = [];
+  const params = [];
+  if (req.query.channel && ['email', 'sms', 'whatsapp', 'push'].includes(req.query.channel)) {
+    params.push(req.query.channel); filters.push(`n.channel = $${params.length}`);
+  }
+  if (req.query.status && ['queued', 'sent', 'failed', 'skipped'].includes(req.query.status)) {
+    params.push(req.query.status); filters.push(`n.status = $${params.length}`);
+  }
+  if (req.query.template) {
+    params.push(String(req.query.template)); filters.push(`n.template = $${params.length}`);
+  }
+  if (req.query.userId) {
+    params.push(String(req.query.userId)); filters.push(`n.user_id = $${params.length}`);
+  }
+  const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+  params.push(limit);
+  const { rows } = await query(
+    `SELECT n.id, n.channel, n.template, n.status, n.provider_ref, n.error,
+            n.sent_at, n.created_at, n.user_id, n.application_id,
+            u.email AS user_email, u.name AS user_name, u.phone AS user_phone
+     FROM notifications n
+     LEFT JOIN users u ON u.id = n.user_id
+     ${where}
+     ORDER BY n.created_at DESC
+     LIMIT $${params.length}`,
+    params
+  );
+  res.json({ entries: rows });
+}));
+
 // Health panel — shows which channels are wired without leaking secrets.
 router.get('/health', requireAuth, requireRole('admin'), ah(async (_req, res) => {
   const { rows } = await query(`
