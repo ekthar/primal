@@ -365,6 +365,7 @@ export const api = {
   }),
 
   publicHome: () => request("GET", "/api/public/home", { auth: false }),
+  publicStatus: () => request("GET", "/api/public/status", { auth: false }),
   publicTournaments: () => request("GET", "/api/public/tournaments", { auth: false }),
   publicTournamentBySlug: (slug) => request("GET", `/api/public/tournaments/${encodeURIComponent(slug)}`, { auth: false }),
   publicAthlete: (id) => request("GET", `/api/public/athletes/${encodeURIComponent(id)}`, { auth: false }),
