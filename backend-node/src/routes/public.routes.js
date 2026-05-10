@@ -58,6 +58,73 @@ router.get('/participants', ah(async (req, res) => {
   sendPublicJson(res, { participants });
 }));
 
+/* Public status page payload — anonymous, cacheable. Reports overall API
+   liveness plus a few high-signal "last X" timestamps so anyone can see at
+   a glance whether the system is processing work. Numeric counts only —
+   never includes PII. */
+const PUBLIC_STATUS_CACHE_TTL_MS = 30 * 1000;
+let publicStatusCache = null;
+const { query: rawQuery } = require('../db');
+
+async function buildPublicStatusPayload() {
+  const startedAt = process.uptime ? new Date(Date.now() - Math.round(process.uptime() * 1000)).toISOString() : null;
+  let dbOk = false;
+  let dbLatencyMs = null;
+  try {
+    const t0 = Date.now();
+    await rawQuery('SELECT 1');
+    dbLatencyMs = Date.now() - t0;
+    dbOk = true;
+  } catch (_err) {
+    dbOk = false;
+  }
+
+  const queries = await Promise.all([
+    rawQuery(`SELECT MAX(updated_at) AS at, COUNT(*) FILTER (WHERE status = 'completed' AND updated_at > NOW() - INTERVAL '30 days')::int AS recent FROM matches`).catch(() => ({ rows: [{}] })),
+    rawQuery(`SELECT MAX(weighed_at) AS at, COUNT(*) FILTER (WHERE weighed_at > NOW() - INTERVAL '30 days')::int AS recent FROM weigh_ins`).catch(() => ({ rows: [{}] })),
+    rawQuery(`SELECT MAX(sent_at) AS at, COUNT(*) FILTER (WHERE status = 'sent' AND created_at > NOW() - INTERVAL '7 days')::int AS recent7d FROM notifications`).catch(() => ({ rows: [{}] })),
+    rawQuery(`SELECT COUNT(*) FILTER (WHERE deleted_at IS NULL)::int AS total FROM tournaments`).catch(() => ({ rows: [{}] })),
+    rawQuery(`SELECT COUNT(*) FILTER (WHERE status = 'approved' AND deleted_at IS NULL)::int AS total FROM applications`).catch(() => ({ rows: [{}] })),
+    rawQuery(`SELECT COUNT(*) FILTER (WHERE deleted_at IS NULL)::int AS total FROM clubs`).catch(() => ({ rows: [{}] })),
+  ]);
+
+  const [matchRow, weighRow, notifRow, tournamentsRow, approvedRow, clubsRow] = queries.map((q) => q.rows?.[0] || {});
+
+  return {
+    ok: true,
+    api: {
+      env: config.env,
+      startedAt,
+    },
+    db: { ok: dbOk, latencyMs: dbLatencyMs },
+    counts: {
+      tournaments: Number(tournamentsRow.total || 0),
+      approvedApplications: Number(approvedRow.total || 0),
+      clubs: Number(clubsRow.total || 0),
+    },
+    activity: {
+      lastMatchCompletedAt: matchRow.at || null,
+      matchesCompleted30d: Number(matchRow.recent || 0),
+      lastWeighInAt: weighRow.at || null,
+      weighInsRecorded30d: Number(weighRow.recent || 0),
+      lastEmailSentAt: notifRow.at || null,
+      emailsSent7d: Number(notifRow.recent7d || 0),
+    },
+    asOf: new Date().toISOString(),
+  };
+}
+
+router.get('/status', ah(async (_req, res) => {
+  const now = Date.now();
+  if (publicStatusCache && now < publicStatusCache.expiresAt) {
+    sendPublicJson(res, publicStatusCache.payload);
+    return;
+  }
+  const payload = await buildPublicStatusPayload();
+  publicStatusCache = { payload, expiresAt: now + PUBLIC_STATUS_CACHE_TTL_MS };
+  sendPublicJson(res, payload);
+}));
+
 router.get('/home', ah(async (_req, res) => {
   const now = Date.now();
   if (isFreshCache(publicHomeCache, now)) {
