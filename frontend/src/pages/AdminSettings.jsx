@@ -76,6 +76,7 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
     registrationOpenAt: "",
     registrationCloseAt: "",
     correctionWindowHours: "72",
+    weightToleranceKg: "0",
     startsOn: "",
     endsOn: "",
     isPublic: "true",
@@ -167,6 +168,7 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
             registrationOpenAt: formatDateTimeInput(tournament.registration_open_at),
             registrationCloseAt: formatDateTimeInput(tournament.registration_close_at),
             correctionWindowHours: tournament.correction_window_hours ? String(tournament.correction_window_hours) : "",
+            weightToleranceKg: tournament.weight_tolerance_kg !== null && tournament.weight_tolerance_kg !== undefined ? String(tournament.weight_tolerance_kg) : "0",
             startsOn: formatDateTimeInput(tournament.starts_on),
             endsOn: formatDateTimeInput(tournament.ends_on),
             isPublic: tournament.is_public ? "true" : "false",
@@ -230,6 +232,7 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
       registrationOpenAt: toIsoDateTime(draft.registrationOpenAt),
       registrationCloseAt: toIsoDateTime(draft.registrationCloseAt),
       correctionWindowHours: draft.correctionWindowHours ? Number(draft.correctionWindowHours) : null,
+      weightToleranceKg: draft.weightToleranceKg === "" || draft.weightToleranceKg === undefined ? null : Number(draft.weightToleranceKg),
       startsOn: toIsoDateTime(draft.startsOn),
       endsOn: toIsoDateTime(draft.endsOn),
       isPublic: draft.isPublic === "true",
@@ -254,6 +257,7 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
         registrationOpenAt: formatDateTimeInput(updated.registration_open_at),
         registrationCloseAt: formatDateTimeInput(updated.registration_close_at),
         correctionWindowHours: updated.correction_window_hours ? String(updated.correction_window_hours) : "",
+        weightToleranceKg: updated.weight_tolerance_kg !== null && updated.weight_tolerance_kg !== undefined ? String(updated.weight_tolerance_kg) : "0",
         startsOn: formatDateTimeInput(updated.starts_on),
         endsOn: formatDateTimeInput(updated.ends_on),
         isPublic: updated.is_public ? "true" : "false",
@@ -276,6 +280,7 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
       registrationOpenAt: toIsoDateTime(newTournament.registrationOpenAt),
       registrationCloseAt: toIsoDateTime(newTournament.registrationCloseAt),
       correctionWindowHours: newTournament.correctionWindowHours ? Number(newTournament.correctionWindowHours) : null,
+      weightToleranceKg: newTournament.weightToleranceKg === "" || newTournament.weightToleranceKg === undefined ? null : Number(newTournament.weightToleranceKg),
       startsOn: toIsoDateTime(newTournament.startsOn),
       endsOn: toIsoDateTime(newTournament.endsOn),
       isPublic: newTournament.isPublic === "true",
@@ -297,6 +302,7 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
         registrationOpenAt: formatDateTimeInput(created.registration_open_at),
         registrationCloseAt: formatDateTimeInput(created.registration_close_at),
         correctionWindowHours: created.correction_window_hours ? String(created.correction_window_hours) : "",
+        weightToleranceKg: created.weight_tolerance_kg !== null && created.weight_tolerance_kg !== undefined ? String(created.weight_tolerance_kg) : "0",
         startsOn: formatDateTimeInput(created.starts_on),
         endsOn: formatDateTimeInput(created.ends_on),
         isPublic: created.is_public ? "true" : "false",
@@ -309,6 +315,7 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
       registrationOpenAt: "",
       registrationCloseAt: "",
       correctionWindowHours: "72",
+      weightToleranceKg: "0",
       startsOn: "",
       endsOn: "",
       isPublic: "true",
@@ -483,6 +490,18 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
                         onChange={(event) => setNewTournament((current) => ({ ...current, correctionWindowHours: event.target.value }))}
                       />
                     </Field>
+                    <Field label="Weight tolerance (kg)">
+                      <Input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        max="10"
+                        className="h-10 bg-surface"
+                        value={newTournament.weightToleranceKg}
+                        onChange={(event) => setNewTournament((current) => ({ ...current, weightToleranceKg: event.target.value }))}
+                      />
+                      <p className="mt-1 text-[11px] text-secondary-muted">0 = strict. Fighters within +N kg of class max stay in their original division.</p>
+                    </Field>
                     <Field label="Tournament starts">
                       <Input
                         type="datetime-local"
@@ -614,6 +633,21 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
                               [tournament.id]: { ...current[tournament.id], correctionWindowHours: event.target.value },
                             }))}
                           />
+                        </Field>
+                        <Field label="Weight tolerance (kg)">
+                          <Input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="10"
+                            className="h-10 bg-surface"
+                            value={draft.weightToleranceKg ?? "0"}
+                            onChange={(event) => setTournamentDrafts((current) => ({
+                              ...current,
+                              [tournament.id]: { ...current[tournament.id], weightToleranceKg: event.target.value },
+                            }))}
+                          />
+                          <p className="mt-1 text-[11px] text-secondary-muted">0 = strict; otherwise allows fighters within +N kg of class max to stay.</p>
                         </Field>
                         <Field label="Tournament starts">
                           <Input

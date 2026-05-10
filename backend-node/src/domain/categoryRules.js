@@ -153,11 +153,15 @@ function getAllowedDisciplinesForDivision(divisionId) {
   return AGE_DISCIPLINES[divisionId] || [];
 }
 
-function getWeightClassForDivision(divisionId, weightKg) {
+function getWeightClassForDivision(divisionId, weightKg, toleranceKg = 0) {
   const numericWeight = Number(weightKg);
   if (!Number.isFinite(numericWeight)) return null;
+  const tol = Math.max(0, Number(toleranceKg) || 0);
   const table = OFFICIAL_WEIGHT_CLASS_TABLE[divisionId] || [];
-  return table.find((weightClass) => numericWeight <= weightClass.max) || table[table.length - 1] || null;
+  // Tolerance only widens the upper bound — fighter weighing tol kg over the
+  // class max still counts as inside that class. Falls back to the next
+  // class if even with tolerance they're over (matching strict behaviour).
+  return table.find((weightClass) => numericWeight <= weightClass.max + tol) || table[table.length - 1] || null;
 }
 
 function buildOfficialCategory(input) {
@@ -198,7 +202,7 @@ function buildOfficialCategory(input) {
     };
   }
 
-  const weightClass = division ? getWeightClassForDivision(division.id, input?.weightKg) : null;
+  const weightClass = division ? getWeightClassForDivision(division.id, input?.weightKg, input?.weightToleranceKg) : null;
   if (division && !weightClass) issues.push(`No weight classes are configured for ${division.label}.`);
 
   const categoryId = issues.length === 0

@@ -24,4 +24,18 @@ describe('match routes', () => {
       });
     expect(res.status).toBe(401);
   });
+
+  it('PATCH /api/matches/:id/notes requires auth', async () => {
+    const res = await request(app)
+      .patch('/api/matches/00000000-0000-0000-0000-000000000000/notes')
+      .send({ doctorNotes: 'cut over right eye, cleared' });
+    expect(res.status).toBe(401);
+  });
+
+  it('PATCH /api/matches/:id/notes is mounted (not 404)', async () => {
+    const res = await request(app)
+      .patch('/api/matches/00000000-0000-0000-0000-000000000000/notes')
+      .send({ doctorNotes: 'cut over right eye, cleared' });
+    expect(res.status).not.toBe(404);
+  });
 });

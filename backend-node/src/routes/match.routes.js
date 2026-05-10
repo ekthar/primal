@@ -15,4 +15,8 @@ router.post('/:id/result', validate(schemas.match.result), ah(async (req, res) =
   res.json(await matches.submitMatchResult(req.user, req.params.id, req.body, { ip: req.ip }));
 }));
 
+router.patch('/:id/notes', validate(schemas.match.notes), ah(async (req, res) => {
+  res.json(await matches.setMatchNotes(req.user, req.params.id, req.body, { ip: req.ip }));
+}));
+
 module.exports = router;

@@ -428,6 +428,8 @@ async function getMatchById(actor, matchId) {
     resultMethod: row.result_method,
     resultRound: row.result_round === null ? null : Number(row.result_round),
     resultTime: row.result_time,
+    doctorNotes: row.doctor_notes || null,
+    refereeNotes: row.referee_notes || null,
     nextMatchId: row.next_match_id,
     nextMatchSlot: row.next_match_slot === null ? null : Number(row.next_match_slot),
     entry1: row.entry1_id
@@ -840,6 +842,59 @@ async function submitMatchResult(actor, matchId, { winnerEntryId, method, result
   return getDivisionBracket(actor, divisionId);
 }
 
+/* Update doctor/referee free-text notes on a match. Both fields are
+   optional; passing `undefined` leaves a column unchanged, while passing
+   an empty string clears it. Notes are appended to the audit log. */
+async function setMatchNotes(actor, matchId, { doctorNotes, refereeNotes }, ctx = {}) {
+  assertAdmin(actor);
+  if (!matchId) throw ApiError.notFound('Match not found');
+
+  if (doctorNotes === undefined && refereeNotes === undefined) {
+    throw ApiError.unprocessable('Provide doctorNotes or refereeNotes');
+  }
+
+  const sets = [];
+  const params = [matchId];
+  if (doctorNotes !== undefined) {
+    params.push(doctorNotes === null || doctorNotes === '' ? null : String(doctorNotes).slice(0, 4000));
+    sets.push(`doctor_notes = $${params.length}`);
+  }
+  if (refereeNotes !== undefined) {
+    params.push(refereeNotes === null || refereeNotes === '' ? null : String(refereeNotes).slice(0, 4000));
+    sets.push(`referee_notes = $${params.length}`);
+  }
+  sets.push('updated_at = NOW()');
+
+  const { rows } = await query(
+    `UPDATE matches SET ${sets.join(', ')} WHERE id = $1 AND deleted_at IS NULL
+     RETURNING id, doctor_notes, referee_notes, updated_at`,
+    params
+  );
+
+  const row = rows[0];
+  if (!row) throw ApiError.notFound('Match not found');
+
+  await auditWrite({
+    actorUserId: actor.id,
+    actorRole: actor.role,
+    action: 'match.notes.update',
+    entityType: 'match',
+    entityId: matchId,
+    payload: {
+      doctorNotesLen: doctorNotes !== undefined ? (doctorNotes ? String(doctorNotes).length : 0) : null,
+      refereeNotesLen: refereeNotes !== undefined ? (refereeNotes ? String(refereeNotes).length : 0) : null,
+    },
+    requestIp: ctx.ip,
+  });
+
+  return {
+    id: row.id,
+    doctorNotes: row.doctor_notes || null,
+    refereeNotes: row.referee_notes || null,
+    updatedAt: row.updated_at,
+  };
+}
+
 async function setManualSeeds(actor, divisionId, payload, ctx = {}) {
   assertAdmin(actor);
   const seeds = Array.isArray(payload?.seeds) ? payload.seeds : [];
@@ -915,6 +970,7 @@ module.exports = {
   getDivisionBracket,
   getDivisionBracketExport,
   submitMatchResult,
+  setMatchNotes,
   setManualSeeds,
   listActiveEntriesForDivision,
   listMatchesForDivision,
