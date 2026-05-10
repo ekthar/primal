@@ -398,6 +398,7 @@ export const api = {
   setDivisionManualSeeds: (id, body) => request("POST", `/api/divisions/${id}/manual-seeds`, { body }),
   getMatch: (id) => request("GET", `/api/matches/${id}`),
   submitMatchResult: (id, body) => request("POST", `/api/matches/${id}/result`, { body }),
+  setMatchNotes: (id, body) => request("PATCH", `/api/matches/${id}/notes`, { body }),
   downloadDivisionBracketPdf: (id) => downloadFile(`/api/divisions/${id}/bracket.pdf`, {
     filename: `primal-division-bracket-${id}.pdf`,
   }),

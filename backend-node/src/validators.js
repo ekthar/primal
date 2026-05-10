@@ -123,6 +123,7 @@ const schemas = {
       startsOn: Joi.date().iso().allow(null),
       endsOn: Joi.date().iso().allow(null),
       isPublic: Joi.boolean().default(true),
+      weightToleranceKg: Joi.number().min(0).max(10).allow(null),
     }).custom((value, helpers) => {
       if (value.registrationOpenAt && value.registrationCloseAt && new Date(value.registrationOpenAt) > new Date(value.registrationCloseAt)) {
         return helpers.message({ custom: 'registrationOpenAt must be before registrationCloseAt' });
@@ -145,6 +146,7 @@ const schemas = {
       startsOn: Joi.date().iso().allow(null),
       endsOn: Joi.date().iso().allow(null),
       isPublic: Joi.boolean(),
+      weightToleranceKg: Joi.number().min(0).max(10).allow(null),
     }).min(1).custom((value, helpers) => {
       if (value.registrationOpenAt && value.registrationCloseAt) {
         if (new Date(value.registrationOpenAt) > new Date(value.registrationCloseAt)) {
@@ -198,6 +200,10 @@ const schemas = {
       resultRound: Joi.number().integer().min(1).max(20).required(),
       resultTime: Joi.string().pattern(/^\d{1,2}:\d{2}$/).required(),
     }),
+    notes: Joi.object({
+      doctorNotes: Joi.string().allow('').max(4000),
+      refereeNotes: Joi.string().allow('').max(4000),
+    }).or('doctorNotes', 'refereeNotes'),
   },
 
   club: {

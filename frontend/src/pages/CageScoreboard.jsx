@@ -132,6 +132,11 @@ export default function CageScoreboard() {
   const [resultTimeSec, setResultTimeSec] = useState(0);
   const [submitting, setSubmitting] = useState(false);
 
+  const [doctorNotes, setDoctorNotes] = useState("");
+  const [refereeNotes, setRefereeNotes] = useState("");
+  const [savingNotes, setSavingNotes] = useState(false);
+  const [notesDirty, setNotesDirty] = useState(false);
+
   const intervalRef = useRef(null);
 
   useEffect(() => {
@@ -165,6 +170,9 @@ export default function CageScoreboard() {
           setWinnerSide("blue");
         }
         if (data?.resultMethod) setMethod(data.resultMethod);
+        setDoctorNotes(data?.doctorNotes || "");
+        setRefereeNotes(data?.refereeNotes || "");
+        setNotesDirty(false);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -231,6 +239,24 @@ export default function CageScoreboard() {
       setResultTimeSec(s);
     }
     setShowResult(true);
+  }
+
+  async function saveNotes() {
+    if (!match) return;
+    setSavingNotes(true);
+    try {
+      const { error } = await api.setMatchNotes(match.id, {
+        doctorNotes: doctorNotes || "",
+        refereeNotes: refereeNotes || "",
+      });
+      if (error) throw new Error(error.message || "Failed to save notes");
+      toast.success("Notes saved.");
+      setNotesDirty(false);
+    } catch (err) {
+      toast.error(err.message || "Failed to save notes");
+    } finally {
+      setSavingNotes(false);
+    }
   }
 
   async function commitResult() {
@@ -382,6 +408,49 @@ export default function CageScoreboard() {
                 completed && match?.winnerEntryId && match?.entry2?.id === match.winnerEntryId
               }
             />
+          </div>
+
+          <div className="px-6 py-4 border-t border-white/10 grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="text-[11px] uppercase tracking-wider text-white/60 font-semibold">
+                Doctor / cuts notes
+              </label>
+              <textarea
+                value={doctorNotes}
+                onChange={(e) => { setDoctorNotes(e.target.value); setNotesDirty(true); }}
+                rows={3}
+                maxLength={4000}
+                placeholder="Cuts, head impacts, medical clearance…"
+                className="mt-1 w-full rounded-lg bg-white/5 border border-white/15 text-sm p-2 text-white placeholder-white/30"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] uppercase tracking-wider text-white/60 font-semibold">
+                Referee notes
+              </label>
+              <textarea
+                value={refereeNotes}
+                onChange={(e) => { setRefereeNotes(e.target.value); setNotesDirty(true); }}
+                rows={3}
+                maxLength={4000}
+                placeholder="Warnings, point deductions, fouls…"
+                className="mt-1 w-full rounded-lg bg-white/5 border border-white/15 text-sm p-2 text-white placeholder-white/30"
+              />
+            </div>
+            <div className="md:col-span-2 flex items-center justify-end gap-2">
+              <span className="text-[11px] text-white/50">
+                {notesDirty ? "Unsaved changes" : "Saved"}
+              </span>
+              <button
+                type="button"
+                onClick={saveNotes}
+                disabled={savingNotes || !notesDirty}
+                className="rounded-lg bg-white/15 hover:bg-white/25 disabled:opacity-40 px-3 py-1.5 text-sm flex items-center gap-2"
+              >
+                {savingNotes ? <Loader2 className="size-4 animate-spin" /> : null}
+                Save notes
+              </button>
+            </div>
           </div>
 
           <div className="flex items-center justify-between px-6 py-5 border-t border-white/10 gap-4 flex-wrap">
