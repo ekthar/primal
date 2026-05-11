@@ -38,6 +38,10 @@ ls -lh /var/backups/primal/
 
 ## Environment variables (read from `/etc/primal/api.env`)
 
+The env file must contain only `KEY=VALUE` entries, with no shell commands. Use
+quotes for values containing spaces or angle brackets, for example
+`RESEND_FROM="Primal <no-reply@example.com>"`.
+
 | Variable                         | Purpose                                                                                   |
 | -------------------------------- | ----------------------------------------------------------------------------------------- |
 | `DATABASE_URL`                   | Used by `primal-reset-db` and `primal-backup`.                                            |

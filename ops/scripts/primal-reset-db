@@ -13,6 +13,31 @@ ENV_FILE="${PRIMAL_ENV_FILE:-/etc/primal/api.env}"
 
 err() { echo "primal-reset-db: $*" >&2; exit 1; }
 
+load_env_file() {
+  local line_no=0
+  local line key value first_char last_char
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line_no=$((line_no + 1))
+    [[ "$line" =~ ^[[:space:]]*$ || "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ "$line" == *=* ]] || err "Invalid env entry in $ENV_FILE:$line_no (expected KEY=VALUE)"
+
+    key="${line%%=*}"
+    value="${line#*=}"
+    key="${key#"${key%%[![:space:]]*}"}"
+    key="${key%"${key##*[![:space:]]}"}"
+    [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || err "Invalid env key in $ENV_FILE:$line_no: $key"
+
+    first_char="${value:0:1}"
+    last_char="${value: -1}"
+    if [[ ${#value} -ge 2 && ( "$first_char" == '"' && "$last_char" == '"' || "$first_char" == "'" && "$last_char" == "'" ) ]]; then
+      value="${value:1:${#value}-2}"
+    fi
+
+    export "$key=$value"
+  done < "$ENV_FILE"
+}
+
 [[ -f "$ENV_FILE" ]] || err "Env file not found at $ENV_FILE"
 
 if [[ "${1:-}" != "--yes" ]]; then
@@ -29,10 +54,7 @@ USAGE
   exit 2
 fi
 
-set -a
-# shellcheck disable=SC1090
-. "$ENV_FILE"
-set +a
+load_env_file
 
 [[ -n "${DATABASE_URL:-}" ]] || err "DATABASE_URL is not set in $ENV_FILE"
 

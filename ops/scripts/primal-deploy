@@ -12,6 +12,31 @@ RUN_AS_USER="${PRIMAL_RUN_AS_USER:-primal}"
 
 err() { echo "primal-deploy: $*" >&2; exit 1; }
 
+load_env_file() {
+  local line_no=0
+  local line key value first_char last_char
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line_no=$((line_no + 1))
+    [[ "$line" =~ ^[[:space:]]*$ || "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ "$line" == *=* ]] || err "Invalid env entry in $ENV_FILE:$line_no (expected KEY=VALUE)"
+
+    key="${line%%=*}"
+    value="${line#*=}"
+    key="${key#"${key%%[![:space:]]*}"}"
+    key="${key%"${key##*[![:space:]]}"}"
+    [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || err "Invalid env key in $ENV_FILE:$line_no: $key"
+
+    first_char="${value:0:1}"
+    last_char="${value: -1}"
+    if [[ ${#value} -ge 2 && ( "$first_char" == '"' && "$last_char" == '"' || "$first_char" == "'" && "$last_char" == "'" ) ]]; then
+      value="${value:1:${#value}-2}"
+    fi
+
+    export "$key=$value"
+  done < "$ENV_FILE"
+}
+
 [[ -d "$REPO_DIR/.git" ]] || err "Repo not found at $REPO_DIR (set PRIMAL_REPO_DIR)"
 [[ -f "$ENV_FILE" ]] || err "Env file not found at $ENV_FILE (set PRIMAL_ENV_FILE)"
 
@@ -24,10 +49,7 @@ echo "==> installing backend deps"
 sudo -u "$RUN_AS_USER" npm --prefix "$REPO_DIR/backend-node" ci --omit=dev
 
 echo "==> running database migrations"
-set -a
-# shellcheck disable=SC1090
-. "$ENV_FILE"
-set +a
+load_env_file
 sudo -u "$RUN_AS_USER" -E npm --prefix "$REPO_DIR/backend-node" run migrate
 
 echo "==> restarting $SERVICE_NAME"
