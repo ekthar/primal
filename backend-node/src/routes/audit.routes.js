@@ -14,6 +14,23 @@ router.get('/verify', ah(async (_req, res) => {
   res.json(await audit.verifyChain());
 }));
 
+router.get('/summary', ah(async (_req, res) => {
+  res.json(await audit.summary());
+}));
+
+router.get('/', ah(async (req, res) => {
+  const entries = await audit.listRecent({
+    limit: req.query.limit,
+    beforeId: req.query.beforeId,
+    action: req.query.action,
+    entityType: req.query.entityType,
+    actorUserId: req.query.actorUserId,
+    since: req.query.since,
+    until: req.query.until,
+  });
+  res.json({ entries });
+}));
+
 router.get('/export.xlsx', ah(async (req, res) => {
   await exporter.auditToExcel(res, req.user, { since: req.query.since, until: req.query.until });
 }));

@@ -182,6 +182,7 @@ async function syncTournament(actor, tournamentId, ctx = {}) {
         gender: application.gender,
         dateOfBirth: application.date_of_birth,
         weightKg: application.form_data?.weightKg || application.weight_kg,
+        weightToleranceKg: tournament.weight_tolerance_kg,
         onDate: tournament.starts_on || Date.now(),
       });
       if (!category.valid) {

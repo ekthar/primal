@@ -365,6 +365,7 @@ export const api = {
   }),
 
   publicHome: () => request("GET", "/api/public/home", { auth: false }),
+  publicStatus: () => request("GET", "/api/public/status", { auth: false }),
   publicTournaments: () => request("GET", "/api/public/tournaments", { auth: false }),
   publicTournamentBySlug: (slug) => request("GET", `/api/public/tournaments/${encodeURIComponent(slug)}`, { auth: false }),
   publicAthlete: (id) => request("GET", `/api/public/athletes/${encodeURIComponent(id)}`, { auth: false }),
@@ -395,7 +396,9 @@ export const api = {
   getDivisionBracket: (id) => request("GET", `/api/divisions/${id}/bracket`),
   generateDivisionBracket: (id, body) => request("POST", `/api/divisions/${id}/generate-bracket`, { body }),
   setDivisionManualSeeds: (id, body) => request("POST", `/api/divisions/${id}/manual-seeds`, { body }),
+  getMatch: (id) => request("GET", `/api/matches/${id}`),
   submitMatchResult: (id, body) => request("POST", `/api/matches/${id}/result`, { body }),
+  setMatchNotes: (id, body) => request("PATCH", `/api/matches/${id}/notes`, { body }),
   downloadDivisionBracketPdf: (id) => downloadFile(`/api/divisions/${id}/bracket.pdf`, {
     filename: `primal-division-bracket-${id}.pdf`,
   }),
@@ -458,6 +461,12 @@ export const api = {
 
   // Notifications
   notificationsHealth: () => request("GET", "/api/notifications/health"),
+  notificationsRecent: (query) => request("GET", "/api/notifications/recent", { query }),
+
+  // Audit log
+  auditList: (query) => request("GET", "/api/audit", { query }),
+  auditSummary: () => request("GET", "/api/audit/summary"),
+  auditVerify: () => request("GET", "/api/audit/verify"),
   resendNotification: async (applicationId, body) => {
     const primary = await request("POST", `/api/notifications/resend/${applicationId}`, { body });
     if (!primary.error) return primary;

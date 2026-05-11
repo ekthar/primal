@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertTriangle, Clock3, Minus, Plus, RotateCcw, Shield, Swords, Trophy } from "lucide-react";
+import { AlertTriangle, Clock3, MonitorSpeaker, Minus, Plus, RotateCcw, Shield, Swords, Trophy } from "lucide-react";
 import { BRACKET_STATUS_LABELS } from "@/lib/brackets";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
@@ -121,7 +121,7 @@ function FixtureTable({ fixtures }) {
   );
 }
 
-export default function BracketView({ bracket, onAdvanceWinner }) {
+export default function BracketView({ bracket, onAdvanceWinner, onOpenScoreboard }) {
   const [bracketZoom, setBracketZoom] = useState(1);
   const [activeMatch, setActiveMatch] = useState(null);
   if (!bracket) return null;
@@ -262,7 +262,23 @@ export default function BracketView({ bracket, onAdvanceWinner }) {
                       <article key={match.id} className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
                         <div className="flex items-center justify-between gap-3 text-[10px] uppercase tracking-[0.16em] text-zinc-500 font-semibold">
                           <span>{match.label}</span>
-                          <span>{match.status}</span>
+                          <div className="flex items-center gap-2">
+                            <span>{match.status}</span>
+                            {onOpenScoreboard && match.status !== "completed" ? (
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  onOpenScoreboard(match.id);
+                                }}
+                                title="Open cage scoreboard"
+                                aria-label="Open cage scoreboard"
+                                className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-amber-200 hover:bg-amber-500/20"
+                              >
+                                <MonitorSpeaker className="size-3" /> Cage
+                              </button>
+                            ) : null}
+                          </div>
                         </div>
                         {match.conflict ? (
                           <div className="mt-3">
@@ -350,6 +366,18 @@ export default function BracketView({ bracket, onAdvanceWinner }) {
                   />
                 ))}
               </div>
+              {onOpenScoreboard && activeMatch.match.status !== "completed" ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenScoreboard(activeMatch.match.id);
+                    setActiveMatch(null);
+                  }}
+                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/15 px-4 py-3 text-sm font-semibold text-amber-100 hover:bg-amber-500/25"
+                >
+                  <MonitorSpeaker className="size-4" /> Open cage scoreboard
+                </button>
+              ) : null}
             </>
           ) : null}
         </SheetContent>

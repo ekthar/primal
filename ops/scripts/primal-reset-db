@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# primal-reset-db — wipe all application data from the local Postgres database
+# while preserving admin user accounts (so you can still log back in).
+#
+# Designed to live at /usr/local/bin/primal-reset-db on the Oracle VM.
+# Reads DATABASE_URL from /etc/primal/api.env so it always targets the right db.
+#
+# Refuses to run if there are zero admin users (would lock you out).
+# Refuses to run unless --yes is passed (this is destructive).
+set -euo pipefail
+
+ENV_FILE="${PRIMAL_ENV_FILE:-/etc/primal/api.env}"
+
+err() { echo "primal-reset-db: $*" >&2; exit 1; }
+
+[[ -f "$ENV_FILE" ]] || err "Env file not found at $ENV_FILE"
+
+if [[ "${1:-}" != "--yes" ]]; then
+  cat <<USAGE >&2
+primal-reset-db: refuses to run without --yes.
+
+This wipes EVERY table in the public schema (applications, weigh-ins,
+divisions, matches, notifications, etc.) and re-inserts admin user rows
+so you can still log in. Migration history is preserved.
+
+To proceed:
+  sudo primal-reset-db --yes
+USAGE
+  exit 2
+fi
+
+set -a
+# shellcheck disable=SC1090
+. "$ENV_FILE"
+set +a
+
+[[ -n "${DATABASE_URL:-}" ]] || err "DATABASE_URL is not set in $ENV_FILE"
+
+echo "==> resetting database (admin users preserved)"
+psql "$DATABASE_URL" <<'SQL'
+\set ON_ERROR_STOP on
+BEGIN;
+
+-- 1. Snapshot admin users (must be > 0 or this txn aborts).
+CREATE TEMP TABLE _kept_users ON COMMIT DROP AS
+  SELECT * FROM users WHERE role = 'admin' AND deleted_at IS NULL;
+
+DO $$
+BEGIN
+  IF (SELECT count(*) FROM _kept_users) = 0 THEN
+    RAISE EXCEPTION 'No admin users found — refusing to reset (you would be locked out).';
+  END IF;
+END $$;
+
+-- 2. Truncate every table in public except the migrations ledger.
+DO $$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT tablename
+    FROM pg_tables
+    WHERE schemaname = 'public'
+      AND tablename NOT IN ('schema_migrations')
+  LOOP
+    EXECUTE format('TRUNCATE TABLE public.%I RESTART IDENTITY CASCADE', r.tablename);
+  END LOOP;
+END $$;
+
+-- 3. Restore admin rows.
+INSERT INTO users SELECT * FROM _kept_users;
+
+-- 4. Sanity print.
+SELECT id, email, role, created_at FROM users ORDER BY email;
+
+COMMIT;
+SQL
+
+echo "==> done"

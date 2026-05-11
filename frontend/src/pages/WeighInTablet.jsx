@@ -96,7 +96,7 @@ export default function WeighInTablet() {
   }
 
   async function submit() {
-    const w = Number(weightKg);
+    const w = Math.round(Number(weightKg) * 100) / 100;
     if (!w || w < 15 || w > 250) { toast.error("Enter a valid weight (15–250 kg)"); return; }
     if (!active?.application_id) { toast.error("Missing application id"); return; }
     setSubmitting(true);

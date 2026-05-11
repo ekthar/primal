@@ -1,0 +1,11 @@
+[Unit]
+Description=Run primal-backup nightly at 02:30 UTC
+
+[Timer]
+OnCalendar=*-*-* 02:30:00 UTC
+Persistent=true
+Unit=primal-backup.service
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target

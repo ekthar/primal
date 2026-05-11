@@ -40,6 +40,27 @@ const configuredCorsOrigins = Array.from(new Set([
   config.webBaseUrl,
 ])).filter(Boolean);
 
+// Compile each configured origin into either an exact string match or a
+// regex if it contains a '*' wildcard. This lets operators allowlist patterns
+// like `https://*.pages.dev` or `https://*.workers.dev` so Cloudflare Pages /
+// Workers preview URLs (which generate a unique subdomain per deploy) keep
+// working without an env edit on every deploy.
+const corsOriginMatchers = configuredCorsOrigins.map((entry) => {
+  if (!entry.includes('*')) {
+    return { type: 'exact', value: entry };
+  }
+  const escaped = entry.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*');
+  return { type: 'regex', value: new RegExp(`^${escaped}$`) };
+});
+
+function isOriginAllowed(requestOrigin) {
+  for (const matcher of corsOriginMatchers) {
+    if (matcher.type === 'exact' && matcher.value === requestOrigin) return true;
+    if (matcher.type === 'regex' && matcher.value.test(requestOrigin)) return true;
+  }
+  return false;
+}
+
 const corsDelegate = (req, callback) => {
   const requestOrigin = req.header('Origin');
   if (!requestOrigin) {
@@ -50,7 +71,7 @@ const corsDelegate = (req, callback) => {
     callback(null, { origin: true, credentials: true });
     return;
   }
-  const allowed = configuredCorsOrigins.includes(requestOrigin);
+  const allowed = isOriginAllowed(requestOrigin);
   callback(null, {
     origin: allowed,
     credentials: true,
@@ -58,6 +79,24 @@ const corsDelegate = (req, callback) => {
 };
 
 app.set('trust proxy', 1);
+
+// Bulletproof CORS: explicitly set Access-Control-Allow-Origin + Vary on
+// every incoming request whose Origin we recognise, BEFORE any other
+// middleware can error out. This ensures that even if multer rejects a
+// large upload, the rate-limiter 429s, the auth middleware 401s, or a
+// downstream handler throws before finishing, the browser still sees a
+// valid CORS header on the response and surfaces the real HTTP status
+// instead of a generic "blocked by CORS policy" message.
+app.use((req, res, next) => {
+  const requestOrigin = req.header('Origin');
+  if (requestOrigin && (!configuredCorsOrigins.length || isOriginAllowed(requestOrigin))) {
+    res.setHeader('Access-Control-Allow-Origin', requestOrigin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Vary', 'Origin');
+  }
+  next();
+});
+
 app.use(requestTiming);
 // Allow the configured frontend origins to embed responses from this API in an
 // <iframe> (e.g. document/PDF preview in Reviewer Workbench). frame-ancestors

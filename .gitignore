@@ -93,3 +93,4 @@ credentials.json
 *.pem
 *.key
 .credentials
+.env*.local

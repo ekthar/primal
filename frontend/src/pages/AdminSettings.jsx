@@ -76,6 +76,7 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
     registrationOpenAt: "",
     registrationCloseAt: "",
     correctionWindowHours: "72",
+    weightToleranceKg: "0",
     startsOn: "",
     endsOn: "",
     isPublic: "true",
@@ -167,6 +168,7 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
             registrationOpenAt: formatDateTimeInput(tournament.registration_open_at),
             registrationCloseAt: formatDateTimeInput(tournament.registration_close_at),
             correctionWindowHours: tournament.correction_window_hours ? String(tournament.correction_window_hours) : "",
+            weightToleranceKg: tournament.weight_tolerance_kg !== null && tournament.weight_tolerance_kg !== undefined ? String(tournament.weight_tolerance_kg) : "0",
             startsOn: formatDateTimeInput(tournament.starts_on),
             endsOn: formatDateTimeInput(tournament.ends_on),
             isPublic: tournament.is_public ? "true" : "false",
@@ -230,6 +232,7 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
       registrationOpenAt: toIsoDateTime(draft.registrationOpenAt),
       registrationCloseAt: toIsoDateTime(draft.registrationCloseAt),
       correctionWindowHours: draft.correctionWindowHours ? Number(draft.correctionWindowHours) : null,
+      weightToleranceKg: draft.weightToleranceKg === "" || draft.weightToleranceKg === undefined ? null : Number(draft.weightToleranceKg),
       startsOn: toIsoDateTime(draft.startsOn),
       endsOn: toIsoDateTime(draft.endsOn),
       isPublic: draft.isPublic === "true",
@@ -254,6 +257,7 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
         registrationOpenAt: formatDateTimeInput(updated.registration_open_at),
         registrationCloseAt: formatDateTimeInput(updated.registration_close_at),
         correctionWindowHours: updated.correction_window_hours ? String(updated.correction_window_hours) : "",
+        weightToleranceKg: updated.weight_tolerance_kg !== null && updated.weight_tolerance_kg !== undefined ? String(updated.weight_tolerance_kg) : "0",
         startsOn: formatDateTimeInput(updated.starts_on),
         endsOn: formatDateTimeInput(updated.ends_on),
         isPublic: updated.is_public ? "true" : "false",
@@ -276,6 +280,7 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
       registrationOpenAt: toIsoDateTime(newTournament.registrationOpenAt),
       registrationCloseAt: toIsoDateTime(newTournament.registrationCloseAt),
       correctionWindowHours: newTournament.correctionWindowHours ? Number(newTournament.correctionWindowHours) : null,
+      weightToleranceKg: newTournament.weightToleranceKg === "" || newTournament.weightToleranceKg === undefined ? null : Number(newTournament.weightToleranceKg),
       startsOn: toIsoDateTime(newTournament.startsOn),
       endsOn: toIsoDateTime(newTournament.endsOn),
       isPublic: newTournament.isPublic === "true",
@@ -297,6 +302,7 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
         registrationOpenAt: formatDateTimeInput(created.registration_open_at),
         registrationCloseAt: formatDateTimeInput(created.registration_close_at),
         correctionWindowHours: created.correction_window_hours ? String(created.correction_window_hours) : "",
+        weightToleranceKg: created.weight_tolerance_kg !== null && created.weight_tolerance_kg !== undefined ? String(created.weight_tolerance_kg) : "0",
         startsOn: formatDateTimeInput(created.starts_on),
         endsOn: formatDateTimeInput(created.ends_on),
         isPublic: created.is_public ? "true" : "false",
@@ -309,6 +315,7 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
       registrationOpenAt: "",
       registrationCloseAt: "",
       correctionWindowHours: "72",
+      weightToleranceKg: "0",
       startsOn: "",
       endsOn: "",
       isPublic: "true",
@@ -341,7 +348,9 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
     }
 
     setSavingProfileId(profileId);
-    const { data, error } = await api.adminReweigh(profileId, { weightKg: Number(raw) });
+    const { data, error } = await api.adminReweigh(profileId, {
+      weightKg: Math.round(Number(raw) * 100) / 100,
+    });
     setSavingProfileId(null);
     if (error) {
       toast.error(error.message || "Failed to update weigh-in weight");
@@ -481,6 +490,18 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
                         onChange={(event) => setNewTournament((current) => ({ ...current, correctionWindowHours: event.target.value }))}
                       />
                     </Field>
+                    <Field label="Weight tolerance (kg)">
+                      <Input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        max="10"
+                        className="h-10 bg-surface"
+                        value={newTournament.weightToleranceKg}
+                        onChange={(event) => setNewTournament((current) => ({ ...current, weightToleranceKg: event.target.value }))}
+                      />
+                      <p className="mt-1 text-[11px] text-secondary-muted">0 = strict. Fighters within +N kg of class max stay in their original division.</p>
+                    </Field>
                     <Field label="Tournament starts">
                       <Input
                         type="datetime-local"
@@ -612,6 +633,21 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
                               [tournament.id]: { ...current[tournament.id], correctionWindowHours: event.target.value },
                             }))}
                           />
+                        </Field>
+                        <Field label="Weight tolerance (kg)">
+                          <Input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="10"
+                            className="h-10 bg-surface"
+                            value={draft.weightToleranceKg ?? "0"}
+                            onChange={(event) => setTournamentDrafts((current) => ({
+                              ...current,
+                              [tournament.id]: { ...current[tournament.id], weightToleranceKg: event.target.value },
+                            }))}
+                          />
+                          <p className="mt-1 text-[11px] text-secondary-muted">0 = strict; otherwise allows fighters within +N kg of class max to stay.</p>
                         </Field>
                         <Field label="Tournament starts">
                           <Input
@@ -839,6 +875,9 @@ export default function AdminSettings({ initialTab = "tournaments" }) {
 
         <TabsContent value="notifications">
           <NotificationsHealthPanel />
+          <div className="mt-6">
+            <RecentNotificationsPanel />
+          </div>
         </TabsContent>
 
         <TabsContent value="backlog">
@@ -1018,6 +1057,130 @@ function NotificationsHealthPanel() {
                 </div>
               ) : null}
             </div>
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+const STATUS_BADGE = {
+  sent: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  failed: "border-red-200 bg-red-50 text-red-800",
+  queued: "border-amber-200 bg-amber-50 text-amber-800",
+  skipped: "border-border bg-surface-muted text-secondary",
+};
+
+function RecentNotificationsPanel() {
+  const [entries, setEntries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [channel, setChannel] = useState("all");
+  const [status, setStatus] = useState("all");
+
+  async function refresh() {
+    setLoading(true);
+    try {
+      const q = {};
+      if (channel !== "all") q.channel = channel;
+      if (status !== "all") q.status = status;
+      q.limit = 100;
+      const data = await api.notificationsRecent(q);
+      setEntries(data?.entries || []);
+    } catch (err) {
+      toast.error(err?.message || "Failed to load recent notifications");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { refresh(); }, [channel, status]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <section className="rounded-3xl border border-border bg-surface elev-card p-6 space-y-4">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="font-display text-2xl font-semibold tracking-tight">Recent notifications</h2>
+          <p className="text-sm text-secondary-muted mt-1">
+            Last 100 send attempts. Use this to debug Resend / Twilio failures — the provider error appears in the Error column.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select value={channel} onValueChange={setChannel}>
+            <SelectTrigger className="w-[140px]"><SelectValue placeholder="Channel" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All channels</SelectItem>
+              <SelectItem value="email">Email</SelectItem>
+              <SelectItem value="sms">SMS</SelectItem>
+              <SelectItem value="whatsapp">WhatsApp</SelectItem>
+              <SelectItem value="push">Push</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={status} onValueChange={setStatus}>
+            <SelectTrigger className="w-[140px]"><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="sent">Sent</SelectItem>
+              <SelectItem value="failed">Failed</SelectItem>
+              <SelectItem value="queued">Queued</SelectItem>
+              <SelectItem value="skipped">Skipped</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button variant="outline" onClick={refresh} disabled={loading}>
+            <RefreshCcw className="size-4" /> Refresh
+          </Button>
+        </div>
+      </div>
+
+      {loading && !entries.length ? <SectionLoader /> : null}
+
+      {!loading && !entries.length ? (
+        <div className="rounded-2xl border border-dashed border-border bg-background/50 p-6 text-center text-sm text-secondary-muted">
+          No notifications yet matching these filters.
+        </div>
+      ) : null}
+
+      {entries.length ? (
+        <div className="rounded-2xl border border-border overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-surface-muted text-[11px] uppercase tracking-wider text-secondary-muted">
+                <tr>
+                  <th className="text-left px-3 py-2 font-semibold">When</th>
+                  <th className="text-left px-3 py-2 font-semibold">Channel</th>
+                  <th className="text-left px-3 py-2 font-semibold">Template</th>
+                  <th className="text-left px-3 py-2 font-semibold">Recipient</th>
+                  <th className="text-left px-3 py-2 font-semibold">Status</th>
+                  <th className="text-left px-3 py-2 font-semibold">Error</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {entries.map((row) => (
+                  <tr key={row.id} className="hover:bg-surface-muted/40">
+                    <td className="px-3 py-2 align-top whitespace-nowrap text-xs text-secondary">
+                      {new Date(row.created_at).toLocaleString()}
+                    </td>
+                    <td className="px-3 py-2 align-top">
+                      <span className="font-mono text-xs px-1.5 py-0.5 rounded bg-surface-muted">{row.channel}</span>
+                    </td>
+                    <td className="px-3 py-2 align-top font-mono text-xs">{row.template}</td>
+                    <td className="px-3 py-2 align-top">
+                      <div className="text-xs text-foreground">{row.user_name || "—"}</div>
+                      <div className="text-[11px] text-secondary-muted truncate max-w-[220px]" title={row.user_email}>
+                        {row.channel === "email" ? row.user_email : row.user_phone || row.user_email || "—"}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 align-top">
+                      <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] ${STATUS_BADGE[row.status] || STATUS_BADGE.skipped}`}>
+                        {row.status}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 align-top text-xs text-red-700 break-words max-w-[320px]">
+                      {row.error || ""}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       ) : null}

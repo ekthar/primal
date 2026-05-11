@@ -223,12 +223,12 @@ const tournaments = {
   findByIdAny: async (id) => (await query(`SELECT * FROM tournaments WHERE id=$1`, [id])).rows[0],
   findBySlug: async (slug) => (await query(`SELECT * FROM tournaments WHERE slug=$1 AND ${ACTIVE}`, [slug])).rows[0],
   findPublicBySlug: async (slug) => (await query(`SELECT * FROM tournaments WHERE slug=$1 AND is_public=TRUE AND ${ACTIVE}`, [slug])).rows[0],
-  createAdmin: async ({ slug, name, season = null, startsOn = null, endsOn = null, registrationOpenAt = null, registrationCloseAt = null, correctionWindowHours = null, isPublic = true }) => {
+  createAdmin: async ({ slug, name, season = null, startsOn = null, endsOn = null, registrationOpenAt = null, registrationCloseAt = null, correctionWindowHours = null, isPublic = true, weightToleranceKg = null }) => {
     const { rows } = await query(
-      `INSERT INTO tournaments (slug, name, season, starts_on, ends_on, registration_open_at, registration_close_at, correction_window_hours, is_public)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      `INSERT INTO tournaments (slug, name, season, starts_on, ends_on, registration_open_at, registration_close_at, correction_window_hours, is_public, weight_tolerance_kg)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE($10,0))
        RETURNING *`,
-      [slug, name, season, startsOn, endsOn, registrationOpenAt, registrationCloseAt, correctionWindowHours, isPublic]
+      [slug, name, season, startsOn, endsOn, registrationOpenAt, registrationCloseAt, correctionWindowHours, isPublic, weightToleranceKg]
     );
     return rows[0];
   },
@@ -255,6 +255,7 @@ const tournaments = {
       startsOn: 'starts_on',
       endsOn: 'ends_on',
       isPublic: 'is_public',
+      weightToleranceKg: 'weight_tolerance_kg',
     };
     const fields = [];
     const args = [];

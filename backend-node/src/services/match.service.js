@@ -359,6 +359,108 @@ async function listMatchesForDivision(divisionId) {
   }));
 }
 
+async function getMatchById(actor, matchId) {
+  assertAdmin(actor);
+  if (!matchId) throw ApiError.notFound('Match not found');
+
+  const { rows } = await query(
+    `
+      SELECT
+        m.*,
+        d.tournament_id AS division_tournament_id,
+        d.label AS division_label,
+        d.weight_class AS division_weight_class,
+        d.sex AS division_sex,
+        d.age_band AS division_age_band,
+        t.name AS tournament_name,
+        t.slug AS tournament_slug,
+        e1.participant_name AS entry1_name,
+        e1.club_name AS entry1_club_name,
+        e1.application_id AS entry1_application_id,
+        e1.profile_id AS entry1_profile_id,
+        e1.seed AS entry1_seed,
+        e1.derived_seed_score AS entry1_derived_seed_score,
+        p1.nationality AS entry1_nationality,
+        p1.weight_kg AS entry1_weight_kg,
+        e2.participant_name AS entry2_name,
+        e2.club_name AS entry2_club_name,
+        e2.application_id AS entry2_application_id,
+        e2.profile_id AS entry2_profile_id,
+        e2.seed AS entry2_seed,
+        e2.derived_seed_score AS entry2_derived_seed_score,
+        p2.nationality AS entry2_nationality,
+        p2.weight_kg AS entry2_weight_kg
+      FROM matches m
+      JOIN divisions d ON d.id = m.division_id
+      LEFT JOIN tournaments t ON t.id = d.tournament_id
+      LEFT JOIN division_entries e1 ON e1.id = m.entry1_id
+      LEFT JOIN profiles p1 ON p1.id = e1.profile_id
+      LEFT JOIN division_entries e2 ON e2.id = m.entry2_id
+      LEFT JOIN profiles p2 ON p2.id = e2.profile_id
+      WHERE m.id = $1
+        AND m.deleted_at IS NULL
+      LIMIT 1
+    `,
+    [matchId]
+  );
+
+  const row = rows[0];
+  if (!row) throw ApiError.notFound('Match not found');
+
+  return {
+    id: row.id,
+    divisionId: row.division_id,
+    tournamentId: row.division_tournament_id,
+    division: {
+      id: row.division_id,
+      label: row.division_label,
+      weightClass: row.division_weight_class,
+      sex: row.division_sex,
+      ageBand: row.division_age_band,
+    },
+    tournament: row.tournament_name
+      ? { name: row.tournament_name, slug: row.tournament_slug }
+      : null,
+    roundNumber: Number(row.round_number),
+    matchNumber: Number(row.match_number),
+    status: row.status,
+    winnerEntryId: row.winner_entry_id,
+    resultMethod: row.result_method,
+    resultRound: row.result_round === null ? null : Number(row.result_round),
+    resultTime: row.result_time,
+    doctorNotes: row.doctor_notes || null,
+    refereeNotes: row.referee_notes || null,
+    nextMatchId: row.next_match_id,
+    nextMatchSlot: row.next_match_slot === null ? null : Number(row.next_match_slot),
+    entry1: row.entry1_id
+      ? {
+          id: row.entry1_id,
+          participantName: row.entry1_name,
+          clubName: row.entry1_club_name,
+          applicationId: row.entry1_application_id,
+          profileId: row.entry1_profile_id,
+          seed: row.entry1_seed === null ? null : Number(row.entry1_seed),
+          nationality: row.entry1_nationality || null,
+          weightKg: row.entry1_weight_kg === null ? null : Number(row.entry1_weight_kg),
+        }
+      : null,
+    entry2: row.entry2_id
+      ? {
+          id: row.entry2_id,
+          participantName: row.entry2_name,
+          clubName: row.entry2_club_name,
+          applicationId: row.entry2_application_id,
+          profileId: row.entry2_profile_id,
+          seed: row.entry2_seed === null ? null : Number(row.entry2_seed),
+          nationality: row.entry2_nationality || null,
+          weightKg: row.entry2_weight_kg === null ? null : Number(row.entry2_weight_kg),
+        }
+      : null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 function createInitialMatchBlueprints(entries) {
   const fighterCount = entries.length;
   if (!fighterCount) return { bracketSize: 0, rounds: [], diagnostics: { score: 0, sameClubCollisions: 0 } };
@@ -740,6 +842,59 @@ async function submitMatchResult(actor, matchId, { winnerEntryId, method, result
   return getDivisionBracket(actor, divisionId);
 }
 
+/* Update doctor/referee free-text notes on a match. Both fields are
+   optional; passing `undefined` leaves a column unchanged, while passing
+   an empty string clears it. Notes are appended to the audit log. */
+async function setMatchNotes(actor, matchId, { doctorNotes, refereeNotes }, ctx = {}) {
+  assertAdmin(actor);
+  if (!matchId) throw ApiError.notFound('Match not found');
+
+  if (doctorNotes === undefined && refereeNotes === undefined) {
+    throw ApiError.unprocessable('Provide doctorNotes or refereeNotes');
+  }
+
+  const sets = [];
+  const params = [matchId];
+  if (doctorNotes !== undefined) {
+    params.push(doctorNotes === null || doctorNotes === '' ? null : String(doctorNotes).slice(0, 4000));
+    sets.push(`doctor_notes = $${params.length}`);
+  }
+  if (refereeNotes !== undefined) {
+    params.push(refereeNotes === null || refereeNotes === '' ? null : String(refereeNotes).slice(0, 4000));
+    sets.push(`referee_notes = $${params.length}`);
+  }
+  sets.push('updated_at = NOW()');
+
+  const { rows } = await query(
+    `UPDATE matches SET ${sets.join(', ')} WHERE id = $1 AND deleted_at IS NULL
+     RETURNING id, doctor_notes, referee_notes, updated_at`,
+    params
+  );
+
+  const row = rows[0];
+  if (!row) throw ApiError.notFound('Match not found');
+
+  await auditWrite({
+    actorUserId: actor.id,
+    actorRole: actor.role,
+    action: 'match.notes.update',
+    entityType: 'match',
+    entityId: matchId,
+    payload: {
+      doctorNotesLen: doctorNotes !== undefined ? (doctorNotes ? String(doctorNotes).length : 0) : null,
+      refereeNotesLen: refereeNotes !== undefined ? (refereeNotes ? String(refereeNotes).length : 0) : null,
+    },
+    requestIp: ctx.ip,
+  });
+
+  return {
+    id: row.id,
+    doctorNotes: row.doctor_notes || null,
+    refereeNotes: row.referee_notes || null,
+    updatedAt: row.updated_at,
+  };
+}
+
 async function setManualSeeds(actor, divisionId, payload, ctx = {}) {
   assertAdmin(actor);
   const seeds = Array.isArray(payload?.seeds) ? payload.seeds : [];
@@ -752,6 +907,61 @@ async function getDivisionBracketExport(actor, divisionId) {
   return getDivisionBracket(actor, divisionId);
 }
 
+/** Latest completed match across all public tournaments (for hero console). */
+async function getLatestPublicMatchResult() {
+  const { rows } = await query(
+    `
+      SELECT
+        m.id                AS match_id,
+        m.round_number      AS round_number,
+        m.result_method     AS method,
+        m.result_round      AS round,
+        m.result_time       AS result_time,
+        m.updated_at        AS completed_at,
+        we.participant_name AS winner_name,
+        we.club_name        AS winner_club_name,
+        le.participant_name AS loser_name,
+        le.club_name        AS loser_club_name,
+        t.name              AS tournament_name,
+        t.slug              AS tournament_slug,
+        d.label             AS division_label
+      FROM matches m
+      JOIN divisions d ON d.id = m.division_id AND d.deleted_at IS NULL
+      JOIN tournaments t ON t.id = d.tournament_id AND t.deleted_at IS NULL
+      JOIN division_entries we ON we.id = m.winner_entry_id
+      LEFT JOIN division_entries le
+        ON le.id = CASE
+          WHEN m.entry1_id = m.winner_entry_id THEN m.entry2_id
+          WHEN m.entry2_id = m.winner_entry_id THEN m.entry1_id
+          ELSE NULL
+        END
+      WHERE m.status = 'completed'
+        AND m.winner_entry_id IS NOT NULL
+        AND m.deleted_at IS NULL
+        AND t.is_public = TRUE
+      ORDER BY m.updated_at DESC
+      LIMIT 1
+    `
+  );
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    winner: {
+      name: row.winner_name,
+      clubName: row.winner_club_name,
+    },
+    opponent: row.loser_name
+      ? { name: row.loser_name, clubName: row.loser_club_name }
+      : null,
+    method: row.method,
+    round: row.round === null || row.round === undefined ? null : Number(row.round),
+    resultTime: row.result_time,
+    completedAt: row.completed_at,
+    tournament: { name: row.tournament_name, slug: row.tournament_slug },
+    divisionLabel: row.division_label,
+  };
+}
+
 module.exports = {
   DIVISION_MATCH_STATUSES,
   syncTournamentDivisions,
@@ -760,7 +970,10 @@ module.exports = {
   getDivisionBracket,
   getDivisionBracketExport,
   submitMatchResult,
+  setMatchNotes,
   setManualSeeds,
   listActiveEntriesForDivision,
   listMatchesForDivision,
+  getMatchById,
+  getLatestPublicMatchResult,
 };

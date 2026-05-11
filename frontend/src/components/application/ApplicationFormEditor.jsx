@@ -148,7 +148,10 @@ export function serializeProfileForPatch(profileForm, originalProfile) {
   const meta = originalProfile?.metadata || {};
   const { firstName, lastName } = splitName(profileForm.fullName);
   const weightStr = profileForm.weight != null ? String(profileForm.weight).trim() : "";
-  const weightNum = weightStr ? Number(weightStr) : null;
+  const weightRaw = weightStr ? Number(weightStr) : null;
+  // Snap to two decimals the same way the backend normaliser does so the
+  // number the user sees (65) round-trips exactly (not 64.9999...).
+  const weightNum = Number.isFinite(weightRaw) ? Math.round(weightRaw * 100) / 100 : null;
   return {
     firstName,
     lastName,
