@@ -748,17 +748,17 @@ function AdminShowcase() {
     <section id="admin" ref={ref} className="py-28 sm:py-36 relative overflow-hidden">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 grid lg:grid-cols-2 gap-14 items-center">
         <Reveal>
-          <div className="text-[10px] uppercase tracking-[0.22em] text-tertiary font-semibold">Built for admins</div>
+          <div className="text-[10px] uppercase tracking-[0.22em] text-tertiary font-semibold">Behind the scenes</div>
           <h2 className="font-display mt-3 text-4xl sm:text-5xl lg:text-6xl font-semibold tracking-tight text-balance">
-            200 applicants, <em className="not-italic italic text-primary">one afternoon</em>.
+            100+ fighters, <em className="not-italic italic text-primary">one registration desk</em>.
           </h2>
           <ul className="mt-8 space-y-3.5 text-sm sm:text-base">
             {[
-              ["Dedicated registration desk with fast-track approvals."],
-              ["Auto-flag expired medicals, weight mismatches, and age limits before fight week."],
-              ["Clear correction loop — send specific fields back, not the whole application."],
-              ["Full audit trail for every decision — exportable on demand."],
-              ["SLA tracking per reviewer, per tournament."],
+              ["Same-day registration approvals — no waitlists."],
+              ["Medical, weight, and age checks before you reach the venue."],
+              ["One-click correction requests — fix what's wrong, not everything."],
+              ["Every decision logged. Full transparency for fighters and gyms."],
+              ["SLA tracking per event — we know who's reviewing what."],
             ].map(([t], i) => (
               <li key={i} className="flex items-start gap-3">
                 <CheckCircle2 className="size-5 text-emerald-500 shrink-0 mt-0.5" />
@@ -768,7 +768,7 @@ function AdminShowcase() {
           </ul>
           <Link href="/login" className="mt-10 inline-flex">
             <Button size="lg" className="bg-foreground text-background hover:bg-foreground/90 rounded-full px-6 h-12" data-testid="admin-cta">
-              View the operations desk <ArrowRight className="size-4 ml-1" />
+              Tour the registration desk <ArrowRight className="size-4 ml-1" />
             </Button>
           </Link>
         </Reveal>
@@ -782,7 +782,7 @@ function AdminShowcase() {
               <span className="size-2.5 rounded-full bg-red-400" />
               <span className="size-2.5 rounded-full bg-amber-400" />
               <span className="size-2.5 rounded-full bg-emerald-400" />
-              <span className="ml-3 text-[11px] font-mono text-tertiary">primal / queue</span>
+              <span className="ml-3 text-[11px] font-mono text-tertiary">fight-series / desk</span>
             </div>
             <div className="p-4 space-y-2">
               {[
