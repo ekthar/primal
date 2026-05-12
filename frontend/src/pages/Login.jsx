@@ -94,10 +94,10 @@ export default function Login() {
                   type="button"
                   onClick={() => pickRole(item)}
                   data-testid={`role-${item.id}`}
-                  className={`text-left rounded-xl border p-3 transition-all duration-200 ease-ios focus-ring ${
+                  className={`text-left rounded-xl border p-3 transition-all duration-200 ease-ios focus-ring active:scale-[0.97] ${
                     role === item.id
                       ? "border-foreground bg-surface-muted shadow-soft"
-                      : "border-border bg-surface hover:bg-surface-muted"
+                      : "border-border bg-surface hover:bg-surface-muted hover:border-foreground/30"
                   }`}
                 >
                   <div className="text-sm font-medium">{item.label}</div>
@@ -155,7 +155,7 @@ export default function Login() {
         </div>
       </div>
 
-      <div className="hidden lg:block w-[46%] relative overflow-hidden border-l border-border">
+      <div className="hidden lg:block w-[46%] relative overflow-hidden border-l border-border grain">
         <div
           className="absolute inset-0"
           style={{

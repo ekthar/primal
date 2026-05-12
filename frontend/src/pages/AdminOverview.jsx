@@ -155,8 +155,8 @@ export default function AdminOverview() {
         </section>
       </div>
 
-      <div className="mt-6 grid md:grid-cols-2 gap-5">
-        <Link href="/admin/weighin" className="rounded-3xl border border-border bg-surface elev-card p-6 block hover:bg-surface-muted/40 transition-colors">
+      <div className="mt-6 grid md:grid-cols-2 gap-6">
+        <Link href="/admin/weighin" className="rounded-3xl border border-border bg-surface elev-card p-8 block card-hover hover:bg-surface-muted/30">
           <div className="flex items-start gap-3">
             <Scale className="size-5 text-primary shrink-0 mt-0.5" />
             <div>
@@ -168,7 +168,7 @@ export default function AdminOverview() {
           </div>
         </Link>
 
-        <Link href="/admin/settings" className="rounded-3xl border border-border bg-surface elev-card p-6 block hover:bg-surface-muted/40 transition-colors">
+        <Link href="/admin/settings" className="rounded-3xl border border-border bg-surface elev-card p-8 block card-hover hover:bg-surface-muted/30">
           <div className="flex items-start gap-3">
             <SlidersHorizontal className="size-5 text-primary shrink-0 mt-0.5" />
             <div>
@@ -222,7 +222,7 @@ function Kpi({ label, value, helper, tone = "default" }) {
     blue: "text-blue-600 dark:text-blue-400",
   };
   return (
-    <div className="rounded-2xl border border-border bg-surface elev-card p-5">
+    <div className="rounded-2xl border border-border bg-surface elev-card p-6 card-hover">
       <div className="text-[10px] uppercase tracking-[0.14em] text-tertiary font-semibold">{label}</div>
       <div className={`font-display text-3xl font-semibold tracking-tight mt-3 ${tones[tone]}`}>{value}</div>
       <div className="text-xs text-secondary-muted mt-1">{helper}</div>

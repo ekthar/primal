@@ -259,7 +259,7 @@ export default function AdminQueue() {
             {items.map((entry) => (
               <article
                 key={entry.id}
-                className={`rounded-2xl border p-4 ${selected.has(entry.id) ? "border-primary/50 bg-primary/5" : "border-border bg-surface/70"}`}
+                className={`rounded-2xl border p-4 card-hover ${selected.has(entry.id) ? "border-primary/50 bg-primary/5" : "border-border bg-surface/70"}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">

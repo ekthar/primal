@@ -14,6 +14,8 @@ export function ThemeProvider({ children }) {
     const root = document.documentElement;
     root.classList.toggle("dark", theme === "dark");
     localStorage.setItem("tos-theme", theme);
+    const duration = getComputedStyle(root).getPropertyValue('--theme-transition-duration') || '0.4s';
+    root.style.setProperty('--theme-transition-duration', duration);
   }, [theme]);
 
   const toggle = () => setTheme((t) => (t === "dark" ? "light" : "dark"));

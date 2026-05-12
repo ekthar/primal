@@ -22,7 +22,7 @@ export function StatusPill({ status, size = "sm", showDot = true, testId }) {
       className={`pill pill-${status} ${size === "xs" ? "text-[10px] px-2 py-0.5" : ""}`}
     >
       {showDot && (
-        <span className={`pill-dot ${DOT_COLORS[status] || "bg-zinc-400"} ${status === "under_review" ? "animate-pulse" : ""}`} />
+        <span className={`pill-dot ${DOT_COLORS[status] || "bg-zinc-400"} ${status === "under_review" ? "animate-pulse-ring" : status === "submitted" ? "animate-pulse" : ""}`} />
       )}
       {label}
     </span>

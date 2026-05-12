@@ -9,15 +9,9 @@ import { LocaleProvider } from "@/context/LocaleContext";
 import { Toaster } from "@/components/ui/sonner";
 import AppShell from "@/components/layout/AppShell";
 import { FullPageLoader, RouteProgressBar } from "@/components/shared/PrimalLoader";
+import { pageSlide } from "@/lib/motion";
 
-/* Phase 7 · Subtle route fade. framer-motion's opacity+translate pair
-   respects the global `prefers-reduced-motion` CSS reset because the
-   user's media-query override drops transitions to 0.01ms. */
-const routeVariants = {
-  initial: { opacity: 0, y: 6 },
-  enter:   { opacity: 1, y: 0, transition: { duration: 0.22, ease: [0.25, 1, 0.5, 1] } },
-  exit:    { opacity: 0, y: -4, transition: { duration: 0.14, ease: "easeIn" } },
-};
+const routeVariants = pageSlide;
 
 function AnimatedPage({ children, routeKey }) {
   return (

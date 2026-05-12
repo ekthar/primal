@@ -314,14 +314,14 @@ function Hero({ registrationOpen, nextTournamentLabel, heroConsole }) {
               ]} />
               <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-border bg-surface/70 backdrop-blur px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-tertiary">
                 <span className="size-1.5 rounded-full bg-primary" />
-                <ScrambleText text="POWERED BY PRIMAL ACADEMY" />
+                <ScrambleText text="POWERED BY PRIMAL FIGHT SERIES" />
               </div>
             </div>
 
             <Reveal delay={0.25}>
               <p className="mt-6 sm:mt-8 max-w-2xl text-sm sm:text-lg lg:text-xl text-secondary-muted leading-relaxed text-pretty">
-                One home for MMA and martial arts events - teams, fighters, brackets, weigh-ins, and approvals.
-                Fast onboarding for gyms, clean registration for athletes, and a public-ready tournament feed.
+                India's premier MMA tournament circuit — live events, sanctioned brackets, and professional weigh-ins.
+                Primal Fight Series runs seasons across every weight class and discipline.
               </p>
             </Reveal>
 
@@ -682,8 +682,8 @@ function WorkflowScrollytell() {
             Transparent from submit to weigh-in.
           </h2>
           <p className="mt-5 text-base text-secondary-muted max-w-2xl leading-relaxed">
-            Every application has a timeline, an SLA, and an actor on record. Applicants see
-            exactly where they stand. Reviewers work a clean queue.
+            Every application has a timeline and a reviewer assigned. Fighters see
+            exactly where they stand. Our team works a clean queue.
           </p>
         </Reveal>
 
@@ -754,11 +754,11 @@ function AdminShowcase() {
           </h2>
           <ul className="mt-8 space-y-3.5 text-sm sm:text-base">
             {[
-              ["Keyboard-first queue with bulk approve."],
-              ["Auto-flag expired medicals, weight mismatches, age limits."],
-              ["Correction loop — send a field back, not the whole form."],
-              ["Tamper-evident audit log — exportable as Excel."],
-              ["SLA counters per reviewer, per tournament."],
+              ["Dedicated registration desk with fast-track approvals."],
+              ["Auto-flag expired medicals, weight mismatches, and age limits before fight week."],
+              ["Clear correction loop — send specific fields back, not the whole application."],
+              ["Full audit trail for every decision — exportable on demand."],
+              ["SLA tracking per reviewer, per tournament."],
             ].map(([t], i) => (
               <li key={i} className="flex items-start gap-3">
                 <CheckCircle2 className="size-5 text-emerald-500 shrink-0 mt-0.5" />
@@ -768,7 +768,7 @@ function AdminShowcase() {
           </ul>
           <Link href="/login" className="mt-10 inline-flex">
             <Button size="lg" className="bg-foreground text-background hover:bg-foreground/90 rounded-full px-6 h-12" data-testid="admin-cta">
-              Open the admin preview <ArrowRight className="size-4 ml-1" />
+              View the operations desk <ArrowRight className="size-4 ml-1" />
             </Button>
           </Link>
         </Reveal>
@@ -839,7 +839,7 @@ function Stats() {
           <ScrambleText text="LIVE TELEMETRY · PRIMAL" />
         </div>
         <h2 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight mb-10 max-w-3xl text-balance">
-          Numbers from the last season Primal Academy ran.
+          Numbers from the last season we ran.
         </h2>
         <StaggerGrid className="grid grid-cols-2 lg:grid-cols-4 gap-10" grid={[4, 1]}>
           {items.map((s) => (
@@ -877,7 +877,7 @@ function LiveTournamentsRail({ tournaments }) {
           <div>
             <div className="text-[10px] uppercase tracking-[0.22em] text-tertiary font-semibold">Public tournaments</div>
             <h2 className="font-display mt-2 text-2xl sm:text-3xl font-semibold tracking-tight">
-              Conducted by Primal Academy.
+              Presented by Primal Fight Series.
             </h2>
           </div>
         </div>
@@ -925,7 +925,7 @@ function TournamentsByPrimal() {
           <div>
             <div className="text-[10px] uppercase tracking-[0.22em] text-tertiary font-semibold">Tournaments by Primal</div>
             <h2 className="font-display mt-3 text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight text-balance max-w-3xl">
-              The events Primal Academy <span className="italic text-primary">conducts</span> on this platform.
+              The events Primal Fight Series <span className="italic text-primary">runs</span> every season.
             </h2>
           </div>
           <p className="max-w-md text-sm text-secondary-muted leading-relaxed">
@@ -1039,7 +1039,7 @@ function Testimonial() {
             <div className="relative">
               <div className="font-display text-primary text-6xl leading-none">"</div>
               <p className="font-display text-2xl sm:text-3xl lg:text-4xl font-medium tracking-tight leading-snug text-balance mt-4">
-                We cut review times from four days to four hours. Our reviewers look forward to the queue now.
+                Primal runs the tightest registration window in Indian MMA. Four days down to four hours — and our fighters feel it.
               </p>
               <div className="mt-8 flex items-center gap-4">
                 <div className="size-12 rounded-full bg-foreground text-background flex items-center justify-center font-display font-bold">KI</div>
@@ -1067,9 +1067,9 @@ function CTA({ registrationOpen }) {
               style={{ backgroundImage: `url(${HERO_IMAGE})`, backgroundSize: "cover", backgroundPosition: "center" }}
             />
             <div className="relative">
-              <div className="text-[10px] uppercase tracking-[0.22em] text-background/60 font-semibold">Start this season</div>
+              <div className="text-[10px] uppercase tracking-[0.22em] text-background/60 font-semibold">Enter the cage</div>
               <h2 className="font-display mt-3 text-4xl sm:text-5xl lg:text-6xl font-semibold tracking-tight text-balance">
-                Your fighters are ready. Your platform should be too.
+                Your fighters are ready. Your season starts here.
               </h2>
               <div className="mt-10 flex flex-wrap gap-3">
                 {registrationOpen ? (
@@ -1111,10 +1111,10 @@ function Footer() {
             <img src="/primal-logo.png" alt="Primal" className="size-7 rounded-lg object-cover" />
             <span className="font-display font-semibold tracking-tight text-foreground">Primal</span>
           </div>
-          <p className="mt-3 leading-relaxed">Built for sanctioning bodies, gyms, federations, and promoters.</p>
+          <p className="mt-3 leading-relaxed">India's premier MMA tournament circuit — for fighters, gyms, and fight fans.</p>
         </div>
         <div className="flex flex-col gap-2">
-          <div className="font-semibold text-foreground text-xs uppercase tracking-wider">Product</div>
+          <div className="font-semibold text-foreground text-xs uppercase tracking-wider">Events</div>
           <a href="#paths">Registration</a>
           <a href="#workflow">Review workflow</a>
           <a href="#admin">Admin</a>
@@ -1127,7 +1127,7 @@ function Footer() {
         </div>
       </div>
       <div className="mt-10 text-center text-[11px] text-tertiary flex items-center justify-center gap-2">
-        <MonitorSmartphone className="size-3.5" /> Web now - Mobile on the way
+        Registration, brackets, and results — all live.
       </div>
     </footer>
   );
@@ -1234,12 +1234,12 @@ export default function Landing() {
       <Announcements />
       <Marquee items={[
         "Primal - Fight Series",
-        "Registration - Open",
-        "Gym onboarding - Fast",
-        "Medical checks - Streamlined",
-        "Brackets - Live",
-        "Teams - Verified",
-        "Athletes - Ready",
+        "Season 2026 - Open",
+        "Gyms - Registering",
+        "Weigh-ins - Live",
+        "Fight cards - Dropping",
+        "Champions - Crowned",
+        "Brackets - Locked",
       ]} />
       <TournamentsByPrimal />
       <LiveTournamentsRail tournaments={tournaments} />

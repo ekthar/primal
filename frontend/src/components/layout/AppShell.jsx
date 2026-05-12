@@ -195,7 +195,7 @@ function DesktopSidebar() {
   const locale = useLocale();
   const nav = NAV[user?.role] || [];
   return (
-    <aside className="hidden md:sticky md:top-0 md:flex md:h-screen md:self-start md:w-72 shrink-0 flex-col border-r border-border bg-surface/40 backdrop-blur-xl">
+    <aside className="hidden md:sticky md:top-0 md:flex md:h-screen md:self-start md:w-72 shrink-0 flex-col border-r border-border bg-surface/40 backdrop-blur-xl grain">
       <div className="px-5 py-5 border-b border-border flex justify-start">
         <Brand />
       </div>
@@ -293,7 +293,7 @@ function DesktopTopbar({ nav }) {
   const platformKey = typeof navigator !== "undefined" && /mac/i.test(navigator.platform) ? "⌘" : "Ctrl";
 
   return (
-    <div className="hidden md:flex items-center justify-between gap-4 border-b border-border bg-background/80 px-6 py-4 backdrop-blur-xl">
+    <div className="hidden md:flex items-center justify-between gap-4 border-b border-border bg-background/85 px-6 py-4 backdrop-blur-xl">
       <div className="flex items-center gap-3 min-w-0">
         <BackButton fallbackRoute={fallbackRoute} />
         <div className="min-w-0">
@@ -344,7 +344,7 @@ function MobileBottomNav({ nav }) {
   const router = useRouter();
   const primary = useMemo(() => nav.slice(0, Math.min(5, nav.length)), [nav]);
   return (
-    <nav className="md:hidden fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur-xl px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2">
+    <nav className="md:hidden fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur-xl px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-4px_20px_rgba(0,0,0,0.06)]">
       <div className="grid grid-cols-5 gap-1">
         {primary.map((item) => {
           const active = isActivePath(router.pathname, item.to);
@@ -352,8 +352,8 @@ function MobileBottomNav({ nav }) {
             <Link
               key={item.to}
               href={item.to}
-              className={`flex min-h-14 flex-col items-center justify-center rounded-xl px-2 text-[10px] font-medium transition-colors ${
-                active ? "bg-surface-muted text-foreground" : "text-tertiary hover:bg-surface-muted/60 hover:text-foreground"
+              className={`flex min-h-14 flex-col items-center justify-center rounded-xl px-2 text-[10px] font-medium transition-all duration-200 ${
+                active ? "bg-surface-muted text-foreground shadow-inner-top" : "text-tertiary hover:bg-surface-muted/60 hover:text-foreground"
               }`}
             >
               <item.icon className={`size-[18px] ${active ? "text-primary" : ""}`} strokeWidth={1.75} />

@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 
 export function ResponsivePageShell({ children, className = "" }) {
   return (
-    <div className={cn("relative mx-auto w-full max-w-7xl px-3 py-4 sm:px-6 sm:py-8 lg:px-8", className)}>
+    <div className={cn("relative mx-auto w-full max-w-7xl px-4 py-5 sm:px-8 sm:py-10 lg:px-10", className)}>
       {children}
     </div>
   );
@@ -78,8 +78,8 @@ export function DashboardSection({
   return (
     <section
       className={cn(
-        "rounded-3xl border border-border bg-surface p-4 sm:p-6 elev-card",
-        compact && "p-3 sm:p-4",
+        "rounded-3xl border border-border bg-surface p-5 sm:p-8 elev-card card-hover",
+        compact && "p-4 sm:p-5",
         className,
       )}
     >
@@ -130,14 +130,11 @@ export function KpiGrid({ children, columns = 4, className = "" }) {
 }
 
 export function StickyActionBar({ children, className = "" }) {
-  // The 5rem mobile offset clears the AppShell MobileBottomNav (z-30) so the
-  // sticky action bar (z-20) is always tappable above it. md+ has no bottom
-  // nav and uses bottom-4.
   return (
     <div
       className={cn(
-        "sticky z-20 mt-4 rounded-2xl border border-border bg-background/92 p-3 backdrop-blur-xl shadow-[0_16px_40px_rgba(0,0,0,0.12)]",
-        "bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-4",
+        "sticky z-20 mt-6 rounded-2xl glass p-3 shadow-[0_16px_40px_rgba(0,0,0,0.12)] animate-slide-up",
+        "bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-6",
         className,
       )}
     >
