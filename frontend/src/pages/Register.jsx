@@ -451,9 +451,18 @@ export default function Register() {
     }
 
     const applicationId = appRes.data.application.id;
+
+    // Identity verification: id_number_last4 is required for photo_id
+    const hasPhotoDoc = Boolean(documents.photo_id);
+    if (hasPhotoDoc && !idNumberLast4.trim()) {
+      setLoading(false);
+      toast.error(rt("Last 4 digits of ID number are required for identity verification.", "पहचान सत्यापन के लिए ID नंबर के अंतिम 4 अंक आवश्यक हैं।"));
+      return;
+    }
+
     for (const [kind, file] of Object.entries(documents)) {
       const capturedVia = documentSources[kind] || "upload";
-      const last4 = kind === "photo_id" && idNumberLast4 ? idNumberLast4.trim().toUpperCase() : undefined;
+      const last4 = kind === "photo_id" ? idNumberLast4.trim().toUpperCase() : undefined;
       const uploadRes = await api.uploadApplicationDocument(applicationId, { file, kind, label: file.name, capturedVia, idNumberLast4: last4 });
       if (uploadRes.error) {
         setLoading(false);
@@ -793,7 +802,7 @@ export default function Register() {
                         {key === "photo_id" ? (
                           <div className="mt-3 rounded-xl border border-border bg-surface px-3 py-2">
                             <label className="text-[10px] uppercase tracking-[0.18em] text-tertiary font-semibold">
-                              {rt("Last 4 digits of ID number (optional)", "ID नंबर के अंतिम 4 अंक (वैकल्पिक)")}
+                              {rt("Last 4 digits of ID number (required)", "ID नंबर के अंतिम 4 अंक (आवश्यक)")}
                             </label>
                             <input
                               inputMode="text"
@@ -804,7 +813,7 @@ export default function Register() {
                               className="mt-1 block w-28 rounded-md border border-border bg-background px-2 py-1 text-sm tracking-[0.3em]"
                             />
                             <p className="mt-1 text-[11px] text-secondary-muted">
-                              {rt("Helps reviewers cross-check Aadhaar/PAN without storing the full number.", "समीक्षकों को पूरा नंबर संग्रहीत किए बिना आधार/PAN जांचने में मदद करता है।")}
+                              {rt("Required for identity verification. Helps prevent duplicate registrations.", "पहचान सत्यापन के लिए आवश्यक। डुप्लिकेट पंजीकरण को रोकने में मदद करता है।")}
                             </p>
                           </div>
                         ) : null}

@@ -1,6 +1,7 @@
 const {
   applications: appsRepo, profiles: profilesRepo, tournaments: tournamentsRepo,
-  statusEvents: seRepo, reviewers: reviewersRepo, clubs: clubsRepo, documents: documentsRepo,
+  statusEvents: seRepo, reviewers: reviewersRepo, clubs: clubsRepo,
+  documents: documentsRepo, identityVerifications: ivRepo,
 } = require('../repositories');
 const { STATUS, assertTransition } = require('../statusMachine');
 const { ApiError } = require('../apiError');
@@ -218,6 +219,35 @@ async function submit(user, id, ctx = {}) {
     }
   }
 
+  // ── Identity duplicate prevention ─────────────────────────────────────
+  const idDoc = documents.find((doc) => doc.kind === 'photo_id');
+  const idLast4 = idDoc?.id_number_last4;
+  if (!idLast4) {
+    throw ApiError.unprocessable(
+      'Photo ID document must include the last 4 digits of your ID number for identity verification.',
+      { field: 'idNumberLast4' }
+    );
+  }
+  const rawName = String(profile.first_name || '') + String(profile.last_name || '');
+  const nameHash = createHash('sha256').update(rawName.toLowerCase().trim()).digest('hex');
+  const existingIdentity = await ivRepo.findByHashAndLast4(nameHash, idLast4);
+  if (existingIdentity) {
+    if (existingIdentity.profile_id !== app.profile_id) {
+      throw ApiError.conflict(
+        'An application already exists for this identity. Each person may register only once per season.',
+        { existingProfileId: existingIdentity.profile_id }
+      );
+    }
+  } else {
+    await ivRepo.upsert({
+      nameHash,
+      idLast4,
+      dateOfBirth: profile.date_of_birth || null,
+      profileId: app.profile_id,
+      userId: profile.user_id || null,
+    });
+  }
+
   // Auto-assign a reviewer if we don't have one yet (hybrid mode).
   const patch = {
     status: STATUS.SUBMITTED,
@@ -254,6 +284,17 @@ async function uploadDocument(user, applicationId, { kind, label, expiresOn, fil
   if (!file) throw ApiError.badRequest('File required');
 
   const checksum = createHash('sha256').update(file.buffer).digest('hex');
+
+  // Reject duplicate file upload (same checksum already exists for this profile).
+  const existingDocs = await documentsRepo.listForApplication(applicationId);
+  const duplicate = existingDocs.find((doc) => doc.checksum_sha256 === checksum && doc.kind === kind);
+  if (duplicate) {
+    throw ApiError.conflict('This file has already been uploaded for this application.', {
+      documentId: duplicate.id,
+      kind: duplicate.kind,
+    });
+  }
+
   const storedDocument = await documentStorage.storeDocument(applicationId, file);
   const sourceTag = (capturedVia || 'upload').toLowerCase();
 

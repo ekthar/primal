@@ -458,6 +458,29 @@ const documents = {
     )).rows[0],
 };
 
+// --------- identity_verifications ---------
+const identityVerifications = {
+  findByHashAndLast4: async (nameHash, idLast4) =>
+    (await query(
+      `SELECT * FROM identity_verifications WHERE name_hash = $1 AND id_last4 = $2`,
+      [nameHash, idLast4]
+    )).rows[0],
+  upsert: async ({ nameHash, idLast4, dateOfBirth, profileId, userId }) =>
+    (await query(
+      `INSERT INTO identity_verifications (name_hash, id_last4, date_of_birth, profile_id, user_id, verified_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())
+       ON CONFLICT (name_hash, id_last4)
+       DO UPDATE SET profile_id = EXCLUDED.profile_id, user_id = EXCLUDED.user_id, verified_at = NOW()
+       RETURNING *`,
+      [nameHash, idLast4, dateOfBirth, profileId, userId]
+    )).rows[0],
+  findByProfileId: async (profileId) =>
+    (await query(
+      `SELECT * FROM identity_verifications WHERE profile_id = $1`,
+      [profileId]
+    )).rows[0],
+};
+
 const trash = {
   list: async ({ entity, limit = 100, offset = 0 }) => {
     const map = {
@@ -696,4 +719,4 @@ const webhookDeliveries = {
     )).rows,
 };
 
-module.exports = { users, sessions, clubs, profiles, tournaments, applications, documents, statusEvents, appeals, reviewers, circulars, trash, weighIns, webhookSubscriptions, webhookDeliveries };
+module.exports = { users, sessions, clubs, profiles, tournaments, applications, documents, statusEvents, appeals, reviewers, circulars, trash, weighIns, webhookSubscriptions, webhookDeliveries, identityVerifications };

@@ -339,7 +339,11 @@ const schemas = {
       label: Joi.string().max(200).allow(null, ''),
       expiresOn: Joi.date().iso().allow(null),
       capturedVia: Joi.string().valid('upload', 'scan', 'admin_rescan').allow(null, ''),
-      idNumberLast4: Joi.string().pattern(/^[0-9A-Za-z]{4}$/).allow(null, ''),
+      idNumberLast4: Joi.when('kind', {
+        is: 'photo_id',
+        then: Joi.string().pattern(/^[0-9A-Za-z]{4}$/).required(),
+        otherwise: Joi.string().pattern(/^[0-9A-Za-z]{4}$/).allow(null, ''),
+      }),
     }),
     verify: Joi.object({
       verified: Joi.boolean().required(),
