@@ -27,8 +27,10 @@ const users = {
     const sql = `SELECT * FROM users WHERE ${where.join(' AND ')} ORDER BY created_at DESC LIMIT $${args.length - 1} OFFSET $${args.length}`;
     return (await query(sql, args)).rows;
   },
-  create: async ({ email, passwordHash, role, name, locale = 'en', googleSub = null, emailVerified = false, avatarUrl = null, stateCode = null }) => {
-    const { rows } = await query(
+  create: async (fields, { client } = {}) => {
+    const q = client ? client.query.bind(client) : query;
+    const { email, passwordHash, role, name, locale = 'en', googleSub = null, emailVerified = false, avatarUrl = null, stateCode = null } = fields;
+    const { rows } = await q(
       `INSERT INTO users (email, password_hash, role, name, locale, google_sub, email_verified, avatar_url, state_code)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
       [email, passwordHash, role, name, locale, googleSub, emailVerified, avatarUrl, stateCode]
@@ -128,8 +130,9 @@ const profiles = {
       LIMIT $${args.length - 1} OFFSET $${args.length}`;
     return (await query(sql, args)).rows;
   },
-  upsertForUser: async (userId, p) => {
-    const { rows } = await query(
+  upsertForUser: async (userId, p, { client } = {}) => {
+    const q = client ? client.query.bind(client) : query;
+    const { rows } = await q(
       `INSERT INTO profiles (user_id, club_id, first_name, last_name, date_of_birth, gender, nationality,
                              discipline, weight_kg, weight_class, record_wins, record_losses, record_draws, bio, metadata)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)

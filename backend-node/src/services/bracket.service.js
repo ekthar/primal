@@ -656,6 +656,10 @@ async function generate(actor, { tournamentId, categoryId, seeding }, ctx = {}) 
   const selectedTournamentId = await resolveTournamentId(tournamentId);
   if (!selectedTournamentId) throw ApiError.notFound('No tournament available');
 
+  // Advisory lock — prevent concurrent bracket generation for the same category.
+  // Uses a BIGINT hash of the categoryId to keep the lock key stable.
+  await query(`SELECT pg_advisory_xact_lock(hashtext($1))`, ['bracket_gen:' + categoryId]);
+
   const categories = buildCategoryReport(await listBracketEntries(selectedTournamentId));
   const category = categories.find((item) => item.id === categoryId);
   if (!category) throw ApiError.notFound('Bracket category not found');

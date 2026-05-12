@@ -7,6 +7,7 @@ const STATUS = Object.freeze({
   UNDER_REVIEW: 'under_review',
   NEEDS_CORRECTION: 'needs_correction',
   APPROVED: 'approved',
+  CONFIRMED: 'confirmed',
   REJECTED: 'rejected',
   SEASON_CLOSED: 'season_closed',
 });
@@ -20,7 +21,8 @@ const TRANSITIONS = Object.freeze({
   [STATUS.SUBMITTED]:        new Set([STATUS.UNDER_REVIEW, STATUS.NEEDS_CORRECTION, STATUS.REJECTED, STATUS.APPROVED]),
   [STATUS.UNDER_REVIEW]:     new Set([STATUS.NEEDS_CORRECTION, STATUS.APPROVED, STATUS.REJECTED]),
   [STATUS.NEEDS_CORRECTION]: new Set([STATUS.SUBMITTED]), // club resubmits
-  [STATUS.APPROVED]:         new Set([STATUS.UNDER_REVIEW]), // only via appeal / audit override
+  [STATUS.APPROVED]:         new Set([STATUS.UNDER_REVIEW, STATUS.CONFIRMED]), // confirm via weigh-in
+  [STATUS.CONFIRMED]:        new Set([STATUS.UNDER_REVIEW]), // admin reopen
   [STATUS.REJECTED]:         new Set([STATUS.UNDER_REVIEW]), // reopen (appeal granted)
   [STATUS.SEASON_CLOSED]:    new Set([]),
 });
@@ -37,6 +39,8 @@ const TRANSITION_ACTORS = Object.freeze({
   [`${STATUS.UNDER_REVIEW}->${STATUS.REJECTED}`]: ['reviewer', 'admin'],
   [`${STATUS.NEEDS_CORRECTION}->${STATUS.SUBMITTED}`]: ['applicant', 'club'],
   [`${STATUS.APPROVED}->${STATUS.UNDER_REVIEW}`]: ['admin'],
+  [`${STATUS.APPROVED}->${STATUS.CONFIRMED}`]: ['admin', 'reviewer'],
+  [`${STATUS.CONFIRMED}->${STATUS.UNDER_REVIEW}`]: ['admin'],
   [`${STATUS.REJECTED}->${STATUS.UNDER_REVIEW}`]: ['admin'],
 });
 

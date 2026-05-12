@@ -9,6 +9,7 @@ const { customAlphabet } = require('nanoid');
 const { splitPersonName } = require('./identity.service');
 const { deriveOfficialWeightClass } = require('../domain/categoryRules');
 const { dispatchDeferred: notify } = require('../notifications');
+const { transaction } = require('../db');
 
 const createCode = customAlphabet('ABCDEFGHJKLMNPQRSTUVWXYZ23456789', 10);
 const MOBILE_FALLBACK_CHANNELS = ['whatsapp', 'email', 'sms'];
@@ -183,28 +184,16 @@ async function createParticipant(user, clubId, payload, ctx = {}) {
     });
   }
 
-  let participantUser = await usersRepo.findByEmail(email);
-  let createdUser = false;
-  let temporaryPassword = null;
-  if (!participantUser) {
-    const tempPassword = randomBytes(12).toString('base64url');
-    temporaryPassword = tempPassword;
-    participantUser = await usersRepo.create({
-      email,
-      passwordHash: await hashPassword(tempPassword),
-      role: 'applicant',
-      name: fullName,
-      locale: 'en',
-    });
-    createdUser = true;
-  } else if (participantUser.role !== 'applicant') {
+  // ── Read-only checks first (no mutations) ──────────────────────────────
+  const existingUser = await usersRepo.findByEmail(email);
+  if (existingUser && existingUser.role !== 'applicant') {
     throw ApiError.conflict('Email belongs to a non-applicant account', { field: 'email' });
   }
-
-  const existingProfile = await profilesRepo.findByUserId(participantUser.id);
+  const existingProfile = existingUser ? await profilesRepo.findByUserId(existingUser.id) : null;
   if (existingProfile && existingProfile.club_id && existingProfile.club_id !== club.id) {
     throw ApiError.conflict('Participant already belongs to another club', { field: 'email' });
   }
+
   const selectedDisciplines = Array.isArray(payload.selectedDisciplines) ? payload.selectedDisciplines : [];
   const weightClass = deriveOfficialWeightClass({
     disciplineId: selectedDisciplines[0] || payload.discipline,
@@ -213,32 +202,54 @@ async function createParticipant(user, clubId, payload, ctx = {}) {
     weightKg: payload.weightKg,
   });
 
-  const profile = await profilesRepo.upsertForUser(participantUser.id, {
-    firstName,
-    lastName,
-    dateOfBirth: payload.dateOfBirth || null,
-    gender: payload.gender || null,
-    nationality: 'India',
-    discipline: payload.discipline || null,
-    weightKg: payload.weightKg || null,
-    weightClass: payload.weightClass || weightClass || null,
-    recordWins: existingProfile?.record_wins || 0,
-    recordLosses: existingProfile?.record_losses || 0,
-    recordDraws: existingProfile?.record_draws || 0,
-    bio: payload.bio || null,
-    clubId: club.id,
-    metadata: {
-      ...(existingProfile?.metadata || {}),
-      phone: payload.phone || participantUser.phone || null,
-      address: addressValidation.normalized,
-      managedByClub: true,
-      fighterCode: existingProfile?.metadata?.fighterCode || `FIG-${createCode()}`,
-      selectedDisciplines,
-    },
+  // ── Atomic mutation block ──────────────────────────────────────────────
+  const { participantUser, profile, temporaryPassword } = await transaction(async (client) => {
+    let pUser = existingUser;
+    let tempPw = null;
+    let created = false;
+
+    if (!pUser) {
+      tempPw = randomBytes(12).toString('base64url');
+      pUser = await usersRepo.create({
+        email,
+        passwordHash: await hashPassword(tempPw),
+        role: 'applicant',
+        name: fullName,
+        locale: 'en',
+      }, { client });
+      created = true;
+    }
+
+    const prof = await profilesRepo.upsertForUser(pUser.id, {
+      firstName,
+      lastName,
+      dateOfBirth: payload.dateOfBirth || null,
+      gender: payload.gender || null,
+      nationality: 'India',
+      discipline: payload.discipline || null,
+      weightKg: payload.weightKg || null,
+      weightClass: payload.weightClass || weightClass || null,
+      recordWins: existingProfile?.record_wins || 0,
+      recordLosses: existingProfile?.record_losses || 0,
+      recordDraws: existingProfile?.record_draws || 0,
+      bio: payload.bio || null,
+      clubId: club.id,
+      metadata: {
+        ...(existingProfile?.metadata || {}),
+        phone: payload.phone || pUser.phone || null,
+        address: addressValidation.normalized,
+        managedByClub: true,
+        fighterCode: existingProfile?.metadata?.fighterCode || `FIG-${createCode()}`,
+        selectedDisciplines,
+      },
+    }, { client });
+
+    return { participantUser: pUser, profile: prof, temporaryPassword: created ? tempPw : null };
   });
 
+  // ── Non-critical side-effects (outside transaction) ────────────────────
   let resetUrl = null;
-  if (payload.sendResetLink || createdUser) {
+  if (payload.sendResetLink || temporaryPassword) {
     const issued = await issuePasswordResetForUser(participantUser, ctx);
     resetUrl = issued.resetUrl;
   }

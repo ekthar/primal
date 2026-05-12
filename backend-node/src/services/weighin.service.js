@@ -1,8 +1,9 @@
-const { weighIns, applications, profiles: profilesRepo } = require('../repositories');
+const { weighIns, applications, profiles: profilesRepo, statusEvents: seRepo } = require('../repositories');
 const { write: auditWrite } = require('../audit');
 const webhookService = require('./webhook.service');
 const divisionService = require('./division.service');
 const { deriveOfficialWeightClass } = require('../domain/categoryRules');
+const { STATUS, assertTransition } = require('../statusMachine');
 const { logger } = require('../logger');
 
 function map(row) {
@@ -44,6 +45,26 @@ async function recordWeighIn({ applicationId, weightKg, photoUrl, notes, actor }
     notes: notes || null,
     weighedBy: actor?.id || null,
   });
+
+  // Transition application to confirmed status after successful weigh-in.
+  try {
+    assertTransition(application.status, STATUS.CONFIRMED, actor?.role);
+    await applications.setStatus(applicationId, { status: STATUS.CONFIRMED });
+    await seRepo.add({
+      applicationId,
+      fromStatus: application.status,
+      toStatus: STATUS.CONFIRMED,
+      actorUserId: actor?.id,
+      actorRole: actor?.role,
+      reason: 'Weigh-in recorded',
+      metadata: { weightKg: normalised },
+    });
+  } catch (transitionErr) {
+    // Non-fatal: the weigh-in itself succeeded; the status transition is a
+    // best-effort side-effect (e.g. for non-approved applications or
+    // re-weighs, the status may not be eligible for transition).
+    logger.warn({ err: transitionErr, applicationId, fromStatus: application.status }, 'weighin.status_transition_skipped');
+  }
 
   // Propagate the official weigh-in into the profile so seeding, bracket
   // generation and approved-participant exports all agree on the same
