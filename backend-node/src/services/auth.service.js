@@ -25,13 +25,21 @@ function normalizeHttpOrigin(raw) {
   }
 }
 
+function isLocalWebBaseUrl(origin) {
+  return origin === 'http://localhost:3000' || origin === 'http://127.0.0.1:3000';
+}
+
 function resolveResetBaseUrl(ctx = {}) {
   const configured = normalizeHttpOrigin(config.webBaseUrl);
   const fromOrigin = normalizeHttpOrigin(ctx.origin);
   const fromReferer = normalizeHttpOrigin(ctx.referer);
 
   if (config.env === 'production') {
-    return configured || fromOrigin || fromReferer || 'http://localhost:3000';
+    if (configured && !isLocalWebBaseUrl(configured)) {
+      return configured;
+    }
+
+    return fromOrigin || fromReferer || 'https://www.ekthar.me';
   }
 
   // In local/staging, prefer caller origin when default localhost config is not accurate.
