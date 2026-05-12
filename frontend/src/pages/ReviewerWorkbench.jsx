@@ -353,7 +353,7 @@ export default function ReviewerWorkbench() {
       toast.error(error.message || "Failed to resend notification");
       return;
     }
-    toast.success("Notification dispatched (WhatsApp, then email/SMS fallback)");
+    toast.success("Notification dispatched to selected channels");
   }
 
   async function handleDocumentVerify(documentId, verified, reason) {
@@ -536,7 +536,7 @@ export default function ReviewerWorkbench() {
                 </Button>
               )}
               {["approved", "rejected", "needs_correction"].includes(activeApplication.status) && (
-                <Button variant="outline" disabled={actionBusy} onClick={handleResendNotification} title={locale?.t("reviewer.resendNotificationTooltip", "Resend decision email + SMS to the applicant") ?? "Resend decision email + SMS to the applicant"}>
+                <Button variant="outline" disabled={actionBusy} onClick={handleResendNotification} title={locale?.t("reviewer.resendNotificationTooltip", "Resend decision notification to the applicant") ?? "Resend decision notification to the applicant"}>
                   <Mail className="size-4 mr-1.5" /> {locale?.t("reviewer.resendNotification", "Resend notification") ?? "Resend notification"}
                 </Button>
               )}

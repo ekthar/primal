@@ -38,7 +38,7 @@ const config = {
 
   notifications: {
     resendKey: process.env.RESEND_API_KEY || '',
-    resendFrom: process.env.RESEND_FROM || 'Primal <no-reply@primalfight.io>',
+    resendFrom: process.env.RESEND_FROM || 'Primal <no-reply@ekthar.me>',
     resendRetries: parseInt(process.env.RESEND_RETRIES || '2', 10),
     twilioSid: process.env.TWILIO_ACCOUNT_SID || '',
     twilioToken: process.env.TWILIO_AUTH_TOKEN || '',

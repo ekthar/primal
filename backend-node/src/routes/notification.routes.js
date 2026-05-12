@@ -140,22 +140,26 @@ async function resendForApplication(req, res) {
   const user = app.submitted_by ? await usersRepo.findById(app.submitted_by) : null;
   if (!user) return res.status(404).json({ error: 'applicant_not_found' });
 
-  await dispatch({
-    userId: user.id,
-    applicationId: app.id,
-    channels,
-    to: { email: user.email, phone: user.phone, whatsapp: user.phone },
-    template,
-    payload: {
-      applicantName: formatPersonName(app.first_name, app.last_name),
-      applicationDisplayId: applicationDisplayId(app.id),
-      tournamentName: app.tournament_name,
-      reason: req.body?.reason || app.review_notes || '',
-      dueAt: app.correction_due_at,
-      appealWindowDays: config.workflow.appealWindowDays,
-      slaHours: config.workflow.reviewSlaHours,
-    },
-  });
+  const payload = {
+    applicantName: formatPersonName(app.first_name, app.last_name),
+    applicationDisplayId: applicationDisplayId(app.id),
+    tournamentName: app.tournament_name,
+    reason: req.body?.reason || app.review_notes || '',
+    dueAt: app.correction_due_at,
+    appealWindowDays: config.workflow.appealWindowDays,
+    slaHours: config.workflow.reviewSlaHours,
+  };
+
+  for (const channel of channels) {
+    await dispatch({
+      userId: user.id,
+      applicationId: app.id,
+      channels: [channel],
+      to: { email: user.email, phone: user.phone, whatsapp: user.phone },
+      template,
+      payload,
+    });
+  }
 
   await auditWrite({
     actorUserId: req.user.id,

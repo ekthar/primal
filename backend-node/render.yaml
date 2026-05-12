@@ -29,3 +29,7 @@ services:
         sync: false
       - key: BLOB_ACCESS
         value: public
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM
+        value: "Primal <no-reply@ekthar.me>"
